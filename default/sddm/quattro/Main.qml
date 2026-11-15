@@ -71,69 +71,67 @@ Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: 14
 
-      Row {
+      Item {
+        width: entry.width
+        height: entry.height
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 15
 
         Image {
           source: root.loginFailed ? "lock-failed.png" : "lock.png"
           width: 34
           height: 38
           fillMode: Image.PreserveAspectFit
+          anchors.right: parent.left
+          anchors.rightMargin: 15
           anchors.verticalCenter: parent.verticalCenter
         }
 
-        Item {
-          width: entry.width
-          height: entry.height
+        Image {
+          id: entry
+          source: root.loginFailed ? "entry-failed.png" : "entry.png"
+          anchors.centerIn: parent
+        }
 
-          Image {
-            id: entry
-            source: root.loginFailed ? "entry-failed.png" : "entry.png"
-            anchors.centerIn: parent
-          }
+        Row {
+          anchors.left: parent.left
+          anchors.leftMargin: 20
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: 5
 
-          Row {
-            anchors.left: parent.left
-            anchors.leftMargin: 20
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 5
+          Repeater {
+            model: Math.min(password.text.length, 21)
 
-            Repeater {
-              model: Math.min(password.text.length, 21)
-
-              Image {
-                source: "bullet.png"
-                width: 7
-                height: 7
-              }
+            Image {
+              source: "bullet.png"
+              width: 7
+              height: 7
             }
           }
+        }
 
-          TextInput {
-            id: password
-            anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
-            verticalAlignment: TextInput.AlignVCenter
-            echoMode: TextInput.Password
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 24
-            font.letterSpacing: 5
-            passwordCharacter: "\u2022"
-            color: "transparent"
-            selectionColor: "transparent"
-            selectedTextColor: "transparent"
-            cursorDelegate: Item {}
-            focus: true
+        TextInput {
+          id: password
+          anchors.fill: parent
+          anchors.leftMargin: 20
+          anchors.rightMargin: 20
+          verticalAlignment: TextInput.AlignVCenter
+          echoMode: TextInput.Password
+          font.family: "JetBrainsMono Nerd Font"
+          font.pixelSize: 24
+          font.letterSpacing: 5
+          passwordCharacter: "\u2022"
+          color: "transparent"
+          selectionColor: "transparent"
+          selectedTextColor: "transparent"
+          cursorDelegate: Item {}
+          focus: true
 
-            onTextChanged: root.loginFailed = false
+          onTextChanged: root.loginFailed = false
 
-            Keys.onPressed: {
-              if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                sddm.login(root.currentUser, password.text, root.sessionIndex)
-                event.accepted = true
-              }
+          Keys.onPressed: {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+              sddm.login(root.currentUser, password.text, root.sessionIndex)
+              event.accepted = true
             }
           }
         }
