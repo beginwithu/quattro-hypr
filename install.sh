@@ -222,10 +222,10 @@ EOF
   cp -a "$PROJECT_DIR/default/fonts/quattro/quattro.ttf" "$HOME/.local/share/fonts/quattro/quattro.ttf"
   cp -a "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf" "$HOME/.config/fontconfig/conf.d/50-quattro.conf"
 
+  mkdir -p "$HOME/.local/share/icons/hicolor/256x256/apps"
+  cp -a "$PROJECT_DIR/icon.png" "$HOME/.local/share/icons/hicolor/256x256/apps/quattro.png"
   if [[ -d $PROJECT_DIR/applications/icons ]]; then
-    mkdir -p "$HOME/.local/share/icons/hicolor/256x256/apps"
     cp -a "$PROJECT_DIR/applications/icons/." "$HOME/.local/share/icons/hicolor/256x256/apps/"
-    cp -a "$PROJECT_DIR/icon.png" "$HOME/.local/share/icons/hicolor/256x256/apps/quattro.png"
   fi
 
   # Remove orphaned web-app entries whose icon file is missing
