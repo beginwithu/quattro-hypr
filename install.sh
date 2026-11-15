@@ -32,6 +32,79 @@ THEME="Tokyo Night"
 INSTALL_DIR="$HOME/.local/share/quattro"
 BIN_LINK_DIR="$HOME/.local/bin"
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+setup_cachyos_repos() {
+  echo -e "${YELLOW}Detecting CPU architecture...${NC}"
+
+  local ARCH
+  if grep -q "x86-64-v4" /proc/cpuinfo 2>/dev/null || /lib/ld-linux-x86-64.so.2 --help 2>/dev/null | grep -q "x86-64-v4"; then
+    ARCH="v4"
+    echo -e "${GREEN}Detected: x86-64-v4${NC}"
+  elif grep -q "x86-64-v3" /proc/cpuinfo 2>/dev/null || /lib/ld-linux-x86-64.so.2 --help 2>/dev/null | grep -q "x86-64-v3"; then
+    ARCH="v3"
+    echo -e "${GREEN}Detected: x86-64-v3${NC}"
+  else
+    ARCH="v2"
+    echo -e "${GREEN}Detected: x86-64 (baseline)${NC}"
+  fi
+
+  echo -e "${YELLOW}Importing CachyOS signing key...${NC}"
+  sudo pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
+  sudo pacman-key --lsign-key F3B607488DB35A47
+
+  echo -e "${YELLOW}Installing CachyOS keyring and mirrorlists...${NC}"
+  sudo pacman -U --noconfirm \
+    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
+    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-27-1-any.pkg.tar.zst" \
+    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst" \
+    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst"
+
+  echo -e "${YELLOW}Configuring repositories in pacman.conf...${NC}"
+
+  local REPO_CONFIG=""
+  if [[ "$ARCH" == "v4" ]]; then
+    REPO_CONFIG="[cachyos-v4]
+Include = /etc/pacman.d/cachyos-v4-mirrorlist
+
+[cachyos-core-v4]
+Include = /etc/pacman.d/cachyos-v4-mirrorlist
+
+[cachyos-extra-v4]
+Include = /etc/pacman.d/cachyos-v4-mirrorlist
+
+"
+  elif [[ "$ARCH" == "v3" ]]; then
+    REPO_CONFIG="[cachyos-v3]
+Include = /etc/pacman.d/cachyos-v3-mirrorlist
+
+[cachyos-core-v3]
+Include = /etc/pacman.d/cachyos-v3-mirrorlist
+
+[cachyos-extra-v3]
+Include = /etc/pacman.d/cachyos-v3-mirrorlist
+
+"
+  fi
+
+  REPO_CONFIG="${REPO_CONFIG}[cachyos]
+Include = /etc/pacman.d/cachyos-mirrorlist"
+
+  if ! grep -q "\[cachyos\]" /etc/pacman.conf; then
+    sudo cp /etc/pacman.conf /etc/pacman.conf.bak
+    echo -e "\n${REPO_CONFIG}" | sudo tee -a /etc/pacman.conf >/dev/null
+    echo -e "${GREEN}Repositories added to pacman.conf${NC}"
+  else
+    echo -e "${YELLOW}CachyOS repositories already configured${NC}"
+  fi
+
+  echo -e "${YELLOW}Syncing package databases...${NC}"
+  sudo pacman -Sy
+}
+
 install_packages() {
   local -a pkgs=()
   mapfile -t pkgs < <(grep -hvE '^[[:space:]]*(#|$)' "$PROJECT_DIR/packages/arch-core.packages")
@@ -47,8 +120,10 @@ install_runtime() {
   mkdir -p "$INSTALL_DIR"
 
   for item in applications bin default install shell themes icon.png icon.txt logo.svg logo.txt version LICENSE; do
-    if [[ -e $PROJECT_DIR/$item ]]; then
-      rm -rf "$INSTALL_DIR/$item"
+    if [[ -d $PROJECT_DIR/$item ]]; then
+      mkdir -p "$INSTALL_DIR/$item"
+      cp -a "$PROJECT_DIR/$item/." "$INSTALL_DIR/$item/"
+    elif [[ -e $PROJECT_DIR/$item ]]; then
       cp -a "$PROJECT_DIR/$item" "$INSTALL_DIR/$item"
     fi
   done
@@ -332,6 +407,7 @@ EOF
 
 if ! $SANDBOX; then
   cleanup_pacman_repos
+  setup_cachyos_repos
   install_packages
 fi
 
