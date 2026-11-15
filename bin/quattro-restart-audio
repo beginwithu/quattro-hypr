@@ -9,6 +9,7 @@ restart_audio_services() {
   echo -e "Restarting audio services...\n"
 
   if timeout 25s systemctl --user restart "${services[@]}"; then
+    timeout 10s systemctl --user try-restart xdg-desktop-portal-hyprland.service xdg-desktop-portal.service >/dev/null 2>&1 || true
     return 0
   fi
 
@@ -18,6 +19,7 @@ restart_audio_services() {
   systemctl --user reset-failed "${services[@]}" >/dev/null 2>&1 || true
 
   timeout 25s systemctl --user start pipewire.service pipewire-pulse.service wireplumber.service
+  timeout 10s systemctl --user try-restart xdg-desktop-portal-hyprland.service xdg-desktop-portal.service >/dev/null 2>&1 || true
 }
 
 wpctl_healthy() {
