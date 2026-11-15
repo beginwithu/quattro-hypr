@@ -33,7 +33,7 @@ ttf-jetbrains-mono-nerd
 woff2-font-awesome
 
 # Default terminal, browser, file manager
-chromium
+brave-origin-bin
 foot
 nautilus
 
@@ -55,6 +55,7 @@ inxi
 jq
 lazygit
 less
+localsend
 lua51
 neovim
 pacman-contrib
