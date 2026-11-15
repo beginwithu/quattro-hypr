@@ -24,3 +24,4 @@
 
 -- Logitech MX Keys examples:
 -- o.bind("SUPER + PERIOD", nil, { panel = "quattro.emojis" })
+o.rebind("SUPER + SHIFT + F", "File manager", { launch = "nautilus --new-window" })
