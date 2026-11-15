@@ -219,6 +219,13 @@ EOF
   # Install desktop entries, icons, and fonts to ~/.local/share
   mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/fonts/quattro" "$HOME/.config/fontconfig/conf.d"
   cp -a "$PROJECT_DIR"/applications/*.desktop "$HOME/.local/share/applications/"
+  if command -v alacritty >/dev/null 2>&1 && [[ -f $PROJECT_DIR/default/alacritty/Alacritty.desktop ]]; then
+    cp -a "$PROJECT_DIR/default/alacritty/Alacritty.desktop" "$HOME/.local/share/applications/"
+  fi
+  if command -v foot >/dev/null 2>&1 && [[ -f $PROJECT_DIR/default/foot/foot.desktop ]]; then
+    cp -a "$PROJECT_DIR/default/foot/foot.desktop" "$HOME/.local/share/applications/"
+  fi
+  rm -f "$HOME/.cache/xdg-terminal-exec"
   cp -a "$PROJECT_DIR/default/fonts/quattro/quattro.ttf" "$HOME/.local/share/fonts/quattro/quattro.ttf"
   cp -a "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf" "$HOME/.config/fontconfig/conf.d/50-quattro.conf"
 

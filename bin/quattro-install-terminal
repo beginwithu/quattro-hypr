@@ -33,8 +33,9 @@ if quattro-pkg-add $package; then
     cp "$QUATTRO_PATH/default/alacritty/$desktop_id" ~/.local/share/applications/
   elif [[ $package == "foot" ]]; then
     mkdir -p ~/.local/share/applications
-    cp "$QUATTRO_PATH/applications/$desktop_id" ~/.local/share/applications/
+    cp "$QUATTRO_PATH/default/foot/$desktop_id" ~/.local/share/applications/
   fi
+  rm -f ~/.cache/xdg-terminal-exec
 
   # Copy default config for optional terminals when missing
   if [[ ! -e ~/.config/$package ]]; then

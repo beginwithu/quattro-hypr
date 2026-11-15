@@ -10,4 +10,9 @@ if quattro-cmd-present alacritty; then
   cp "$QUATTRO_PATH/default/alacritty/Alacritty.desktop" ~/.local/share/applications/
 fi
 
+if quattro-cmd-present foot; then
+  cp "$QUATTRO_PATH/default/foot/foot.desktop" ~/.local/share/applications/
+fi
+
+rm -f ~/.cache/xdg-terminal-exec
 update-desktop-database ~/.local/share/applications
