@@ -224,7 +224,6 @@
   "setup.keyboard.input-methods": {"icon":"","label":"Input Methods","action":"quattro-setup-input"},
   "setup.input": {"icon":"","label":"Input","when":"[[ -f ~/.config/hypr/input.lua ]]","action":"quattro-launch-config-editor \"$HOME/.config/hypr/input.lua\""},
   "setup.monitors": {"icon":"󰍹","label":"Monitors","when":"[[ -f ~/.config/hypr/monitors.lua ]]","action":"quattro-launch-config-editor \"$HOME/.config/hypr/monitors.lua\""},
-  "setup.language": {"icon":"","label":"Language","provider":"languages"},
   "setup.network": {"icon":"󰛳","label":"Network","aliases":["network"]},
   "setup.network.dns": {"icon":"󰇖","label":"DNS","aliases":["dns"]},
   "setup.network.dns.dhcp": {"icon":"󰩟","label":"DHCP","checked":"[[ \"$(quattro-dns)\" == \"DHCP\" ]]","action":"quattro-dns DHCP"},

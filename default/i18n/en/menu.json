@@ -462,6 +462,9 @@
   "setup.input": {
     "label": "Input"
   },
+  "setup.monitors": {
+    "label": "Monitors"
+  },
   "setup.language": {
     "label": "Language"
   },
