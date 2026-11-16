@@ -40,6 +40,7 @@ nautilus
 # Core CLI tools used by shell & scripts
 bash-completion
 bat
+yay
 btop
 eza
 expac
