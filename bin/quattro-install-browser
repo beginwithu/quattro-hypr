@@ -56,7 +56,7 @@ chromium)
   ;;
 chrome)
   echo "Installing Chrome..."
-  quattro-pkg-add google-chrome
+  quattro-pkg-aur-add google-chrome || exit 1
 
   setup_chromium_policy_directory /etc/opt/chrome/policies/managed
   copy_chromium_flags ~/.config/chrome-flags.conf

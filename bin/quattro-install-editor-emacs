@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# quattro:summary=Install Emacs with Quattro theme and font integration via the quattro-emacs AUR package
+# quattro:summary=Install Emacs from Arch repositories
 
 echo "Installing Emacs..."
-quattro-pkg-aur-add quattro-emacs && quattro-install-emacs
+quattro-pkg-add emacs || exit 1
 
 # emacsclient opens a frame on the running daemon, not a second Emacs
 setsid uwsm-app -- gtk-launch emacsclient >/dev/null 2>&1 &

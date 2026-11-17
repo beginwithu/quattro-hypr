@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# quattro:summary=Apply pacman configuration (preserves existing system config)
+# quattro:hidden=true
+
 # Custom repository and pacman.conf template application are disabled so the
 # system's existing /etc/pacman.conf and /etc/pacman.d/mirrorlist remain untouched.
 

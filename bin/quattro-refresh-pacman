@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# quattro:summary=Refresh pacman package databases using existing system repositories
+# quattro:hidden=true
+
 # Refresh pacman package databases using the existing system /etc/pacman.conf
 # and /etc/pacman.d/mirrorlist without modifying or adding repositories.
 

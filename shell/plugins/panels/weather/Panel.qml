@@ -474,11 +474,11 @@ Panel {
     }
   }
 
-  // Quattro's own lookup: city and coordinates from Cloudflare's view of
-  // this network, in weather.json's shape.
+  // Auto-detect city and coordinates from GeoJS IP geolocation when no manual
+  // location is saved in weather.json.
   Process {
     id: locationProc
-    command: ["curl", "-fsS", "--max-time", "4", "https://geo.omarchy.org/"]
+    command: ["curl", "-fsS", "--max-time", "4", "https://get.geojs.io/v1/ip/geo.json"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {

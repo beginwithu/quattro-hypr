@@ -465,7 +465,7 @@ stop_screenrecording() {
     quattro-notification-send "$(quattro-i18n capture.recordingSaved)" "$(recording_details "$filename")" \
       -t 10000 "${image_args[@]}" \
       --action "$(quattro-i18n capture.recordingOpen)" mpv -- \
-      --action "$(quattro-i18n capture.recordingCut)" omacut \
+      --action "$(quattro-i18n capture.recordingCut)" quattro-video-cut \
       --with "$filename"
 
     # The shell loads the preview into memory when the toast appears and never

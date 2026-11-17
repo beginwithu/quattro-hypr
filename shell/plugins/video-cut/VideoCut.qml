@@ -162,7 +162,7 @@ Item {
     root.statusText = isReplace ? "Trimming original video..." : "Saving trimmed copy..."
 
     var startSec = (root.startMs / 1000.0).toFixed(3)
-    var endSec = (root.endMs / 1000.0).toFixed(3)
+    var durationSec = Math.max(0.1, (root.endMs - root.startMs) / 1000.0).toFixed(3)
     var inQ = Util.shellQuote(root.videoPath)
     var modeFlag = isReplace ? "replace" : "copy"
 
@@ -175,7 +175,7 @@ Item {
       + "ext=\"${base##*.}\"\n"
       + "if [[ \"$stem\" == \"$base\" ]]; then ext=\"mp4\"; fi\n"
       + "if [[ \"$mode\" == \"replace\" ]]; then\n"
-      + "  tmp_out=\"$dir/.${stem}.omacut-$$.${ext}\"\n"
+      + "  tmp_out=\"$dir/.${stem}.quattro-video-cut-$$.${ext}\"\n"
       + "  final_out=\"$in_file\"\n"
       + "else\n"
       + "  final_out=\"$dir/${stem}-cut.${ext}\"\n"
@@ -186,8 +186,9 @@ Item {
       + "  done\n"
       + "  tmp_out=\"$final_out\"\n"
       + "fi\n"
-      + "ffmpeg -y -ss " + Util.shellQuote(startSec) + " -to " + Util.shellQuote(endSec)
-      + " -i \"$in_file\" -c:v libx264 -preset veryfast -crf 18 -c:a aac -movflags +faststart \"$tmp_out\" -loglevel error\n"
+      + "ffmpeg -y -ss " + Util.shellQuote(startSec)
+      + " -i \"$in_file\" -t " + Util.shellQuote(durationSec)
+      + " -c:v libx264 -preset veryfast -crf 18 -c:a aac -movflags +faststart \"$tmp_out\" -loglevel error\n"
       + "if [[ \"$mode\" == \"replace\" ]]; then\n"
       + "  mv -f \"$tmp_out\" \"$final_out\"\n"
       + "fi\n"
@@ -234,6 +235,7 @@ Item {
 
   PanelWindow {
     id: window
+    screen: root.targetScreen
     visible: root.opened
     color: "transparent"
 

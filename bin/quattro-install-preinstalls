@@ -15,18 +15,11 @@ if gum confirm --affirmative "$(quattro-i18n common.yes)" --negative "$(quattro-
     exit 1
   fi
 
-  # Mirrors the list in quattro-remove-preinstalls; both track quattro-base.packages
+  # Mirrors the list in quattro-remove-preinstalls
   if ! quattro-pkg-add \
-    aether \
-    cliamp \
     libreoffice-fresh \
     pinta \
-    obsidian \
-    omacut \
-    omacalc \
-    omawrite \
-    hype \
-    signed; then
+    obsidian; then
     echo -e "\nPreinstalls are still marked as removed. Fix the errors above and try again."
     exit 1
   fi

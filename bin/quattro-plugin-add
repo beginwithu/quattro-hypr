@@ -3,7 +3,7 @@
 # quattro:summary=Add a shell plugin from git
 # quattro:group=plugin
 # quattro:args=[git-url] [--enable] [--yes]
-# quattro:examples=quattro plugin add https://github.com/acme/omarchy-weather.git --enable
+# quattro:examples=quattro plugin add https://github.com/acme/quattro-weather.git --enable
 # quattro:alias=quattro plugin install
 
 set -euo pipefail
@@ -89,7 +89,7 @@ done
 
 if [[ -z $url ]]; then
   interactive ||
-    fail "a git URL is required (e.g. quattro plugin add https://github.com/acme/omarchy-weather.git)"
+    fail "a git URL is required (e.g. quattro plugin add https://github.com/acme/quattro-weather.git)"
   url=$(gum input --prompt "$(quattro-i18n plugin.gitUrlPrompt)") || fail "cancelled"
   [[ -n $url ]] || fail "a git URL is required"
 fi

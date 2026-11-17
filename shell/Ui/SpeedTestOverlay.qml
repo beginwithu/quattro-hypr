@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Commons
 import qs.Commons as Commons
@@ -76,6 +77,17 @@ PanelWindow {
   readonly property color onScrimUrgent: "#ff6b6b"
 
   visible: open
+  screen: {
+    var screens = Quickshell.screens
+    if (!screens || screens.length === 0) return null
+    var fm = Hyprland.focusedMonitor
+    if (fm) {
+      for (var i = 0; i < screens.length; i++) {
+        if (String(screens[i].name || "") === String(fm.name || "")) return screens[i]
+      }
+    }
+    return screens[0]
+  }
   // The window is instantiated hidden, so re-acquire focus after mapping and
   // fire the ignition sweep once the surface is actually on screen.
   onOpenChanged: {

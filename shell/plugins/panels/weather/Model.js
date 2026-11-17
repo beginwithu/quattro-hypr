@@ -10,8 +10,9 @@ function parseLocationFile(raw) {
     var latitude = parseFloat(data.latitude)
     var longitude = parseFloat(data.longitude)
     var hasCoordinates = !isNaN(latitude) && !isNaN(longitude)
+    var rawName = typeof data.name === "string" ? data.name : (typeof data.city === "string" ? data.city : "")
     return {
-      name: typeof data.name === "string" ? data.name.replace(/^\s+|\s+$/g, "") : "",
+      name: rawName.replace(/^\s+|\s+$/g, ""),
       latitude: hasCoordinates ? latitude : null,
       longitude: hasCoordinates ? longitude : null
     }

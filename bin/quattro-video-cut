@@ -50,12 +50,12 @@ def probe_duration_ms(video_path: str) -> int:
 def main() -> int:
     args = [a for a in sys.argv[1:] if a != "--"]
     if not args or args[0] in ("-h", "--help"):
-        print("Usage: omacut <video-file>")
+        print("Usage: quattro-video-cut <video-file>")
         return 0 if args else 1
 
     video_path = str(Path(args[0]).expanduser().resolve())
     if not os.path.isfile(video_path):
-        print(f"omacut: file not found: {video_path}", file=sys.stderr)
+        print(f"quattro-video-cut: file not found: {video_path}", file=sys.stderr)
         return 1
 
     quattro_path = resolve_quattro_path()
@@ -94,7 +94,7 @@ def main() -> int:
         )
         return 0
 
-    print("omacut: Quickshell video cutter unavailable", file=sys.stderr)
+    print("quattro-video-cut: Quickshell video cutter unavailable", file=sys.stderr)
     return 1
 
 

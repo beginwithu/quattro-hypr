@@ -406,8 +406,7 @@ command_requires_args() {
 }
 
 # A command whose documented arguments are all flags can't take a word, so a
-# word after it names something else: `quattro agent account` is the account
-# commands, not an argument to quattro-agent.
+# word after it names a subcommand rather than an argument to that binary.
 command_takes_only_flags() {
   local key="$1"
   local args="${COMMAND_ARGS[$key]}"

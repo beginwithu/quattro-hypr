@@ -34,5 +34,5 @@ if [[ -z $browser_exec ]]; then
 fi
 
 if ! quattro-cmd-browser-handoff "$browser_exec" --app="$1" "${@:2}"; then
-  exec setsid uwsm-app -- $browser_exec --app="$1" "${@:2}"
+  exec setsid uwsm-app -- "$browser_exec" --app="$1" "${@:2}"
 fi

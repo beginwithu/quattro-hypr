@@ -20,14 +20,7 @@ if gum confirm --affirmative "$(quattro-i18n common.yes)" --negative "$(quattro-
        ~/.local/bin/cf ~/.local/bin/ghui ~/.local/bin/hunk
 
   quattro-pkg-drop \
-    aether \
-    cliamp \
     libreoffice-fresh \
     pinta \
-    obsidian \
-    omacut \
-    omacalc \
-    omawrite \
-    hype \
-    signed
+    obsidian
 fi

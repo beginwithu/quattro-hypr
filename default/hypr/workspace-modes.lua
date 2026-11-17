@@ -23,7 +23,7 @@ local WORKSPACE_TAG = "quattro-floating-workspace"
 local OPENED_TAG = "quattro-mode-opened"
 local OPEN_RULE = "quattro-floating-open-"
 local LAST_WORKSPACE = 2147483647
-local TITLEBARS = "/usr/lib/omarchy-hyprland-titlebars/titlebars.so"
+local TITLEBARS = "/usr/lib/quattro-hyprland-titlebars/titlebars.so"
 
 local M = {}
 

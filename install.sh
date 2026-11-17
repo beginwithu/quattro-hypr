@@ -38,6 +38,12 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 setup_cachyos_repos() {
+  if [[ -f /etc/pacman.conf ]] && grep -qE '^[[:space:]]*\[cachyos\][[:space:]]*$' /etc/pacman.conf; then
+    echo -e "${YELLOW}CachyOS repositories already configured; syncing package databases...${NC}"
+    sudo pacman -Sy
+    return
+  fi
+
   echo -e "${YELLOW}Detecting CPU architecture...${NC}"
 
   local ARCH
@@ -57,11 +63,23 @@ setup_cachyos_repos() {
   sudo pacman-key --lsign-key F3B607488DB35A47
 
   echo -e "${YELLOW}Installing CachyOS keyring and mirrorlists...${NC}"
+  local cachyos_base="https://mirror.cachyos.org/repo/x86_64/cachyos"
+  local cachyos_index
+  cachyos_index=$(curl -fsSL --max-time 10 "$cachyos_base/" 2>/dev/null || true)
+
+  resolve_cachyos_pkg() {
+    local name="$1" fallback="$2" found=""
+    if [[ -n $cachyos_index ]]; then
+      found=$(printf '%s\n' "$cachyos_index" | grep -oE "${name}-[0-9][^\"'<>]*-any\.pkg\.tar\.zst" | head -n1 || true)
+    fi
+    echo "${cachyos_base}/${found:-$fallback}"
+  }
+
   sudo pacman -U --noconfirm \
-    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
-    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-27-1-any.pkg.tar.zst" \
-    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst" \
-    "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst"
+    "$(resolve_cachyos_pkg cachyos-keyring cachyos-keyring-20240331-1-any.pkg.tar.zst)" \
+    "$(resolve_cachyos_pkg cachyos-mirrorlist cachyos-mirrorlist-27-1-any.pkg.tar.zst)" \
+    "$(resolve_cachyos_pkg cachyos-v3-mirrorlist cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst)" \
+    "$(resolve_cachyos_pkg cachyos-v4-mirrorlist cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst)"
 
   echo -e "${YELLOW}Configuring repositories in pacman.conf...${NC}"
 
@@ -93,13 +111,8 @@ Include = /etc/pacman.d/cachyos-v3-mirrorlist
   REPO_CONFIG="${REPO_CONFIG}[cachyos]
 Include = /etc/pacman.d/cachyos-mirrorlist"
 
-  if ! grep -q "\[cachyos\]" /etc/pacman.conf; then
-    sudo cp /etc/pacman.conf /etc/pacman.conf.bak
-    echo -e "\n${REPO_CONFIG}" | sudo tee -a /etc/pacman.conf >/dev/null
-    echo -e "${GREEN}Repositories added to pacman.conf${NC}"
-  else
-    echo -e "${YELLOW}CachyOS repositories already configured${NC}"
-  fi
+  echo -e "\n${REPO_CONFIG}" | sudo tee -a /etc/pacman.conf >/dev/null
+  echo -e "${GREEN}Repositories added to pacman.conf${NC}"
 
   echo -e "${YELLOW}Syncing package databases...${NC}"
   sudo pacman -Sy
@@ -130,8 +143,8 @@ install_runtime() {
 
   echo "==> Linking quattro-* commands into $BIN_LINK_DIR..."
   mkdir -p "$BIN_LINK_DIR"
-  for link in "$BIN_LINK_DIR"/quattro-*; do
-    [[ -L $link && ! -e $link ]] && rm -f "$link"
+  for link in "$BIN_LINK_DIR"/quattro-* "$BIN_LINK_DIR"/omacut; do
+    [[ -L $link && (! -e $link || ${link##*/} == "omacut") ]] && rm -f "$link"
   done
   for bin_file in "$PROJECT_DIR"/bin/*; do
     local name="${bin_file##*/}"
@@ -152,7 +165,7 @@ install_user_configs() {
 
     if [[ -d $entry ]]; then
       mkdir -p "$target"
-      # Copy sub-items individually so existing user files outside Quattro defaults are backed up
+      # Copy sub-items individually so existing user files outside Quattro defaults are preserved
       while IFS= read -r -d '' src_file; do
         local rel="${src_file#$entry/}"
         local dst_file="$target/$rel"
@@ -395,8 +408,12 @@ EOF
 
   printf 'export QUATTRO_PATH="%s"\n' "$INSTALL_DIR" | sudo tee /etc/quattro.conf >/dev/null
 
-  # Install packaged root-owned DNS helper and passwordless sudoers rule for one-click DNS switching
+  # Install packaged root-owned DNS and passwordless-sudo helpers
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-dns" /usr/bin/quattro-dns
+  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-sudo-passwordless" /usr/bin/quattro-sudo-passwordless
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/bin/quattro-security-functions" /usr/bin/quattro-security-functions
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/tmpfiles.d/quattro-nopasswd-sudo.conf" /etc/tmpfiles.d/quattro-nopasswd-sudo.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/05-quattro-passwordless-revoke.hook" /usr/share/libalpm/hooks/05-quattro-passwordless-revoke.hook
   if ! command -v visudo >/dev/null 2>&1 || visudo -cf "$PROJECT_DIR/etc/sudoers.d/quattro-dns" >/dev/null 2>&1; then
     sudo install -Dm440 -o root -g root "$PROJECT_DIR/etc/sudoers.d/quattro-dns" /etc/sudoers.d/quattro-dns
   fi
@@ -408,8 +425,6 @@ EOF
 
   echo "==> Enabling SDDM display manager..."
   sudo systemctl enable sddm.service
-  echo "Rebooting the System..."
-  sudo reboot
 }
 
 if ! $SANDBOX; then
@@ -444,4 +459,11 @@ EOF
 if ! $SANDBOX && [[ -d /run/systemd/system ]] && [[ -z ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && ! systemctl is-active --quiet sddm.service; then
   echo "==> Enabling SDDM..."
   sudo systemctl enable sddm.service
+fi
+
+if ! $SANDBOX && [[ ${QUATTRO_NO_REBOOT:-0} != "1" ]]; then
+  echo ""
+  echo "==> Installation complete. Rebooting in 5 seconds (Ctrl+C to cancel)..."
+  sleep 5
+  sudo reboot
 fi

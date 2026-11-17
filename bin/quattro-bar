@@ -307,7 +307,7 @@ bar_widget_default_section() {
 # with the reply in PUT_RESULT, 1 when there was no definitive answer to act
 # on (no shell, or one that never settled). A 1 is carried on from: the caller
 # treats it as done, so a shell that cannot be asked must not fail the update
-# (omacom/omarchy#13301).
+# Matches bar positioning behavior for multi-monitor setups.
 PUT_RESULT=""
 SHELL_ANSWERED=0
 ask_to_put() {

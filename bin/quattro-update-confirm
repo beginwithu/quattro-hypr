@@ -8,7 +8,7 @@ gum style --border normal --padding "1 2" \
   "• $(quattro-i18n update.cannotStop)" \
   "• $(quattro-i18n update.connectPower)" \
   "" \
-  "$(quattro-i18n update.whatsNew "https://github.com/omacom/omarchy/releases/latest")"
+  "$(quattro-i18n update.whatsNew "https://github.com/beginwithu/quattro-hypr/releases/latest")"
 
 echo
 

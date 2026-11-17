@@ -45,11 +45,14 @@ if quattro-cmd-missing "$editor"; then
     exec quattro-launch-floating-terminal-with-presentation quattro-default-editor --install "$selection"
   else
     case "$selection" in
-    plain) quattro-pkg-add plain ;;
+    plain)
+      echo "plain is not installed; install it manually or choose another editor." >&2
+      exit 1
+      ;;
     code) quattro-install-editor-vscode ;;
-    cursor) quattro-pkg-add cursor-bin ;;
+    cursor) quattro-pkg-aur-add cursor-bin ;;
     zed) quattro-install-editor-zed ;;
-    sublime_text) quattro-pkg-add sublime-text-4 ;;
+    sublime_text) quattro-pkg-aur-add sublime-text-4 ;;
     helix) quattro-install-editor-helix ;;
     vim) quattro-pkg-add vim ;;
     emacs) quattro-install-editor-emacs ;;

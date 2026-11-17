@@ -90,7 +90,7 @@ fi
 # x86, plain aarch64, Snapdragon, N1x and GB10 machines have no registered
 # package: every operation is a no-op there and callers keep their generic path.
 # Apple Silicon's boot operations belong to quattro-mac-boot, and its system and
-# user setup and app-install hooks to quattro-mac (both omacom/omarchy-mac-pkgs).
+# user setup and app-install hooks to quattro-mac.
 # Provisioning and factory reset have no other path on a Mac, only update-verify
 # checks what an update left in its boot chain, its boot checks prove the kept
 # LUKS slots that luks-slots records, and hardware setup has no other way to run

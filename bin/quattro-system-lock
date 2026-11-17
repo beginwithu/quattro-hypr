@@ -7,9 +7,7 @@
 
 lock_result=$(quattro-shell lock lock 2>/dev/null || true)
 if [[ $lock_result != "ok" ]]; then
-  if command -v hyprlock >/dev/null 2>&1; then
-    hyprlock >/dev/null 2>&1 &
-  elif [[ $lock_result == "missing-pam" ]]; then
+  if [[ $lock_result == "missing-pam" ]]; then
     quattro-notification-send -u critical \
       "Lock screen is not configured" \
       "Run: sudo quattro-apply-lock (or re-run ./install.sh) to configure /etc/pam.d/quattro-lock-password." || true

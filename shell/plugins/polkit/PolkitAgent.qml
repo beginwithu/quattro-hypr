@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Polkit
 import Quickshell.Wayland
@@ -226,6 +227,17 @@ Item {
     Binding { target: panel.contentItem; property: "LayoutMirroring.childrenInherit"; value: true }
 
     visible: root.dialogVisible
+    screen: {
+      var screens = Quickshell.screens
+      if (!screens || screens.length === 0) return null
+      var fm = Hyprland.focusedMonitor
+      if (fm) {
+        for (var i = 0; i < screens.length; i++) {
+          if (String(screens[i].name || "") === String(fm.name || "")) return screens[i]
+        }
+      }
+      return screens[0]
+    }
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.namespace: "quattro-polkit"
