@@ -120,6 +120,7 @@ expected_files=(
   "$tmp_home/.local/state/quattro/current/theme/ghostty.conf"
   "$tmp_home/.local/state/quattro/current/theme/btop.theme"
   "$tmp_home/.local/state/quattro/current/theme/hyprland.lua"
+  "$tmp_home/.local/state/quattro/current/theme/qt6ct.colors"
   "$tmp_home/.local/state/quattro/current/theme/qtengine.colors"
   "$tmp_home/.local/state/quattro/current/theme/shell.toml"
   "$tmp_home/.local/state/quattro/current/theme/gtk.css"

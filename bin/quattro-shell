@@ -37,7 +37,9 @@ USAGE
 fi
 
 (( $# >= 2 )) || fail "Usage: quattro-shell <target> <method> [args...]"
-[[ -n ${QUATTRO_PATH:-} ]] || fail "QUATTRO_PATH is not set"
+if [[ -z ${QUATTRO_PATH:-} ]]; then
+  QUATTRO_PATH=$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)
+fi
 [[ -f $QUATTRO_PATH/shell/shell.qml ]] || fail "quattro-shell config not found: $QUATTRO_PATH/shell/shell.qml"
 
 # qs matches instances by display, and a caller from outside the session (an

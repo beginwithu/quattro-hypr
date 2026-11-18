@@ -4,6 +4,7 @@
 
 set -euo pipefail
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 updates=()
 
 if [[ $QUATTRO_PATH != "/usr/share/quattro" ]]; then

@@ -11,7 +11,7 @@ Item {
   id: root
 
   property var shell: null
-  property string quattroPath: ""
+  property string quattroPath: Util.quattroPath
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string stateHome: home + "/.local/state"
@@ -710,7 +710,7 @@ Item {
   Process {
     id: posterProc
     property string sourcePath: ""
-    command: ["bash", Quickshell.env("QUATTRO_PATH") + "/shell/plugins/lock/poster.sh", sourcePath]
+    command: ["bash", (root.quattroPath || Util.quattroPath) + "/shell/plugins/lock/poster.sh", sourcePath]
     stdout: StdioCollector { id: posterOutput; waitForEnd: true }
     onExited: function(exitCode) {
       if (sourcePath !== root.backgroundPath) {

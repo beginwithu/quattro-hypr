@@ -11,7 +11,7 @@ import "AppSearch.js" as AppSearch
 Item {
   id: root
 
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
 
   property var configuredHiddenEntryIds: ({})
   property var desktopHiddenEntryIds: ({})

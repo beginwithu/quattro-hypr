@@ -5,7 +5,7 @@ import qs.Commons
 ShellRoot {
   id: standaloneRoot
 
-  readonly property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  readonly property string quattroPath: Util.quattroPath
 
   Loader {
     id: screensaverLoader

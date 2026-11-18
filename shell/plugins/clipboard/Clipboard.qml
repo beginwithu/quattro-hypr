@@ -10,7 +10,7 @@ import "ClipboardHistory.js" as ClipboardHistory
 Item {
   id: root
 
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
   property bool opened: false
   property string filterText: ""
   property int selectedIndex: 0

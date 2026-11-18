@@ -6,6 +6,7 @@
 
 set -e
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 source "$QUATTRO_PATH/default/chromium/browser-policy.sh"
 
 opt_path="${QUATTRO_OPT_PATH:-/opt}"

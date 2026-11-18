@@ -6,6 +6,7 @@
 
 set -euo pipefail
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 locales_json=${QUATTRO_LOCALES_JSON:-$QUATTRO_PATH/default/i18n/locales.json}
 language_file=${QUATTRO_LANGUAGE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/quattro/language}
 

@@ -15,7 +15,7 @@ Item {
   id: root
 
   // The quattro-shell host injects quattroPath from QUATTRO_PATH.
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
   // Injected by the host shell so bar slots can resolve enabled widgets.
   property var barWidgetRegistry: fallbackBarWidgetRegistry
   // Read-only registry view for third-party full bars; the built-in bar does

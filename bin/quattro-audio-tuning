@@ -7,6 +7,7 @@
 
 set -uo pipefail
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 tunings_dir="$QUATTRO_PATH/default/audio/tunings"
 config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 

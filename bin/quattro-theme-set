@@ -9,6 +9,9 @@ if [[ -z $1 ]]; then
   exit 1
 fi
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+export QUATTRO_PATH
+
 CURRENT_THEME_PATH="$HOME/.local/state/quattro/current/theme"
 CURRENT_THEME_NAME_PATH="$HOME/.local/state/quattro/current/theme.name"
 NEXT_THEME_PATH="$HOME/.local/state/quattro/current/next-theme"

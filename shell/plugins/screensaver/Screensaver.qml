@@ -9,7 +9,7 @@ import qs.Commons as Commons
 Item {
   id: root
 
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
   property var shell: null
   property var manifest: null
   property bool standalone: false

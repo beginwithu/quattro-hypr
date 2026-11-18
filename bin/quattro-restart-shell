@@ -3,6 +3,8 @@
 # quattro:summary=Restart the Quattro shell
 # quattro:examples=quattro restart shell
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+
 # A caller opened after dev link/unlink may disagree with the still-running
 # desktop. The user manager receives Hyprland's environment at session start.
 session_quattro_path=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^QUATTRO_PATH=//p' | tail -n 1)

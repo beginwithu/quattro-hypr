@@ -2,7 +2,8 @@
 
 # quattro:summary=Check the update log for known failure conditions
 
-update_log="/tmp/quattro-update.log"
+update_log="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/quattro-update.log"
+[[ -r $update_log ]] || exit 0
 
 # Check for initramfs generation failure
 if grep -q "Updating linux initcpios" "$update_log"; then

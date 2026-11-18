@@ -17,6 +17,7 @@
 #
 # The shell watches icons.revision and redraws the icons when it changes.
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 CURRENT="$HOME/.local/state/quattro/current"
 THEME="$CURRENT/theme"
 ICONS="$CURRENT/icons"

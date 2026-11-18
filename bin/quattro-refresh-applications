@@ -2,6 +2,7 @@
 
 # quattro:summary=Ensure default application launchers are installed.
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 # Copy .desktop declarations
 mkdir -p ~/.local/share/applications
 cp "$QUATTRO_PATH"/applications/*.desktop ~/.local/share/applications/

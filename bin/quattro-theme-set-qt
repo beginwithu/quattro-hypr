@@ -1,20 +1,55 @@
 #!/bin/bash
 
-# quattro:summary=Apply the current theme's icon theme to Qt apps
+# quattro:summary=Apply the current theme colors and icon theme to Qt apps (qt6ct & qtengine)
 # quattro:hidden=true
 
 set -euo pipefail
 
-# qtengine follows the theme's qtengine.colors on its own, but takes the icon
-# theme from its config. Only that key is written, so the rest of the file stays
-# the user's, and the write is what makes running Qt apps reload their icons.
-CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/qtengine/config.json"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+icon_theme="Adwaita"
 
+# 1. Configure qt6ct (stock Arch [extra] Qt6 platform theme)
+qt6ct_colors="$state_home/quattro/current/theme/qt6ct.colors"
+qt6ct_conf="$config_home/qt6ct/qt6ct.conf"
+if [[ -f $qt6ct_colors ]] && { command -v qt6ct >/dev/null 2>&1 || [[ -f $qt6ct_conf || -f /usr/lib/qt6/plugins/platformthemes/libqt6ct.so ]]; }; then
+  mkdir -p "$(dirname "$qt6ct_conf")"
+  if [[ ! -f $qt6ct_conf ]]; then
+    cat >"$qt6ct_conf" <<EOF
+[Appearance]
+color_scheme_path=$qt6ct_colors
+custom_palette=true
+icon_theme=$icon_theme
+style=Fusion
+EOF
+  else
+    python3 - "$qt6ct_conf" "$qt6ct_colors" "$icon_theme" <<'PY'
+import configparser, os, sys
+
+conf_path, colors_path, icon_theme = sys.argv[1:4]
+real_path = os.path.realpath(conf_path)
+cp = configparser.ConfigParser(interpolation=None)
+cp.optionxform = str
+cp.read(real_path, encoding="utf-8")
+if not cp.has_section("Appearance"):
+    cp.add_section("Appearance")
+cp.set("Appearance", "color_scheme_path", colors_path)
+cp.set("Appearance", "custom_palette", "true")
+cp.set("Appearance", "icon_theme", icon_theme)
+if not cp.get("Appearance", "style", fallback="").strip():
+    cp.set("Appearance", "style", "Fusion")
+tmp = real_path + ".quattro-tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    cp.write(f, space_around_delimiters=False)
+os.replace(tmp, real_path)
+PY
+  fi
+fi
+
+# 2. Configure qtengine (if installed)
+CONFIG="$config_home/qtengine/config.json"
 [[ -f $CONFIG ]] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
-
-# The same icons quattro-theme-set-gnome gives GTK: Adwaita, for every theme.
-icon_theme="Adwaita"
 
 if [[ $(jq -r '.theme.iconTheme // empty' "$CONFIG") == "$icon_theme" ]]; then
   exit 0

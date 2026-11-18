@@ -3,6 +3,7 @@
 # quattro:summary=Apply the current theme color to Chromium, Chrome, Edge, and Brave
 # quattro:hidden=true
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 source "$QUATTRO_PATH/default/chromium/browser-policy.sh"
 
 CHROMIUM_THEME=$HOME/.local/state/quattro/current/theme/chromium.theme

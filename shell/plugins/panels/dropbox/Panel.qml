@@ -20,7 +20,7 @@ Panel {
   readonly property Item hero: panel.loadedContent ? panel.loadedContent.hero : null
   readonly property Item fileColumn: panel.loadedContent ? panel.loadedContent.fileColumn : null
 
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
   property string focusSection: "login"
   property int fileIndex: 0
   property bool cursorActive: false

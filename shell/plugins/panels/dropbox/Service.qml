@@ -8,7 +8,7 @@ Item {
   id: root
 
   property var settings: ({})
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
 
   property bool installed: false
   property bool running: false

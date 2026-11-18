@@ -54,8 +54,10 @@ cleanup_update() {
 }
 
 if [[ -z ${QUATTRO_UPDATE_LOGGED:-} ]]; then
+  update_log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/quattro"
+  mkdir -p -m 0700 "$update_log_dir"
   script_command=$(printf '%q ' "$0" "$@")
-  exec env QUATTRO_UPDATE_LOGGED=1 script -qefc "$script_command" "/tmp/quattro-update.log"
+  exec env QUATTRO_UPDATE_LOGGED=1 script -qefc "$script_command" "$update_log_dir/quattro-update.log"
 fi
 
 if ! quattro-update-lock held; then

@@ -3,6 +3,7 @@
 # quattro:summary=Copy a shipped user config from $QUATTRO_PATH/config into ~/.config (backs up your version).
 # quattro:args=<config-path>
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 config_file=${1:-}
 
 if [[ -z $config_file ]]; then

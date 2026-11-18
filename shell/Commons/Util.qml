@@ -173,6 +173,9 @@ QtObject {
     return out
   }
 
+  // Resolved Quattro root directory; honors QUATTRO_PATH and falls back to the tree containing shell/.
+  readonly property string quattroPath: Quickshell.env("QUATTRO_PATH") || String(Qt.resolvedUrl("../..")).replace(/^file:\/\//, "").replace(/\/+$/, "")
+
   // The bar's sections in the order they run along it, and tray, drawn
   // inside the tray's drawer. The center box sits in the middle of the bar;
   // centerBegin and centerEnd hang off its two edges.

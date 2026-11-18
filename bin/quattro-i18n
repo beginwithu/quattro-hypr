@@ -44,6 +44,7 @@ if [[ -z $key ]]; then
 fi
 shift
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 i18n=$QUATTRO_PATH/default/i18n
 language_file=${QUATTRO_LANGUAGE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/quattro/language}
 language=en

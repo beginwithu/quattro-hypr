@@ -90,7 +90,7 @@ Item {
 
   Process {
     id: statusProbe
-    command: ["bash", Quickshell.env("QUATTRO_PATH") + "/shell/plugins/services/remote-session/probe.sh"]
+    command: ["bash", String(Qt.resolvedUrl("probe.sh")).replace(/^file:\/\//, "")]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyProbe(text)

@@ -6,6 +6,9 @@
 
 set -e
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+export QUATTRO_PATH
+
 usage() {
   cat <<USAGE
 Usage: quattro-provision-first-run [--force]

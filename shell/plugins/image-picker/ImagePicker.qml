@@ -13,7 +13,7 @@ Item {
   id: root
 
   // Injected by quattro-shell; defaults to the session QUATTRO_PATH.
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
   property string stateHome: Quickshell.env("HOME") + "/.local/state"
   property string userThemesPath: Quickshell.env("HOME") + "/.config/quattro/themes"
   property string imageDirs: Quickshell.env("QUATTRO_IMAGE_SELECTOR_DIRS") || Quickshell.env("QUATTRO_IMAGE_SELECTOR_DIR") || Quickshell.env("QUATTRO_STOCK_BACKGROUNDS_DIR") || (stateHome + "/quattro/current/theme/backgrounds")

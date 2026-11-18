@@ -3,6 +3,7 @@
 # quattro:summary=Generate themed config files from Quattro templates
 # quattro:hidden=true
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 TEMPLATES_DIR="$QUATTRO_PATH/default/themed"
 USER_TEMPLATES_DIR="$HOME/.config/quattro/themed"
 NEXT_THEME_DIR="$HOME/.local/state/quattro/current/next-theme"

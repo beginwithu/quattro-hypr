@@ -31,7 +31,7 @@ ShellRoot {
   // The quattro-shell host is the long-running entry point. Plugins live in
   // sibling directories under plugins/. QUATTRO_PATH is provided by the uwsm
   // session environment and is the single source of truth for this checkout.
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
   readonly property string shellPath: quattroPath + "/shell"
   readonly property string firstPartyPluginsDir: shellPath + "/plugins"
   readonly property string defaultsPath: quattroPath + "/config/quattro/shell.json"

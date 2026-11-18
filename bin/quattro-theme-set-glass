@@ -10,6 +10,7 @@
 # backdrop-filter. Those lines go in each theme file between markers, so
 # leaving glassy takes them out again.
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 THEME_DIR="${1:-$HOME/.local/state/quattro/current/theme}"
 TOGGLES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/toggles/hypr"
 GLASSY=false

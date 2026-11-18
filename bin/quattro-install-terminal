@@ -9,6 +9,7 @@ if (($# == 0)); then
   exit 1
 fi
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 package="$1"
 
 # Map package name to desktop entry ID

@@ -9,7 +9,7 @@ Item {
   id: root
 
   property var shell: null
-  property string quattroPath: Quickshell.env("QUATTRO_PATH")
+  property string quattroPath: Util.quattroPath
 
   readonly property int batteryThreshold: 10
   property string pendingPowerSource: ""
