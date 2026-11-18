@@ -47,9 +47,13 @@ USAGE
     ;;
 esac
 
-default_target="/usr/share/quattro"
-
-printf 'export QUATTRO_PATH="%s"\n' "$default_target" | sudo tee /etc/quattro.conf >/dev/null
+if [[ -d /usr/share/quattro/default ]]; then
+  default_target="/usr/share/quattro"
+  printf 'export QUATTRO_PATH="%s"\n' "$default_target" | sudo tee /etc/quattro.conf >/dev/null
+else
+  default_target="$HOME/.local/share/quattro"
+  sudo rm -f /etc/quattro.conf
+fi
 
 # quattro-dev-link prepended the checkout to sudo's secure_path. Drop it in the
 # same step that drops the checkout, or sudo keeps running a tree nothing else

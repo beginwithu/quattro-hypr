@@ -142,11 +142,29 @@ Item {
     if (qrSize > 0) error = ""
   }
 
+  property bool pwExited: false
+  property int pwExitCode: -1
+  property bool pwStreamDone: false
+
+  function settlePasswordFetch() {
+    if (!pwExited || !pwStreamDone) return
+    if (pwExpectedStop || !opened) return
+    if (pwExitCode === 0 && password !== "") {
+      passwordError = ""
+      passwordVisible = true
+    } else {
+      passwordError = I18n.t("wifiqr.passwordFailed")
+    }
+  }
+
   function togglePassword() {
     if (passwordVisible) { passwordVisible = false; return }
-    if (password !== "") { passwordVisible = true; return }
+    if (password !== "") { passwordError = ""; passwordVisible = true; return }
     if (pwProc.running || !iface) return
     passwordError = ""
+    pwExited = false
+    pwExitCode = -1
+    pwStreamDone = false
     // Only a deliberate new lookup lowers the canceled-fetch guard, right as
     // it launches -- see the pwProc comment.
     pwExpectedStop = false
@@ -200,13 +218,20 @@ Item {
     id: pwProc
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: if (root.opened && !root.pwExpectedStop) root.password = String(text || "").trim()
+      onStreamFinished: {
+        if (root.opened && !root.pwExpectedStop) {
+          root.password = String(text || "").trim()
+          root.pwStreamDone = true
+          root.settlePasswordFetch()
+        }
+      }
     }
     onExited: function(exitCode) {
       if (root.pwExpectedStop) return
       if (!root.opened) return
-      if (exitCode === 0 && root.password !== "") root.passwordVisible = true
-      else root.passwordError = I18n.t("wifiqr.passwordFailed")
+      root.pwExited = true
+      root.pwExitCode = exitCode
+      root.settlePasswordFetch()
     }
   }
 

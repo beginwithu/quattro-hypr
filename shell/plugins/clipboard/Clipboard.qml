@@ -220,9 +220,17 @@ Item {
     root.openSelected(row)
   }
 
+  function dismiss() {
+    if (root.shell && typeof root.shell.hide === "function") {
+      root.shell.hide((root.manifest && root.manifest.id) || "quattro.clipboard")
+    } else {
+      root.close()
+    }
+  }
+
   function applySelected(row) {
     if (!row) return
-    root.opened = false
+    root.dismiss()
     if (row.entryType === "image") {
       Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-paste-file", row.mime, row.path])
     } else if (row.fullText) {
@@ -232,7 +240,7 @@ Item {
 
   function copySelected(row) {
     if (!row) return
-    root.opened = false
+    root.dismiss()
     if (row.entryType === "image") {
       Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-paste-file", "--copy-only", row.mime, row.path])
     } else if (row.fullText) {
@@ -242,7 +250,7 @@ Item {
 
   function openSelected(row) {
     if (!row) return
-    root.opened = false
+    root.dismiss()
     Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-open", "--history-index", String(row.historyIndex)])
   }
 

@@ -4,6 +4,9 @@
 
 # Refresh the Chromium configuration
 quattro-refresh-config chromium-flags.conf
+if [[ -f ~/.config/chromium-flags.conf ]]; then
+  sed -i "s|__QUATTRO_PATH__|$QUATTRO_PATH|g" ~/.config/chromium-flags.conf
+fi
 
 # Install/refresh the native messaging hosts used by the bundled extensions
 quattro-install-chromium-copy-url

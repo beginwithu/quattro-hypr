@@ -119,17 +119,56 @@ current_dns_provider() {
   fi
 }
 
+validate_dns_server() {
+  local entry=$1 clean=$1 host=""
+  clean=${clean#dns+tls://}
+  clean=${clean#dns+udp://}
+  if [[ $clean == *"#"* ]]; then
+    host=${clean#*#}
+    clean=${clean%%#*}
+    [[ $host =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] || return 1
+  fi
+  clean=${clean#[}
+  clean=${clean%]}
+  [[ -n $clean ]] || return 1
+  if [[ $clean =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]{1,5})?$ ]]; then
+    return 0
+  elif [[ $clean =~ ^[0-9A-Fa-f:]+(%[A-Za-z0-9_.-]+)?$ && $clean == *:* ]]; then
+    return 0
+  fi
+  return 1
+}
+
 normalize_servers() {
-  printf '%s\n' "$*" | tr ',\t\n' ' ' | xargs | tr ' ' ','
+  local raw=$1
+  local -a raw_list=() valid_list=()
+  local token
+  raw=${raw//$'\r'/ }
+  raw=${raw//$'\n'/ }
+  raw=${raw//$'\t'/ }
+  raw=${raw//,/ }
+  IFS=' ' read -r -a raw_list <<<"$raw"
+  for token in "${raw_list[@]}"; do
+    [[ -n $token ]] || continue
+    if ! validate_dns_server "$token"; then
+      echo "Error: Invalid DNS server entry: $token" >&2
+      return 1
+    fi
+    valid_list+=("$token")
+  done
+  local IFS=,
+  printf '%s\n' "${valid_list[*]}"
 }
 
 split_dns_servers() {
   local servers="$1"
+  local -a server_list=()
   local server clean
   ipv4_dns=""
   ipv6_dns=""
 
-  for server in ${servers//,/ }; do
+  IFS=, read -r -a server_list <<<"$servers"
+  for server in "${server_list[@]}"; do
     clean=${server#dns+tls://}
     clean=${clean#dns+udp://}
     clean=${clean%%#*}

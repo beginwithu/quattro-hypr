@@ -35,5 +35,5 @@ elif (( status != 0 )); then
   cat "$errors" >&2
   exit "$status"
 elif [[ -n $resolved ]]; then
-  sudo quattro-lifecycle-dispatch "$operation"
+  sudo "$QUATTRO_PATH/bin/quattro-lifecycle-dispatch" "$operation"
 fi

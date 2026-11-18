@@ -103,8 +103,12 @@ done
 source "$QUATTRO_INSTALL/user/all.sh"
 
 quattro-refresh-applications
-env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser google-chrome.desktop
-xdg-mime default HEY.desktop x-scheme-handler/mailto
+for default_browser in brave-origin.desktop brave-browser.desktop google-chrome.desktop chromium.desktop; do
+  if [[ -f /usr/share/applications/$default_browser || -f $HOME/.local/share/applications/$default_browser ]]; then
+    env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser "$default_browser" || true
+    break
+  fi
+done
 
 if (( first_install )); then
   mkdir -p "$state_dir/migrations"

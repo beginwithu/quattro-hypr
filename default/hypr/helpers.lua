@@ -12,7 +12,7 @@ o.shell_quote = shell_quote
 
 -- Chromium-based browsers. Rule classes match the whole name, so their web apps
 -- (chrome-<host>_<path>-<profile>) aren't included.
-o.chromium_browsers = "((google-)?[cC]hrom(e|ium)|[bB]rave-browser|[mM]icrosoft-edge|Vivaldi-stable|helium)"
+o.chromium_browsers = "((google-)?[cC]hrom(e|ium)|[bB]rave-(browser|origin)|[mM]icrosoft-edge|Vivaldi-stable|helium)"
 
 -- Apps that draw their own header with a close button: those browsers and GNOME
 -- apps with a header bar. Floating workspaces give them no titlebar. Web apps
@@ -146,7 +146,7 @@ function o.preinstalled_bindings_enabled()
     return _G.quattro_preinstalled_bindings == true
   end
 
-  return not file_exists((os.getenv("HOME") or "") .. "/.local/state/quattro/preinstalls-removed")
+  return not file_exists(paths.state_home .. "/quattro/preinstalls-removed")
 end
 
 function o.bind(keys, description, dispatcher, options)
@@ -297,7 +297,7 @@ function o.software_rendering_defaults()
   end
 
   return file_exists(runtime .. "/hypr/" .. signature .. "/quattro-software-rendering")
-    and not file_exists(paths.home .. "/.local/state/quattro/toggles/animations-without-gpu")
+    and not file_exists(paths.state_home .. "/quattro/toggles/animations-without-gpu")
 end
 
 -- What makes apps float on their own account, so a floating workspace can
@@ -319,29 +319,36 @@ function o.window(match, rules)
     end
   end
 
+  local has_class = type(rules.match.class) == "string"
+  local has_title = type(rules.match.title) == "string"
+
   if rules.float == true then
     -- Only a rule floating a tag alone floats everything with that tag; one
     -- that also names a class or title floats just those, recorded below.
-    if type(rules.match.tag) == "string" and rules.match.class == nil and rules.match.title == nil then
+    if type(rules.match.tag) == "string" and not has_class and not has_title then
       o.floating_apps.tags[rules.match.tag] = true
       floating_changed = true
     end
-    for _, key in ipairs({ "class", "title" }) do
-      if type(rules.match[key]) == "string" then
-        table.insert(o.floating_apps[key], rules.match[key])
-        floating_changed = true
-      end
+    -- A rule matching both class and title only floats specific dialogs of
+    -- that app; recording class alone would exclude normal windows of the app.
+    if has_title then
+      table.insert(o.floating_apps.title, rules.match.title)
+      floating_changed = true
+    elseif has_class then
+      table.insert(o.floating_apps.class, rules.match.class)
+      floating_changed = true
     end
   end
 
   if type(rules.tag) == "string" and rules.tag:sub(1, 1) == "+" then
     local tag = rules.tag:sub(2)
     o.floating_apps.tagged[tag] = o.floating_apps.tagged[tag] or {}
-    for _, key in ipairs({ "class", "title" }) do
-      if type(rules.match[key]) == "string" then
-        table.insert(o.floating_apps.tagged[tag], { key = key, pattern = rules.match[key] })
-        floating_changed = true
-      end
+    if has_title then
+      table.insert(o.floating_apps.tagged[tag], { key = "title", pattern = rules.match.title })
+      floating_changed = true
+    elseif has_class then
+      table.insert(o.floating_apps.tagged[tag], { key = "class", pattern = rules.match.class })
+      floating_changed = true
     end
   end
 

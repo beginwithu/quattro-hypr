@@ -15,7 +15,7 @@ fi
 if [[ -f $default_editor ]]; then
   read -r editor <"$default_editor"
 else
-  editor="plain"
+  editor="nvim"
 fi
 
 # sublime-text-4 ships `subl` on PATH, not `sublime_text`.

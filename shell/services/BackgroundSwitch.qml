@@ -232,7 +232,7 @@ Item {
     id: linkProc
     property string target: ""
     onExited: {
-      if (root.pendingLink) root.startLink()
+      if (root.pendingLink) Qt.callLater(root.startLink)
       else if (root.token && target === root.still) root.linked = true
       root.advance()
     }

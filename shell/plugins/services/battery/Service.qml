@@ -87,7 +87,7 @@ Item {
   Process {
     id: powerProfileProcess
     onExited: {
-      if (root.pendingPowerSource !== "") root.runPendingPowerProfile()
+      if (root.pendingPowerSource !== "") Qt.callLater(root.runPendingPowerProfile)
       root.refreshPowerProfile()
     }
   }

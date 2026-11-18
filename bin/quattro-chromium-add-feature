@@ -42,7 +42,7 @@ add_feature() {
 # written doesn't hold back the other. Under ||, set -e is off inside, so each
 # write returns its own failure.
 status=0
-for conf in ~/.config/chromium-flags.conf ~/.config/chrome-flags.conf; do
+for conf in ~/.config/brave-origin-flags.conf ~/.config/brave-flags.conf ~/.config/chromium-flags.conf ~/.config/chrome-flags.conf; do
   add_feature "$conf" || status=$?
 done
 exit "$status"

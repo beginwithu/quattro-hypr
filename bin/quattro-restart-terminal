@@ -7,9 +7,9 @@ if [[ -f ~/.config/alacritty/alacritty.toml ]]; then
 fi
 
 if pgrep -x kitty >/dev/null; then
-  killall -SIGUSR1 kitty >/dev/null
+  pkill -SIGUSR1 -x kitty >/dev/null 2>&1 || true
 fi
 
 if pgrep -x ghostty >/dev/null; then
-  killall -SIGUSR2 ghostty
+  pkill -SIGUSR2 -x ghostty >/dev/null 2>&1 || true
 fi

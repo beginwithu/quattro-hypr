@@ -91,7 +91,12 @@ browser_policy_install_defaults() {
   # Google Chrome ignores --load-extension, so its policy installs the bundled
   # extensions from the CRXs Quattro ships instead.
   if [[ $policy_dir == "/etc/opt/chrome/policies/managed" ]]; then
-    as_root install -m 644 -o root -g root -T "$QUATTRO_PATH/default/chromium/policies/chrome-extensions.json" "$policy_dir/quattro-extensions.json"
+    local ext_src="$QUATTRO_PATH/default/chromium/policies/chrome-extensions.json"
+    local ext_tmp
+    ext_tmp=$(mktemp)
+    sed "s|file:///usr/share/quattro|file://$QUATTRO_PATH|g" "$ext_src" >"$ext_tmp"
+    as_root install -m 644 -o root -g root -T "$ext_tmp" "$policy_dir/quattro-extensions.json"
+    rm -f "$ext_tmp"
   fi
 }
 

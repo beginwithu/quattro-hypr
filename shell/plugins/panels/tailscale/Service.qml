@@ -584,7 +584,7 @@ Item {
       }
       if (root._pendingFullPeers) {
         root._pendingFullPeers = false
-        root.refreshStatusAndAccounts(false, true)
+        Qt.callLater(function() { root.refreshStatusAndAccounts(false, true) })
       }
     }
   }

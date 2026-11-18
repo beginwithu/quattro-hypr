@@ -151,7 +151,7 @@
       "type": "command",
       "key": "󱫐 Uptime",
       "keyColor": "magenta",
-      "text": "up=$(cut -d. -f1 /proc/uptime); d=$((up / 86400)); h=$((up % 86400 / 3600)); m=$((up % 3600 / 60)); if [ \"$d\" -gt 0 ]; then quattro-i18n agents.durationDaysHours \"$d\" \"$h\"; elif [ \"$h\" -gt 0 ]; then quattro-i18n battery.durationHoursMinutes \"$h\" \"$m\"; else quattro-i18n battery.durationMinutes \"$m\"; fi"
+      "text": "up=$(cut -d. -f1 /proc/uptime); d=$((up / 86400)); h=$((up % 86400 / 3600)); m=$((up % 3600 / 60)); if [ \"$d\" -gt 0 ]; then printf '%dd %dh\\n' \"$d\" \"$h\"; elif [ \"$h\" -gt 0 ]; then quattro-i18n battery.durationHoursMinutes \"$h\" \"$m\"; else quattro-i18n battery.durationMinutes \"$m\"; fi"
     },
     {
       "type": "command",

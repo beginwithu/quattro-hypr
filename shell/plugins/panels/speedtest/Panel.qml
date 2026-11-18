@@ -159,7 +159,7 @@ Item {
       }
 
       root.expectedStop = false
-      root.finishPhase()
+      Qt.callLater(root.finishPhase)
     }
   }
 

@@ -150,9 +150,9 @@ fi
 # needs a pin bump in quattro-pkgs. It conflicts with stock libfprint, and
 # --noconfirm answers that prompt with N; --ask 4 accepts the replacement in
 # one transaction, so a failed install leaves the existing driver in place.
-if quattro-pkg-missing libfprint-git fprintd usbutils; then
+if quattro-pkg-missing libfprint fprintd usbutils; then
   echo "Installing required packages..."
-  sudo pacman -S --needed --noconfirm --ask 4 -- libfprint-git fprintd usbutils
+  sudo pacman -S --needed --noconfirm -- libfprint fprintd usbutils
 fi
 
 # Enroll first fingerprint
@@ -181,7 +181,7 @@ if ! enable_hook=$(quattro-lifecycle-dispatch --resolve enable-fingerprint); the
   enable_hook=
 fi
 if [[ -n $enable_hook ]]; then
-  if ! sudo quattro-lifecycle-dispatch enable-fingerprint; then
+  if ! sudo "$QUATTRO_PATH/bin/quattro-lifecycle-dispatch" enable-fingerprint; then
     echo -e "\e[31mThe fingerprint sensor was not turned on, so nothing was enrolled.\e[0m"
     exit 1
   fi

@@ -283,7 +283,7 @@ Item {
       known[path] = { width: width > 0 ? width : 0, height: height > 0 ? height : 0 }
       root.nativeSizes = known
       root.sizeQueue = root.sizeQueue.filter(function(queued) { return queued !== sizeProbe.path })
-      root.probeNextSize()
+      Qt.callLater(root.probeNextSize)
     }
   }
 
@@ -432,7 +432,7 @@ Item {
       // the window's size and the wallpaper's native size so nothing is ever
       // decoded at native size first, and a wallpaper smaller than the screen
       // is decoded at its own size rather than scaled up to cover the screen.
-      readonly property bool sized: width > 0 && height > 0
+      readonly property bool sized: width > 0 && height > 0 && !!screen
       readonly property int decodeWidth: sized ? Math.ceil(width * screen.devicePixelRatio) : 0
       readonly property int decodeHeight: sized ? Math.ceil(height * screen.devicePixelRatio) : 0
 

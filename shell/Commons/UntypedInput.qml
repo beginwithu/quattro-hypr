@@ -112,14 +112,14 @@ Singleton {
         root.known = true
       }
     }
-    onExited: root.settle()
+    onExited: Qt.callLater(root.settle)
   }
 
   Process {
     id: writer
     onExited: {
       root.readAgain = true
-      root.settle()
+      Qt.callLater(root.settle)
     }
   }
 
@@ -127,7 +127,7 @@ Singleton {
   // translates its events, so they are read in the C locale.
   Process {
     id: events
-    command: ["pactl", "subscribe"]
+    command: ["setpriv", "--pdeathsig", "TERM", "pactl", "subscribe"]
     environment: ({ LC_ALL: "C" })
     onRunningChanged: if (running) root.subscribedAt = Date.now()
     onExited: {
@@ -140,6 +140,8 @@ Singleton {
       }
     }
   }
+
+  Component.onDestruction: events.running = false
 
   Timer {
     id: resubscribe

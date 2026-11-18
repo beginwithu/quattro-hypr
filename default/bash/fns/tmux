@@ -56,7 +56,11 @@ tds() {
 
   tmux send-keys -t "$editor_pane" -l "nvim ."
   tmux send-keys -t "$editor_pane" C-m
-  tmux send-keys -t "$diff_pane" -l "hunk diff --watch"
+  if command -v hunk >/dev/null 2>&1; then
+    tmux send-keys -t "$diff_pane" -l "hunk diff --watch"
+  else
+    tmux send-keys -t "$diff_pane" -l "watch -n 2 --color git -c color.ui=always diff"
+  fi
   tmux send-keys -t "$diff_pane" C-m
   tmux send-keys -t "$git_pane" -l "lazygit"
   tmux send-keys -t "$git_pane" C-m
@@ -78,17 +82,27 @@ tdlm() {
   # Rename the session to the current directory name (replace dots/colons which tmux disallows)
   tmux rename-session "$(basename "$base_dir" | tr '.:' '--')"
 
+  local q_cmd q_cmd2 tdl_call
+  printf -v q_cmd '%q' "$cmd"
+  tdl_call="tdl $q_cmd"
+  if [[ -n $cmd2 ]]; then
+    printf -v q_cmd2 '%q' "$cmd2"
+    tdl_call+=" $q_cmd2"
+  fi
+
   for dir in "$base_dir"/*/; do
     [[ -d $dir ]] || continue
     local dirpath="${dir%/}"
+    local q_dir
+    printf -v q_dir '%q' "$dirpath"
 
     if $first; then
       # Reuse the current window for the first project
-      tmux send-keys -t "$TMUX_PANE" "cd '$dirpath' && tdl $cmd $cmd2" C-m
+      tmux send-keys -t "$TMUX_PANE" "cd $q_dir && $tdl_call" C-m
       first=false
     else
       local pane_id=$(tmux new-window -c "$dirpath" -P -F '#{pane_id}')
-      tmux send-keys -t "$pane_id" "tdl $cmd $cmd2" C-m
+      tmux send-keys -t "$pane_id" "$tdl_call" C-m
     fi
   done
 }

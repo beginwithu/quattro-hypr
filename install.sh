@@ -37,20 +37,27 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+PACMAN_SYNC_FORCE=0
+
 setup_cachyos_repos() {
+  if [[ $(uname -m) != "x86_64" ]]; then
+    echo -e "${YELLOW}Non-x86_64 architecture ($(uname -m)); skipping x86_64 CachyOS repositories.${NC}"
+    return
+  fi
+
   if [[ -f /etc/pacman.conf ]] && grep -qE '^[[:space:]]*\[cachyos\][[:space:]]*$' /etc/pacman.conf; then
-    echo -e "${YELLOW}CachyOS repositories already configured; syncing package databases...${NC}"
-    sudo pacman -Sy
+    echo -e "${YELLOW}CachyOS repositories already configured.${NC}"
     return
   fi
 
   echo -e "${YELLOW}Detecting CPU architecture...${NC}"
 
-  local ARCH
-  if grep -q "x86-64-v4" /proc/cpuinfo 2>/dev/null || /lib/ld-linux-x86-64.so.2 --help 2>/dev/null | grep -q "x86-64-v4"; then
+  local ARCH ld_help
+  ld_help=$(/lib/ld-linux-x86-64.so.2 --help 2>/dev/null || true)
+  if grep -qE 'x86-64-v4[[:space:]]*\(supported, searched\)' <<<"$ld_help"; then
     ARCH="v4"
     echo -e "${GREEN}Detected: x86-64-v4${NC}"
-  elif grep -q "x86-64-v3" /proc/cpuinfo 2>/dev/null || /lib/ld-linux-x86-64.so.2 --help 2>/dev/null | grep -q "x86-64-v3"; then
+  elif grep -qE 'x86-64-v3[[:space:]]*\(supported, searched\)' <<<"$ld_help"; then
     ARCH="v3"
     echo -e "${GREEN}Detected: x86-64-v3${NC}"
   else
@@ -111,11 +118,22 @@ Include = /etc/pacman.d/cachyos-v3-mirrorlist
   REPO_CONFIG="${REPO_CONFIG}[cachyos]
 Include = /etc/pacman.d/cachyos-mirrorlist"
 
-  echo -e "\n${REPO_CONFIG}" | sudo tee -a /etc/pacman.conf >/dev/null
+  if grep -qE '^[[:space:]]*\[core\][[:space:]]*$' /etc/pacman.conf; then
+    awk -v block="$REPO_CONFIG" '
+      !inserted && /^[[:space:]]*\[core\][[:space:]]*$/ {
+        print block
+        print ""
+        inserted = 1
+      }
+      { print }
+    ' /etc/pacman.conf | sudo tee /etc/pacman.conf.tmp >/dev/null
+    sudo mv /etc/pacman.conf.tmp /etc/pacman.conf
+    sudo chmod 0644 /etc/pacman.conf
+  else
+    printf '\n%s\n' "$REPO_CONFIG" | sudo tee -a /etc/pacman.conf >/dev/null
+  fi
   echo -e "${GREEN}Repositories added to pacman.conf${NC}"
-
-  echo -e "${YELLOW}Syncing package databases...${NC}"
-  sudo pacman -Sy
+  PACMAN_SYNC_FORCE=1
 }
 
 install_packages() {
@@ -123,8 +141,10 @@ install_packages() {
   mapfile -t pkgs < <(grep -hvE '^[[:space:]]*(#|$)' "$PROJECT_DIR/packages/arch-core.packages")
 
   if (( ${#pkgs[@]} > 0 )); then
-    echo "==> Installing core Arch packages via pacman..."
-    sudo pacman -S --needed --noconfirm "${pkgs[@]}"
+    local sync_flags="-Syu"
+    (( PACMAN_SYNC_FORCE )) && sync_flags="-Syyu"
+    echo "==> Syncing package databases and installing core packages via pacman..."
+    sudo pacman "$sync_flags" --needed --noconfirm "${pkgs[@]}"
   fi
 }
 
@@ -132,12 +152,22 @@ install_runtime() {
   echo "==> Installing Quattro runtime to $INSTALL_DIR..."
   mkdir -p "$INSTALL_DIR"
 
-  for item in applications bin default install shell themes icon.png icon.txt logo.svg logo.txt version LICENSE; do
+  for item in applications bin config default install shell themes icon.png icon.txt logo.svg logo.txt version LICENSE; do
     if [[ -d $PROJECT_DIR/$item ]]; then
+      rm -rf "${INSTALL_DIR:?}/$item"
       mkdir -p "$INSTALL_DIR/$item"
       cp -a "$PROJECT_DIR/$item/." "$INSTALL_DIR/$item/"
     elif [[ -e $PROJECT_DIR/$item ]]; then
       cp -a "$PROJECT_DIR/$item" "$INSTALL_DIR/$item"
+    fi
+  done
+
+  # Resolve file:///usr/share/quattro in bundled Chromium CRX manifests for standalone installs
+  for crx_file in \
+    "$INSTALL_DIR/default/chromium/crx/updates.xml" \
+    "$INSTALL_DIR/default/chromium/policies/chrome-extensions.json"; do
+    if [[ -f $crx_file ]]; then
+      sed -i "s|file:///usr/share/quattro|file://$INSTALL_DIR|g" "$crx_file"
     fi
   done
 
@@ -177,8 +207,11 @@ install_user_configs() {
     fi
   done
 
-  # Resolve __QUATTRO_PATH__ in chrome/chromium flags
-  for flags_file in "$HOME/.config/chrome-flags.conf" "$HOME/.config/chromium-flags.conf"; do
+  # Resolve __QUATTRO_PATH__ in Chromium-family browser flags
+  for flags_file in \
+    "$HOME/.config/brave-origin-flags.conf" \
+    "$HOME/.config/chrome-flags.conf" \
+    "$HOME/.config/chromium-flags.conf"; do
     if [[ -f $flags_file ]]; then
       sed -i "s|__QUATTRO_PATH__|$INSTALL_DIR|g" "$flags_file"
     fi
@@ -218,10 +251,15 @@ EOF
     : >"$HOME/.local/state/quattro/.toggles-cleaned"
   fi
 
-  # Seed UWSM user env drop-in & xdg-terminal-exec list
-  mkdir -p "$HOME/.config/uwsm/env.d" "$HOME/.config/xdg-terminal-exec" "$HOME/.config/environment.d"
-  cp -a "$PROJECT_DIR/default/uwsm/env.d/10-quattro" "$HOME/.config/uwsm/env.d/10-quattro"
-  cp -a "$PROJECT_DIR/default/xdg-terminal-exec/hyprland-xdg-terminals.list" "$HOME/.config/xdg-terminal-exec/hyprland-xdg-terminals.list"
+  # Seed user systemd environment drop-ins (UWSM 10-quattro is installed system-wide in /usr/share/uwsm/env.d
+  # so user overrides in ~/.config/uwsm/env are not clobbered; only seed under ~/.config in sandbox mode)
+  mkdir -p "$HOME/.config/environment.d"
+  if $SANDBOX; then
+    mkdir -p "$HOME/.config/uwsm/env.d"
+    cp -a "$PROJECT_DIR/default/uwsm/env.d/10-quattro" "$HOME/.config/uwsm/env.d/10-quattro"
+  else
+    rm -f "$HOME/.config/uwsm/env.d/10-quattro" "$HOME/.config/xdg-terminal-exec/hyprland-xdg-terminals.list"
+  fi
   cp -a "$PROJECT_DIR/default/environment.d/10-quattro-fcitx.conf" "$HOME/.config/environment.d/10-quattro-fcitx.conf"
 
   cat >"$HOME/.config/environment.d/20-quattro-path.conf" <<EOF
@@ -348,16 +386,18 @@ cleanup_pacman_repos() {
   fi
 
   if (( cleaned )); then
-    sudo pacman -Syy --noconfirm
+    PACMAN_SYNC_FORCE=1
   fi
 }
 
 install_system_configs() {
   echo "==> Installing system-wide Arch integration (requires sudo)..."
-  sudo mkdir -p \
+  sudo install -d -m 0755 -o root -g root \
     /usr/local/share/wayland-sessions \
+    /usr/local/share/xdg-terminal-exec \
     /etc/sddm.conf.d \
     /usr/share/sddm/themes/quattro \
+    /usr/share/quattro/default/i18n \
     /etc/profile.d \
     /usr/share/uwsm/env.d \
     /etc/fastfetch \
@@ -368,34 +408,44 @@ install_system_configs() {
     /etc/fonts/conf.d \
     /etc/systemd/user/wayland-wm@hyprland.desktop.service.d
 
-  sudo cp -a "$PROJECT_DIR/default/wayland-sessions/quattro.desktop" /usr/local/share/wayland-sessions/quattro.desktop
-  sudo cp -a "$PROJECT_DIR/etc/sddm.conf.d/10-wayland.conf" /etc/sddm.conf.d/10-wayland.conf
-  sudo cp -a "$PROJECT_DIR/etc/sddm.conf.d/10-theme.conf" /etc/sddm.conf.d/10-theme.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/wayland-sessions/quattro.desktop" /usr/local/share/wayland-sessions/quattro.desktop
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/xdg-terminal-exec/hyprland-xdg-terminals.list" /usr/local/share/xdg-terminal-exec/hyprland-xdg-terminals.list
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/sddm.conf.d/10-wayland.conf" /etc/sddm.conf.d/10-wayland.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/sddm.conf.d/10-theme.conf" /etc/sddm.conf.d/10-theme.conf
   cat <<'EOF' | sudo tee /etc/sddm.conf.d/99-quattro-login.conf >/dev/null
 [Users]
 RememberLastUser=true
 RememberLastSession=true
 EOF
-  sudo cp -a "$PROJECT_DIR/default/sddm/hyprland.lua" /usr/share/sddm/hyprland.lua
-  sudo cp -a "$PROJECT_DIR/default/sddm/quattro/." /usr/share/sddm/themes/quattro/
+  sudo chmod 0644 /etc/sddm.conf.d/99-quattro-login.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/sddm/hyprland.lua" /usr/share/sddm/hyprland.lua
+  sudo rm -rf /usr/share/sddm/themes/quattro
+  sudo install -d -m 0755 -o root -g root /usr/share/sddm/themes/quattro
+  sudo cp -r --no-preserve=ownership "$PROJECT_DIR/default/sddm/quattro/." /usr/share/sddm/themes/quattro/
+  sudo chown -R root:root /usr/share/sddm/themes/quattro
+  sudo chmod -R a+rX,go-w /usr/share/sddm/themes/quattro
+
   if ! sudo grep -qE '^User=.+' /var/lib/sddm/state.conf 2>/dev/null; then
     sudo install -d -m 0755 -o sddm -g sddm /var/lib/sddm 2>/dev/null || sudo install -d -m 0755 /var/lib/sddm
     cat <<EOF | sudo tee /var/lib/sddm/state.conf >/dev/null
 [Last]
-Session=quattro.desktop
+Session=/usr/local/share/wayland-sessions/quattro.desktop
 User=$USER
 EOF
+    sudo chmod 0644 /var/lib/sddm/state.conf
     sudo chown sddm:sddm /var/lib/sddm /var/lib/sddm/state.conf 2>/dev/null || true
   fi
-  sudo cp -a "$PROJECT_DIR/etc/profile.d/quattro.sh" /etc/profile.d/quattro.sh
-  sudo cp -a "$PROJECT_DIR/default/uwsm/env.d/10-quattro" /usr/share/uwsm/env.d/10-quattro
-  sudo cp -a "$PROJECT_DIR/etc/fastfetch/config.jsonc" /etc/fastfetch/config.jsonc
-  sudo cp -a "$PROJECT_DIR/etc/mpv/mpv.conf" /etc/mpv/mpv.conf
-  sudo cp -a "$PROJECT_DIR/etc/xdg/kitty/kitty.conf" /etc/xdg/kitty/kitty.conf
-  sudo cp -a "$PROJECT_DIR/etc/xkb/rules/evdev" /etc/xkb/rules/evdev
-  sudo cp -a "$PROJECT_DIR/etc/xkb/symbols/quattro" /etc/xkb/symbols/quattro
-  sudo cp -a "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf" /etc/fonts/conf.d/50-quattro.conf
-  sudo cp -a "$PROJECT_DIR/etc/systemd/user/wayland-wm@hyprland.desktop.service.d/10-keep-shell.conf" /etc/systemd/user/wayland-wm@hyprland.desktop.service.d/10-keep-shell.conf
+
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/profile.d/quattro.sh" /etc/profile.d/quattro.sh
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/uwsm/env.d/10-quattro" /usr/share/uwsm/env.d/10-quattro
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/fastfetch/config.jsonc" /etc/fastfetch/config.jsonc
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/mpv/mpv.conf" /etc/mpv/mpv.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/xdg/kitty/kitty.conf" /etc/xdg/kitty/kitty.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/xkb/rules/evdev" /etc/xkb/rules/evdev
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/xkb/symbols/quattro" /etc/xkb/symbols/quattro
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf" /etc/fonts/conf.d/50-quattro.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/systemd/user/wayland-wm@hyprland.desktop.service.d/10-keep-shell.conf" /etc/systemd/user/wayland-wm@hyprland.desktop.service.d/10-keep-shell.conf
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/i18n/locales.json" /usr/share/quattro/default/i18n/locales.json
 
   # Prevent SDDM PAM logins from creating an encrypted keyring that prompts on login
   if [[ -f /etc/pam.d/sddm ]]; then
@@ -406,25 +456,40 @@ EOF
     sudo faillock --user "$USER" --reset 2>/dev/null || true
   fi
 
-  printf 'export QUATTRO_PATH="%s"\n' "$INSTALL_DIR" | sudo tee /etc/quattro.conf >/dev/null
+  # Remove any stale /etc/quattro.conf pointing at an unprivileged user home (env-bootstrap resolves $HOME/.local/share/quattro per user)
+  if [[ -f /etc/quattro.conf ]] && grep -qxF "export QUATTRO_PATH=\"$INSTALL_DIR\"" /etc/quattro.conf; then
+    sudo rm -f /etc/quattro.conf
+  fi
 
-  # Install packaged root-owned DNS and passwordless-sudo helpers
+  # Install packaged root-owned privileged helpers and sudoers rules
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-dns" /usr/bin/quattro-dns
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-sudo-passwordless" /usr/bin/quattro-sudo-passwordless
+  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-theme-set-browser-policy" /usr/bin/quattro-theme-set-browser-policy
+  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-locale-generate" /usr/bin/quattro-locale-generate
+  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-apply-lock" /usr/bin/quattro-apply-lock
+  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-hw-laptop-closed" /usr/bin/quattro-hw-laptop-closed
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/bin/quattro-security-functions" /usr/bin/quattro-security-functions
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/tmpfiles.d/quattro-nopasswd-sudo.conf" /etc/tmpfiles.d/quattro-nopasswd-sudo.conf
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/05-quattro-passwordless-revoke.hook" /usr/share/libalpm/hooks/05-quattro-passwordless-revoke.hook
-  if ! command -v visudo >/dev/null 2>&1 || visudo -cf "$PROJECT_DIR/etc/sudoers.d/quattro-dns" >/dev/null 2>&1; then
-    sudo install -Dm440 -o root -g root "$PROJECT_DIR/etc/sudoers.d/quattro-dns" /etc/sudoers.d/quattro-dns
+  for sudoers_rule in quattro-dns quattro-theme-browser quattro-locale-generate; do
+    if [[ -f $PROJECT_DIR/etc/sudoers.d/$sudoers_rule ]] && { ! command -v visudo >/dev/null 2>&1 || visudo -cf "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" >/dev/null 2>&1; }; then
+      sudo install -Dm440 -o root -g root "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" "/etc/sudoers.d/$sudoers_rule"
+    fi
+  done
+
+  # Seed managed browser policy for Brave (prevents Brave from hijacking mimeapps.list)
+  if command -v brave-origin >/dev/null 2>&1 || command -v brave >/dev/null 2>&1; then
+    sudo install -d -m 0755 -o root -g root /etc/brave /etc/brave/policies /etc/brave/policies/managed
+    sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/chromium/policies/quattro.json" /etc/brave/policies/managed/quattro.json
   fi
 
   # Ensure Quickshell lock screen PAM config (/etc/pam.d/quattro-lock-password) is installed
-  if [[ -x $INSTALL_DIR/bin/quattro-apply-lock ]]; then
-    sudo QUATTRO_PATH="$INSTALL_DIR" QUATTRO_INSTALL_USER="$USER" "$INSTALL_DIR/bin/quattro-apply-lock"
+  if [[ -x /usr/bin/quattro-apply-lock ]]; then
+    sudo QUATTRO_PATH="$INSTALL_DIR" QUATTRO_INSTALL_USER="$USER" /usr/bin/quattro-apply-lock
   fi
 
   echo "==> Enabling SDDM display manager..."
-  sudo systemctl enable sddm.service
+  sudo systemctl enable --force sddm.service
 }
 
 if ! $SANDBOX; then
@@ -455,11 +520,6 @@ Next steps:
   3. Log in via SDDM (Quattro (Hyprland uwsm)) or start from TTY:
      uwsm start hyprland.desktop
 EOF
-
-if ! $SANDBOX && [[ -d /run/systemd/system ]] && [[ -z ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && ! systemctl is-active --quiet sddm.service; then
-  echo "==> Enabling SDDM..."
-  sudo systemctl enable sddm.service
-fi
 
 if ! $SANDBOX && [[ ${QUATTRO_NO_REBOOT:-0} != "1" ]]; then
   echo ""

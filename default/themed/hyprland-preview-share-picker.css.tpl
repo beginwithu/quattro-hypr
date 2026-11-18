@@ -10,7 +10,7 @@
 
 * {
   all: unset;
-  font-family: JetBrains Mono NF;
+  font-family: "JetBrainsMono Nerd Font", monospace;
   color: @foreground;
   font-weight: bold;
   font-size: 16px;

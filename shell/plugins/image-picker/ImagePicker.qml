@@ -470,7 +470,7 @@ Item {
     onExited: {
       if (queued) {
         queued = false
-        running = true
+        Qt.callLater(function() { if (!themeRowsProc.running) themeRowsProc.running = true })
       }
     }
   }
@@ -487,7 +487,7 @@ Item {
     onExited: {
       if (queued) {
         queued = false
-        running = true
+        Qt.callLater(function() { if (!extraThemesProc.running) extraThemesProc.running = true })
       }
     }
   }
@@ -560,7 +560,7 @@ Item {
       queuedSerial = 0
       queuedDirs = ""
       if (serial > 0 && serial === root.requestSerial)
-        root.startImageScan(serial, dirs)
+        Qt.callLater(function() { root.startImageScan(serial, dirs) })
     }
   }
 
@@ -625,7 +625,7 @@ Item {
 
   Process {
     id: releaseProc
-    onExited: root.releaseNextDoneFile()
+    onExited: Qt.callLater(root.releaseNextDoneFile)
   }
 
   OverlayWindow {

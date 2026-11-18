@@ -10,7 +10,8 @@ cwd=""
 
 # Files keeps its working directory on the folder it shows, so a terminal
 # opened over it starts there.
-if [[ $(readlink "/proc/$terminal_pid/exe" 2>/dev/null) == */folio ]]; then
+exe_path=$(readlink "/proc/$terminal_pid/exe" 2>/dev/null || true)
+if [[ $exe_path == */folio || $exe_path == */nautilus ]]; then
   cwd=$(readlink -f "/proc/$terminal_pid/cwd" 2>/dev/null)
 elif [[ -S $kitty_socket ]]; then
   cwd=$(kitten @ --to "unix:$kitty_socket" ls --match "state:focused" 2>/dev/null |

@@ -65,11 +65,13 @@ cleanup_freeze
 freeze_pid=""
 
 if [[ $action == "copy" ]]; then
-  wl-copy < "$out_file"
+  wl-copy --type image/png < "$out_file"
   rm -f "$out_file"
   command -v quattro-notification-send >/dev/null 2>&1 && quattro-notification-send "Screenshot copied to clipboard" -t 2000 || true
 else
-  wl-copy < "$out_file" 2>/dev/null || true
+  if [[ $action != "save" ]]; then
+    wl-copy --type image/png < "$out_file" 2>/dev/null || true
+  fi
   if command -v quattro-notification-send >/dev/null 2>&1; then
     quattro-notification-send "Screenshot saved" "$out_file" -i "$out_file" -t 3000 || true
   fi

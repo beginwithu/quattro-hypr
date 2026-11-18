@@ -144,8 +144,7 @@ Item {
 
   function openFile(file) {
     if (!file || !file.path) return
-    // Files opens a file's folder with the file selected.
-    Quickshell.execDetached(["uwsm-app", "--", "folio", String(file.path)])
+    Quickshell.execDetached(["quattro-launch-files", String(file.path)])
   }
 
   function fileUri(path) {
@@ -253,7 +252,7 @@ Item {
       var stderr = String(statusStderr.text || root._statusError || "")
       if (exitCode === 0) root.applyStatus(stdout)
       else root.lastError = root.elideStatus(stderr || stdout || I18n.t("dropbox.statusReadFailed"))
-      if (root._fullRefreshPending) root.refresh()
+      if (root._fullRefreshPending) Qt.callLater(root.refresh)
     }
   }
 

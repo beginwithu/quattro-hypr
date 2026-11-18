@@ -269,7 +269,7 @@ Item {
       root.appsChanged()
       if (root.iconRescanQueued) {
         root.iconRescanQueued = false
-        running = true
+        Qt.callLater(function() { if (!iconIndexScan.running) iconIndexScan.running = true })
       }
     }
   }
@@ -310,7 +310,7 @@ Item {
     watchChanges: true
     printErrors: false
     onLoaded: root.loadConfiguredHides(text())
-    onFileChanged: root.loadConfiguredHides(text())
+    onFileChanged: reload()
     onLoadFailed: root.loadConfiguredHides("")
   }
 

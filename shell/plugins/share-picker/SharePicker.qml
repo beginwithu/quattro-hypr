@@ -385,10 +385,10 @@ Item {
           } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             root.confirmSelection()
             event.accepted = true
-          } else if (event.key === Qt.Key_Left) {
+          } else if (Util.readingKey(event) === Qt.Key_Left) {
             root.moveGridSelection(-1, 0)
             event.accepted = true
-          } else if (event.key === Qt.Key_Right) {
+          } else if (Util.readingKey(event) === Qt.Key_Right) {
             root.moveGridSelection(1, 0)
             event.accepted = true
           } else if (event.key === Qt.Key_Up) {

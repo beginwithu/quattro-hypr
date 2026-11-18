@@ -10,7 +10,7 @@ iso2sd() {
   local drive="$2"
 
   if [[ -z $drive ]]; then
-    local available_sds=$(lsblk -dpno NAME | grep -E '/dev/sd')
+    local available_sds=$(lsblk -dpno NAME | grep -E '/dev/(sd|mmcblk)')
 
     if [[ -z $available_sds ]]; then
       echo "No SD drives found and no drive specified"
@@ -47,7 +47,7 @@ format-drive() {
       sudo parted -s "$1" mkpart primary 1MiB 100%
       sudo parted -s "$1" set 1 msftdata on
 
-      partition="$([[ $1 == *"nvme"* ]] && echo "${1}p1" || echo "${1}1")"
+      partition="$([[ $1 =~ [0-9]$ ]] && echo "${1}p1" || echo "${1}1")"
       sudo partprobe "$1" || true
       sudo udevadm settle || true
 

@@ -103,7 +103,7 @@ mapfile -t leftovers < <(
 # Its boot package vouches for the takeover or refuses it, and the files stay.
 # Where the platform registers none, nothing resolves and nothing asks for root.
 takeover=$(quattro-lifecycle-dispatch --resolve update-takeover) || exit 1
-if [[ -n $takeover ]] && ! sudo quattro-lifecycle-dispatch update-takeover "${leftovers[@]}"; then
+if [[ -n $takeover ]] && ! sudo "$QUATTRO_PATH/bin/quattro-lifecycle-dispatch" update-takeover "${leftovers[@]}"; then
   echo -e "\e[33m\nThis platform keeps these files, so the upgrade can't take them over:\e[0m" >&2
   printf '  %s\n' "${leftovers[@]}" >&2
   exit 1

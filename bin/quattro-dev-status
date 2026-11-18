@@ -5,7 +5,11 @@
 
 set -euo pipefail
 
-default_target="/usr/share/quattro"
+if [[ -d /usr/share/quattro/default ]]; then
+  default_target="/usr/share/quattro"
+else
+  default_target="$HOME/.local/share/quattro"
+fi
 sudoers_file="/etc/sudoers.d/quattro-dev-path"
 configured="$default_target"
 conf_present=0

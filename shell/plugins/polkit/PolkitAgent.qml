@@ -220,6 +220,33 @@ Item {
     }
   }
 
+  property var targetScreen: null
+
+  function focusedScreen() {
+    var screens = Quickshell.screens
+    if (!screens || screens.length === 0) return null
+    var fm = Hyprland.focusedMonitor
+    if (fm) {
+      for (var i = 0; i < screens.length; i++) {
+        if (String(screens[i].name || "") === String(fm.name || "")) return screens[i]
+      }
+    }
+    return screens[0]
+  }
+
+  onDialogVisibleChanged: {
+    targetScreen = dialogVisible ? focusedScreen() : null
+  }
+
+  Connections {
+    target: Quickshell
+    function onScreensChanged() {
+      if (!root.dialogVisible) return
+      var screens = Quickshell.screens || []
+      if (screens.indexOf(root.targetScreen) === -1) root.targetScreen = root.focusedScreen()
+    }
+  }
+
   PanelWindow {
     id: panel
     // Right-to-left languages read this window mirrored.
@@ -227,17 +254,7 @@ Item {
     Binding { target: panel.contentItem; property: "LayoutMirroring.childrenInherit"; value: true }
 
     visible: root.dialogVisible
-    screen: {
-      var screens = Quickshell.screens
-      if (!screens || screens.length === 0) return null
-      var fm = Hyprland.focusedMonitor
-      if (fm) {
-        for (var i = 0; i < screens.length; i++) {
-          if (String(screens[i].name || "") === String(fm.name || "")) return screens[i]
-        }
-      }
-      return screens[0]
-    }
+    screen: root.targetScreen
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.namespace: "quattro-polkit"

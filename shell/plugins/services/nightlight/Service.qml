@@ -77,8 +77,9 @@ Item {
     id: applyProcess
     onExited: function() {
       if (root.hasPendingTemperature) {
+        var pending = root.pendingTemperature
         root.hasPendingTemperature = false
-        root.runApply(root.pendingTemperature)
+        Qt.callLater(function() { root.runApply(pending) })
         return
       }
 

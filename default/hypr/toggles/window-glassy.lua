@@ -9,7 +9,7 @@ require("default.hypr.glass")()
 o.window(".*", { opacity = "0.75 0.75" })
 
 hl.layer_rule({
-  match = { namespace = "^(quattro-bar|quattro-menu|quattro-notifications|quattro-osd|quattro-polkit|quattro-reminders|quattro-clipboard|quattro-emojis|quattro-image-selector|quattro-keyboard-panel|quattro-network-qr)$" },
+  match = { namespace = "^(quattro-bar|quattro-dock|quattro-dock-apps|quattro-menu|quattro-notifications|quattro-osd|quattro-polkit|quattro-reminders|quattro-clipboard|quattro-emojis|quattro-image-selector|quattro-keyboard-panel|quattro-network-qr|quattro-share-picker|quattro-video-cut)$" },
   blur = true,
   ignore_alpha = 0.3,
 })

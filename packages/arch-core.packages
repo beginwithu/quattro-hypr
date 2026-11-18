@@ -1,5 +1,5 @@
 # Lean core packages required for Quattro (Hyprland, Quickshell, theming, and shell scripts)
-# All packages exist in official Arch [core] / [extra] repositories.
+# Packages come from official Arch [core] / [extra] plus CachyOS [cachyos] (configured by install.sh).
 
 # Wayland compositor, display manager & shell
 hyprland
@@ -30,6 +30,7 @@ qt6-svg
 qt6-wayland
 qt6ct
 ttf-jetbrains-mono-nerd
+ttf-liberation
 woff2-font-awesome
 
 # Default terminal, browser, file manager

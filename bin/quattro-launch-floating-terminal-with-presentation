@@ -7,8 +7,11 @@
 # even after a theme switch (the inherited environment is captured at login).
 source quattro-restart-gum
 
-cmd="$*"
 # 130 is the user bailing with Ctrl-C; anything else gets the Done/Failed prompt.
-presentation_script="quattro-show-logo; $cmd; code=\$?; if (( code != 130 )); then quattro-show-done \$code; fi"
-
-exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.quattro.terminal --title=Quattro -e bash -c "$presentation_script"
+if (( $# > 1 )); then
+  exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.quattro.terminal --title=Quattro -e \
+    bash -c 'quattro-show-logo; "$@"; code=$?; if (( code != 130 )); then quattro-show-done "$code"; fi' _ "$@"
+else
+  exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.quattro.terminal --title=Quattro -e \
+    bash -c 'quattro-show-logo; bash -c "$1"; code=$?; if (( code != 130 )); then quattro-show-done "$code"; fi' _ "${1:-}"
+fi

@@ -10,7 +10,6 @@ if [[ ! -s $HOME/.local/state/quattro/current/theme.name ]]; then
     quattro-theme-set "Tokyo Night"
   fi
 fi
-quattro-theme-set-pi --activate
 quattro-theme-set-fcitx5 --activate
 # A headless theme set skips the retints, so the seeded config would keep its
 # default icon theme until the first switch.

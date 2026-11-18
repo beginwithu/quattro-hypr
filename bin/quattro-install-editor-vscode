@@ -3,7 +3,7 @@
 # quattro:summary=Install VS Code and configure Quattro defaults for secrets, updates, and theme
 
 echo "Installing VSCode..."
-quattro-pkg-add visual-studio-code-bin
+quattro-pkg-aur-add visual-studio-code-bin
 
 mkdir -p ~/.vscode ~/.config/Code/User
 

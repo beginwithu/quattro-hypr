@@ -36,7 +36,7 @@ Singleton {
   // input devices are the c13: entries, character major 13.
   Process {
     id: watcher
-    command: ["bash", "-c",
+    command: ["setpriv", "--pdeathsig", "TERM", "bash", "-c",
       "dirs=(\"$2\"); for dir in \"$1\" \"$3\"; do [[ -d $dir ]] && dirs+=(\"$dir\"); done; "
         + "exec inotifywait -m -q -e create,delete,delete_self,moved_to --format '%w|%e|%f' \"${dirs[@]}\"",
       "input-devices", root.inputDir, root.devDir, root.udevDir]
@@ -109,4 +109,6 @@ Singleton {
     interval: 1000
     onTriggered: watcher.running = true
   }
+
+  Component.onDestruction: watcher.running = false
 }

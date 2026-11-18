@@ -8,11 +8,11 @@ failures=0
 pass() { printf 'PASS: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
 
-echo "==> 1. Checking Bash & Python script syntax..."
+echo "==> 1. Checking Bash & Python script syntax and executable bits..."
 script_errors=0
 while IFS= read -r -d '' script; do
   shebang=$(head -n1 "$script" 2>/dev/null || true)
-  if [[ $shebang == *bash* || $script == "$PROJECT_DIR/default/bash/"* ]]; then
+  if [[ $shebang == *bash* || $script == "$PROJECT_DIR/default/bash/"* || $script == "$PROJECT_DIR/etc/profile.d/"* || $script == "$PROJECT_DIR/default/uwsm/"* ]]; then
     if ! bash -n "$script" 2>/dev/null; then
       echo "  Bash syntax error in: $script" >&2
       script_errors=$((script_errors + 1))
@@ -23,8 +23,16 @@ while IFS= read -r -d '' script; do
       script_errors=$((script_errors + 1))
     fi
   fi
-done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" -type f -print0)
-(( script_errors == 0 )) && pass "All Bash & Python scripts pass syntax checks" || fail "$script_errors script syntax error(s)"
+done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/install" -type f -print0)
+while IFS= read -r -d '' bin_file; do
+  base="${bin_file##*/}"
+  [[ $base == "quattro-security-functions" ]] && continue
+  if [[ ! -x $bin_file ]]; then
+    echo "  Non-executable script in bin/: $bin_file" >&2
+    script_errors=$((script_errors + 1))
+  fi
+done < <(find "$PROJECT_DIR/bin" -maxdepth 1 -type f -print0)
+(( script_errors == 0 )) && pass "All Bash & Python scripts pass syntax and permission checks" || fail "$script_errors script syntax/permission error(s)"
 
 echo "==> 2. Checking Lua syntax..."
 if command -v luac >/dev/null 2>&1; then
@@ -34,13 +42,13 @@ if command -v luac >/dev/null 2>&1; then
       echo "  Lua syntax error in: $lua_file" >&2
       lua_errors=$((lua_errors + 1))
     fi
-  done < <(find "$PROJECT_DIR/config/hypr" "$PROJECT_DIR/default/hypr" -name '*.lua' -type f -print0)
+  done < <(find "$PROJECT_DIR/config/hypr" "$PROJECT_DIR/default/hypr" "$PROJECT_DIR/default/sddm" -name '*.lua' -type f -print0)
   (( lua_errors == 0 )) && pass "All Hyprland Lua files pass luac -p" || fail "$lua_errors Lua syntax error(s)"
 else
   echo "SKIP: luac not installed (skipping Lua bytecode check)"
 fi
 
-echo "==> 3. Checking JSON configs..."
+echo "==> 3. Checking JSON & XML configs..."
 json_errors=0
 for jf in \
   "$PROJECT_DIR/config/quattro/shell.json" \
@@ -51,7 +59,15 @@ for jf in \
     json_errors=$((json_errors + 1))
   fi
 done
-(( json_errors == 0 )) && pass "All JSON config files parse cleanly" || fail "$json_errors JSON error(s)"
+for xf in \
+  "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf" \
+  "$PROJECT_DIR/default/chromium/crx/updates.xml"; do
+  if ! python3 -c 'import xml.etree.ElementTree as ET, sys; ET.parse(sys.argv[1])' "$xf" >/dev/null 2>&1; then
+    echo "  Invalid XML: $xf" >&2
+    json_errors=$((json_errors + 1))
+  fi
+done
+(( json_errors == 0 )) && pass "All JSON & XML config files parse cleanly" || fail "$json_errors JSON/XML error(s)"
 
 echo "==> 4. Verifying Arch repository package lists..."
 if command -v pacman >/dev/null 2>&1; then
@@ -91,9 +107,11 @@ expected_files=(
   "$tmp_home/.config/btop/themes/current.theme"
   "$tmp_home/.config/starship.toml"
   "$tmp_home/.config/tmux/tmux.conf"
+  "$tmp_home/.config/brave-origin-flags.conf"
   "$tmp_home/.config/chrome-flags.conf"
   "$tmp_home/.config/chromium-flags.conf"
   "$tmp_home/.local/share/quattro/bin/quattro"
+  "$tmp_home/.local/share/quattro/config/quattro/shell.json"
   "$tmp_home/.local/bin/quattro"
   "$tmp_home/.local/state/quattro/current/theme/colors.toml"
   "$tmp_home/.local/state/quattro/current/theme/alacritty.toml"
@@ -118,11 +136,14 @@ for f in "${expected_files[@]}"; do
 done
 (( missing_deployed == 0 )) && pass "All expected configs and rendered theme files exist" || fail "$missing_deployed missing deployed file(s)"
 
-if grep -q '__QUATTRO_PATH__' "$tmp_home/.config/chromium-flags.conf" || grep -q '/usr/share/quattro' "$tmp_home/.config/chromium-flags.conf"; then
-  fail "chromium-flags.conf still contains unresolved path"
-else
-  pass "chromium-flags.conf extension paths resolved to sandbox QUATTRO_PATH"
-fi
+flags_unresolved=0
+for ff in "$tmp_home/.config/brave-origin-flags.conf" "$tmp_home/.config/chrome-flags.conf" "$tmp_home/.config/chromium-flags.conf"; do
+  if grep -q '__QUATTRO_PATH__' "$ff" || grep -q '/usr/share/quattro' "$ff"; then
+    echo "  Unresolved path in: $ff" >&2
+    flags_unresolved=$((flags_unresolved + 1))
+  fi
+done
+(( flags_unresolved == 0 )) && pass "Browser flag extension paths resolved to sandbox QUATTRO_PATH" || fail "$flags_unresolved browser flag file(s) still contain unresolved path"
 
 if [[ $(HOME="$tmp_home" QUATTRO_PATH="$tmp_home/.local/share/quattro" "$tmp_home/.local/bin/quattro-version-channel") == "arch-standalone" ]]; then
   pass "quattro-version-channel reports arch-standalone"

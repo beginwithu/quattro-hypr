@@ -714,7 +714,7 @@ Item {
     stdout: StdioCollector { id: posterOutput; waitForEnd: true }
     onExited: function(exitCode) {
       if (sourcePath !== root.backgroundPath) {
-        root.refreshPoster()
+        Qt.callLater(root.refreshPoster)
       } else {
         root.videoPosterPath = exitCode === 0 ? String(posterOutput.text || "").trim() : ""
       }

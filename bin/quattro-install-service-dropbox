@@ -4,7 +4,8 @@
 # quattro:requires-sudo=true
 
 echo "Installing all dependencies..."
-quattro-pkg-add dropbox dropbox-cli libappindicator python-gpgme
+quattro-pkg-add libappindicator python-gpgme
+quattro-pkg-aur-add dropbox dropbox-cli
 
 echo "Adding Dropbox to the bar..."
 quattro-plugin-enable quattro.dropbox

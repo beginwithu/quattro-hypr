@@ -68,7 +68,7 @@ close_portal_window() {
   local host=${url#*://}
   host=${host%%/*}
   # [.] rather than \. so the pattern survives both jq and the Lua string.
-  local class="^chrome-${host//./[.]}__.*$"
+  local class="^.+?-${host//./[.]}__.*$"
   local seen=0
 
   # The browser handoff can return before the window maps, so an online

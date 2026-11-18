@@ -16,12 +16,33 @@ fi
 printf -v install_message '%q' "Installing ${name}..."
 printf -v desktop_id_arg '%q' "$desktop_id"
 
-# The list has to reach quattro-pkg-add as several words, so each word is quoted
-# rather than the whole string; -d '' reads past newlines and always ends at EOF.
+# Route official repo packages to quattro-pkg-add and AUR-only packages to quattro-pkg-aur-add.
 read -r -d '' -a package_list <<<"$packages" || true
-printf -v packages_arg '%q ' "${package_list[@]}"
-packages_arg="${packages_arg% }"
+repo_pkgs=()
+aur_pkgs=()
+for pkg in "${package_list[@]}"; do
+  if pacman -Si -- "$pkg" >/dev/null 2>&1; then
+    repo_pkgs+=("$pkg")
+  else
+    aur_pkgs+=("$pkg")
+  fi
+done
+
+install_steps=()
+if (( ${#repo_pkgs[@]} > 0 )); then
+  printf -v repo_arg '%q ' "${repo_pkgs[@]}"
+  install_steps+=("quattro-pkg-add ${repo_arg% }")
+fi
+if (( ${#aur_pkgs[@]} > 0 )); then
+  printf -v aur_arg '%q ' "${aur_pkgs[@]}"
+  install_steps+=("quattro-pkg-aur-add ${aur_arg% }")
+fi
+
+install_cmd=""
+for step in "${install_steps[@]}"; do
+  install_cmd+="${install_cmd:+ && }$step"
+done
 
 # The subshell keeps & from backgrounding the package installation too.
 exec quattro-launch-floating-terminal-with-presentation \
-  "echo ${install_message}; quattro-pkg-add ${packages_arg} && (setsid uwsm-app -- gtk-launch ${desktop_id_arg} >/dev/null 2>&1 &)"
+  "echo ${install_message}; ${install_cmd} && (setsid uwsm-app -- gtk-launch ${desktop_id_arg} >/dev/null 2>&1 &)"

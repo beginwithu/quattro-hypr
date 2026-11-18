@@ -1,10 +1,9 @@
 # Optional desktop, developer, printing, and media packages from Arch [core]/[extra].
-# Install with: ./install.sh --with-optional
+# Install manually as needed with: sudo pacman -S <pkg>
 
 # Productivity & GUI apps
 gnome-disk-utility
 libreoffice-fresh
-localsend
 obsidian
 papers
 pinta

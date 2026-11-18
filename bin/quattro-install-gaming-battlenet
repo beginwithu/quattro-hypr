@@ -59,8 +59,10 @@ app launcher.
 
 EOF
 
-  log="/tmp/quattro-battlenet-installer.log"
-  setsid -f sh -c "umu-run '$installer' >'$log' 2>&1" </dev/null >/dev/null 2>&1
+  log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/quattro"
+  mkdir -p -m 0700 "$log_dir"
+  log="$log_dir/battlenet-installer.log"
+  setsid -f sh -c 'umu-run "$1" >"$2" 2>&1' _ "$installer" "$log" </dev/null >/dev/null 2>&1
   echo "Installer log: $log"
   launched_installer=1
 fi

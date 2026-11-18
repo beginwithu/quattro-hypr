@@ -355,9 +355,12 @@ smart | *)
   ;;
 esac
 
-[[ $KEEP_FREEZE == true ]] && echo "$FREEZE_PID"
+if [[ -z $SELECTION ]]; then
+  [[ -n $FREEZE_PID ]] && kill "$FREEZE_PID" 2>/dev/null || true
+  exit 1
+fi
 
-[[ -n $SELECTION ]] || exit 1
+[[ $KEEP_FREEZE == true ]] && echo "$FREEZE_PID"
 
 if [[ $MATCH_MONITOR == true ]]; then
   monitor=$(hyprctl monitors -j | jq -r --arg geo "$SELECTION" "${JQ_MONITOR_GEO} .[] | select(format_geo == \$geo) | .name" | head -1)

@@ -31,7 +31,9 @@ Item {
   readonly property int trimLengthMs: Math.max(0, endMs - startMs)
   readonly property bool isPlaying: player.playbackState === MediaPlayer.PlayingState
 
-  readonly property var targetScreen: {
+  property var targetScreen: null
+
+  function focusedScreen() {
     var screens = Quickshell.screens
     if (!screens || screens.length === 0) return null
     var fm = Hyprland.focusedMonitor
@@ -41,6 +43,15 @@ Item {
       }
     }
     return screens[0]
+  }
+
+  Connections {
+    target: Quickshell
+    function onScreensChanged() {
+      if (!root.opened) return
+      var screens = Quickshell.screens || []
+      if (screens.indexOf(root.targetScreen) === -1) root.targetScreen = root.focusedScreen()
+    }
   }
 
   function formatTime(ms) {
@@ -80,8 +91,13 @@ Item {
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
 
     var path = String(payload.path || payload.file || "").trim()
+    if (!path) {
+      if (root.standalone) Qt.quit()
+      return
+    }
     var dur = Math.max(0, Math.round(Number(payload.durationMs || 0)))
 
+    root.targetScreen = root.focusedScreen()
     root.cutting = false
     root.statusText = ""
     root.errorText = ""
@@ -104,6 +120,7 @@ Item {
     player.source = ""
     root.opened = false
     root.cutting = false
+    root.targetScreen = null
     if (root.standalone) Qt.quit()
   }
 
@@ -174,6 +191,10 @@ Item {
       + "stem=\"${base%.*}\"\n"
       + "ext=\"${base##*.}\"\n"
       + "if [[ \"$stem\" == \"$base\" ]]; then ext=\"mp4\"; fi\n"
+      + "ext_lc=\"${ext,,}\"\n"
+      + "tmp_out=\"\"\n"
+      + "cleanup_tmp() { [[ -n $tmp_out && $mode == replace ]] && rm -f -- \"$tmp_out\"; }\n"
+      + "trap cleanup_tmp EXIT\n"
       + "if [[ \"$mode\" == \"replace\" ]]; then\n"
       + "  tmp_out=\"$dir/.${stem}.quattro-video-cut-$$.${ext}\"\n"
       + "  final_out=\"$in_file\"\n"
@@ -186,11 +207,18 @@ Item {
       + "  done\n"
       + "  tmp_out=\"$final_out\"\n"
       + "fi\n"
+      + "codec_args=(-c:v libx264 -preset veryfast -crf 18 -c:a aac)\n"
+      + "if [[ $ext_lc == mp4 || $ext_lc == mov || $ext_lc == m4v ]]; then\n"
+      + "  codec_args+=(-movflags +faststart)\n"
+      + "elif [[ $ext_lc == webm ]]; then\n"
+      + "  codec_args=(-c:v libvpx-vp9 -crf 28 -b:v 0 -c:a libopus)\n"
+      + "fi\n"
       + "ffmpeg -y -ss " + Util.shellQuote(startSec)
       + " -i \"$in_file\" -t " + Util.shellQuote(durationSec)
-      + " -c:v libx264 -preset veryfast -crf 18 -c:a aac -movflags +faststart \"$tmp_out\" -loglevel error\n"
+      + " \"${codec_args[@]}\" \"$tmp_out\" -loglevel error\n"
       + "if [[ \"$mode\" == \"replace\" ]]; then\n"
-      + "  mv -f \"$tmp_out\" \"$final_out\"\n"
+      + "  mv -f -- \"$tmp_out\" \"$final_out\"\n"
+      + "  tmp_out=\"\"\n"
       + "fi\n"
       + "quattro-notification-send \"Video Cut Saved\" \"$(basename -- \"$final_out\")\" -t 8000 --action \"$(quattro-i18n capture.recordingOpen 2>/dev/null || echo Open)\" mpv -- --with \"$final_out\" >/dev/null 2>&1 || true\n"
 
@@ -330,12 +358,6 @@ Item {
               anchors.left: parent.left
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.spacing.sm
-
-              Text {
-                textFormat: Text.PlainText
-                text: "ContentCut"
-                visible: false
-              }
 
               Text {
                 textFormat: Text.PlainText
@@ -700,6 +722,8 @@ Item {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, Math.max(Style.space(80), contentCol.width - Style.space(420)))
+                elide: Text.ElideRight
                 textFormat: Text.PlainText
                 text: root.errorText !== "" ? root.errorText : root.statusText
                 font.family: Style.font.family

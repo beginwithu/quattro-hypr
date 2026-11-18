@@ -21,7 +21,11 @@ local kb_options = "quattro:shift_caps_compose"
 -- layout that's currently active, so Quattro's Latin-keysym bindings (SUPER + W
 -- and friends) only fire when a Latin layout leads. Installing with a non-Latin
 -- one would otherwise leave the desktop unusable.
-if non_latin_layouts:find(" " .. kb_layout:match("^[^,]*") .. " ", 1, true) then
+local first_layout = kb_layout:match("^[^,]*") or ""
+local first_variant = kb_variant:match("^[^,]*") or ""
+if non_latin_layouts:find(" " .. first_layout .. " ", 1, true)
+  or (first_layout == "us" and non_latin_us_variants:find(" " .. first_variant .. " ", 1, true))
+then
   -- Variants pair with layouts by position. A list that already names us (as in
   -- "ru,us") moves that entry and its variant to the front rather than gaining a
   -- second us, which would make the toggle cycle through a duplicate.

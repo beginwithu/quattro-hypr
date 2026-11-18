@@ -33,7 +33,7 @@ safe_stage_path() {
 }
 
 if quattro-cmd-missing supergfxctl; then
-  quattro-pkg-add supergfxctl
+  quattro-pkg-aur-add supergfxctl
 
   # Create config before starting service to prevent hang on first boot
   sudo tee /etc/supergfxd.conf >/dev/null <<'CONF'

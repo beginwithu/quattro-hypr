@@ -22,15 +22,15 @@ function parseLocationFile(raw) {
 }
 
 // True when weather.json names no place: the panel then reports for wherever
-// geo.quattro.org places this network.
+// IP geolocation places this network.
 function isAutoLocation(state) {
   var s = state || {}
   return String(s.name || "") === "" && (s.latitude === null || s.latitude === undefined)
 }
 
 // The location to report for: the stored one, or with none stored, the one
-// geo.quattro.org detected. geo.quattro.org answers in weather.json's shape, so
-// both come from parseLocationFile.
+// IP geolocation detected in weather.json's shape, so both come from
+// parseLocationFile.
 function effectiveLocation(configured, detected) {
   return isAutoLocation(configured) && detected ? detected : configured
 }

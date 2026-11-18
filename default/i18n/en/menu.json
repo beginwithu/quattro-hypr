@@ -979,6 +979,9 @@
   "remove.service.tailscale": {
     "label": "Tailscale"
   },
+  "remove.service.slack": {
+    "label": "Slack"
+  },
   "remove.service.microsoft": {
     "label": "Microsoft"
   },

@@ -54,7 +54,8 @@ $saw_any && $all_unchanged && exit 0
 if ! $saw_any && [[ ${QUATTRO_THEME_BROWSER_FORCE:-0} != "1" ]]; then
   exit 0
 fi
-if (( EUID != 0 )) && [[ ${QUATTRO_THEME_HEADLESS:-0} == "1" || ! -t 0 ]] && ! sudo -n true 2>/dev/null; then
+if (( EUID != 0 )) && [[ ${QUATTRO_THEME_HEADLESS:-0} == "1" || ! -t 0 ]] &&
+  ! sudo -n -l /usr/bin/quattro-theme-set-browser-policy "${THEME_HEX_COLOR#\#}" >/dev/null 2>&1; then
   exit 0
 fi
 

@@ -1059,7 +1059,7 @@ Item {
         root.mergeProviderRows(providerProc.collected, providerProc.menuId, providerProc.providerKey)
         if (root.filterText.trim()) root.loadProvidersForSearch()
       }
-      root.startNextProvider()
+      Qt.callLater(root.startNextProvider)
     }
   }
 
@@ -1119,7 +1119,7 @@ Item {
         }
         root.updateDmenuChecks()
       }
-      startNext()
+      Qt.callLater(selectionProc.startNext)
     }
   }
 

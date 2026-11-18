@@ -25,20 +25,25 @@ Rectangle {
       var byRole = (userModel.data(userModel.index(root.userIndex, 0), Qt.UserRole + 1) || "").toString()
       if (byRole)
         return byRole
-      var byDisplay = (userModel.data(userModel.index(root.userIndex, 0), Qt.DisplayRole) || "").toString()
-      if (byDisplay)
-        return byDisplay
     }
     return userModel.lastUser || ""
   }
 
   property bool loginFailed: false
   property int sessionIndex: {
+    var uwsmFallback = -1
     for (var i = 0; i < sessionModel.rowCount(); i++) {
-      var name = (sessionModel.data(sessionModel.index(i, 0), Qt.DisplayRole) || "").toString()
-      if (name.toLowerCase().indexOf("uwsm") !== -1)
+      var idx = sessionModel.index(i, 0)
+      // SDDM SessionModel roles: FileRole = Qt.UserRole + 2, NameRole = Qt.UserRole + 4
+      var file = (sessionModel.data(idx, Qt.UserRole + 2) || "").toString().toLowerCase()
+      var name = (sessionModel.data(idx, Qt.UserRole + 4) || "").toString().toLowerCase()
+      if (file.indexOf("quattro.desktop") !== -1 || name.indexOf("quattro") !== -1)
         return i
+      if (uwsmFallback === -1 && name.indexOf("uwsm") !== -1)
+        uwsmFallback = i
     }
+    if (uwsmFallback !== -1)
+      return uwsmFallback
     return sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
   }
 

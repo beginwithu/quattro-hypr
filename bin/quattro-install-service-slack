@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-quattro-pkg-add slack-desktop
+quattro-pkg-aur-add slack-desktop
 if quattro-setup-slack; then
   setsid uwsm-app -- gtk-launch slack >/dev/null 2>&1 &
 else

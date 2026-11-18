@@ -54,7 +54,7 @@ append_line() {
 setup_chromium() {
   local conf status=0
 
-  for conf in ~/.config/chromium-flags.conf ~/.config/chrome-flags.conf; do
+  for conf in ~/.config/brave-origin-flags.conf ~/.config/brave-flags.conf ~/.config/chromium-flags.conf ~/.config/chrome-flags.conf; do
     [[ -f $conf ]] || continue
     if ! chromium_args "$conf" | grep -E -- '(^|[[:space:]])--use-angle=' >/dev/null; then
       append_line "$conf" '--use-angle=gles-egl' || status=$?

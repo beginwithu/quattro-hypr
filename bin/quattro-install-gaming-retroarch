@@ -20,7 +20,9 @@ quattro-pkg-add \
   libretro-overlays \
   libretro-parallel-n64 libretro-picodrive libretro-play libretro-ppsspp \
   libretro-sameboy libretro-scummvm libretro-shaders-slang libretro-snes9x \
-  libretro-yabause \
+  libretro-yabause
+
+quattro-pkg-aur-add \
   libretro-cap32-git libretro-fbneo-git libretro-uae-git \
   libretro-vice-x128-git libretro-vice-x64-git libretro-vice-x64dtv-git libretro-vice-x64sc-git \
   libretro-vice-xcbm2-git libretro-vice-xcbm5x0-git libretro-vice-xpet-git \
@@ -82,4 +84,4 @@ set_cfg content_show_video "false"
 echo ""
 echo "Put your roms and bios files in ~/Games. Then start RetroArch from the app launcher (Super + Space)."
 
-setsid folio "$HOME/Games" >/dev/null 2>&1 &
+quattro-launch-files "$HOME/Games" >/dev/null 2>&1 &

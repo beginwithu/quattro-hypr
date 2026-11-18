@@ -54,10 +54,10 @@ quattro_security_require_source_root() {
   command_source=$(/usr/bin/readlink -e -- "$1") || return 1
 
   # A runtime root selects the code used by this invocation. Accept the
-  # canonical checkout containing the entrypoint or the package's bin links.
+  # canonical checkout containing the entrypoint or the packaged /usr/bin binary.
   if [[ ${QUATTRO_PATH:-} != /* || $(/usr/bin/realpath -e -- "$QUATTRO_PATH") != "$QUATTRO_PATH" ]] ||
     ! { [[ $command_source == "$QUATTRO_PATH/bin/$command_name" ]] ||
-      [[ $QUATTRO_PATH == "/usr/share/quattro" && $command_source == "/usr/bin/$command_name" ]]; }; then
+      [[ $command_source == "/usr/bin/$command_name" && -f "$QUATTRO_PATH/bin/$command_name" ]]; }; then
     echo "QUATTRO_PATH does not match this Quattro command." >&2
     return 1
   fi

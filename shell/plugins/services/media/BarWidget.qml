@@ -19,6 +19,12 @@ BarWidget {
   readonly property string artist: activePlayer ? (activePlayer.trackArtist || "") : ""
 
   property bool popupOpen: false
+  readonly property bool tooltipHovered: visible && opacity > 0 && mediaMouseArea.containsMouse
+  readonly property color barFg: root.bar ? root.bar.barForeground : Commons.Color.foreground
+  readonly property color popupFg: root.bar ? root.bar.foreground : Commons.Color.foreground
+  readonly property string barFontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+  readonly property bool barVertical: root.bar ? root.bar.vertical : false
+  readonly property bool barHiddenState: root.bar ? root.bar.barHidden : false
 
   function close() { popupOpen = false }
   property real maxLabelWidth: 180
@@ -37,8 +43,8 @@ BarWidget {
       textFormat: Text.PlainText
       anchors.verticalCenter: parent.verticalCenter
       text: root.playIcon
-      color: activePlayer && activePlayer.isPlaying ? root.bar.barForeground : Qt.darker(root.bar.barForeground, 1.5)
-      font.family: root.bar.fontFamily
+      color: activePlayer && activePlayer.isPlaying ? root.barFg : Qt.darker(root.barFg, 1.5)
+      font.family: root.barFontFamily
       font.pixelSize: Style.font.body
       Behavior on color {
         enabled: !root.bar || root.bar.foregroundAnimationEnabled
@@ -52,14 +58,14 @@ BarWidget {
       height: glyph.height
       clip: true
       anchors.verticalCenter: parent.verticalCenter
-      visible: !root.bar.vertical && root.title !== ""
+      visible: !root.barVertical && root.title !== ""
 
       Text {
         id: labelText
         textFormat: Text.PlainText
         text: root.title + (root.artist ? "  ·  " + root.artist : "")
-        color: root.bar.barForeground
-        font.family: root.bar.fontFamily
+        color: root.barFg
+        font.family: root.barFontFamily
         font.pixelSize: Style.font.body
         anchors.verticalCenter: parent.verticalCenter
 
@@ -69,7 +75,7 @@ BarWidget {
         // track is playing and the bar is on screen to show it.
         NumberAnimation on x {
           id: scrollAnim
-          running: labelText.needsScroll && root.isPlaying && root.visible && !root.bar.barHidden && !root.popupOpen && !root.bar.vertical && !Style.reduceMotion
+          running: labelText.needsScroll && root.isPlaying && root.visible && !root.barHiddenState && !root.popupOpen && !root.barVertical && !Style.reduceMotion
           // Stopped, the title reads from its start again.
           onRunningChanged: if (!running) labelText.x = 0
           loops: Animation.Infinite
@@ -83,6 +89,7 @@ BarWidget {
   }
 
   MouseArea {
+    id: mediaMouseArea
     anchors.fill: parent
     hoverEnabled: true
     cursorShape: root.activePlayer ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -129,8 +136,8 @@ BarWidget {
           width: Style.space(64)
           height: Style.space(64)
           radius: Style.spacing.labelGap
-          color: Style.normalFillFor(root.bar.foreground, Commons.Color.accent)
-          borderSpec: Border.controlSpec("normal", root.bar.foreground, Commons.Color.accent)
+          color: Style.normalFillFor(root.popupFg, Commons.Color.accent)
+          borderSpec: Border.controlSpec("normal", root.popupFg, Commons.Color.accent)
 
           // Decode the art at the size it is drawn, not the size the player
           // serves it at. The popup is built on every monitor at startup.
@@ -146,8 +153,8 @@ BarWidget {
             anchors.centerIn: parent
             visible: !root.activePlayer || !root.activePlayer.trackArtUrl
             text: "󰝚"
-            color: root.bar.foreground
-            font.family: root.bar.fontFamily
+            color: root.popupFg
+            font.family: root.barFontFamily
             font.pixelSize: Style.font.displayLarge
           }
         }
@@ -159,8 +166,8 @@ BarWidget {
           Text {
             textFormat: Text.PlainText
             text: root.title || I18n.t("media.nothingPlaying")
-            color: root.bar.foreground
-            font.family: root.bar.fontFamily
+            color: root.popupFg
+            font.family: root.barFontFamily
             font.pixelSize: Style.font.subtitle
             font.bold: true
             elide: Text.ElideRight
@@ -170,8 +177,8 @@ BarWidget {
           Text {
             textFormat: Text.PlainText
             text: root.artist
-            color: Qt.darker(root.bar.foreground, 1.3)
-            font.family: root.bar.fontFamily
+            color: Qt.darker(root.popupFg, 1.3)
+            font.family: root.barFontFamily
             font.pixelSize: Style.font.bodySmall
             elide: Text.ElideRight
             width: parent.width
@@ -181,8 +188,8 @@ BarWidget {
           Text {
             textFormat: Text.PlainText
             text: root.activePlayer && root.activePlayer.trackAlbum ? root.activePlayer.trackAlbum : ""
-            color: Qt.darker(root.bar.foreground, 1.6)
-            font.family: root.bar.fontFamily
+            color: Qt.darker(root.popupFg, 1.6)
+            font.family: root.barFontFamily
             font.pixelSize: Style.font.caption
             elide: Text.ElideRight
             width: parent.width
@@ -201,7 +208,7 @@ BarWidget {
 
         Button {
           iconText: "󰒮"
-          foreground: root.bar.foreground
+          foreground: root.popupFg
           horizontalPadding: Style.spacing.controlPaddingX
           verticalPadding: Style.spacing.controlPaddingY
           enabled: root.activePlayer && root.activePlayer.canGoPrevious
@@ -211,7 +218,7 @@ BarWidget {
 
         Button {
           iconText: root.activePlayer && root.activePlayer.isPlaying ? "󰏤" : "󰐊"
-          foreground: root.bar.foreground
+          foreground: root.popupFg
           horizontalPadding: Style.spacing.panelGap
           verticalPadding: Style.spacing.controlPaddingY
           iconSize: Style.font.iconLarge
@@ -222,7 +229,7 @@ BarWidget {
 
         Button {
           iconText: "󰒭"
-          foreground: root.bar.foreground
+          foreground: root.popupFg
           horizontalPadding: Style.spacing.controlPaddingX
           verticalPadding: Style.spacing.controlPaddingY
           enabled: root.activePlayer && root.activePlayer.canGoNext
@@ -233,7 +240,7 @@ BarWidget {
 
       PanelSeparator {
         visible: root.sourcePlayers.length > 1
-        foreground: root.bar.foreground
+        foreground: root.popupFg
       }
 
       Column {
@@ -258,8 +265,8 @@ BarWidget {
             width: sourceList.width
             height: sourceInner.implicitHeight + Style.space(10)
             radius: Style.spacing.labelGap
-            color: selected ? Style.selectedFillFor(root.bar.foreground, Commons.Color.accent) : "transparent"
-            borderSpec: selected ? Border.controlSpec("normal", root.bar.foreground, Commons.Color.accent) : Border.none()
+            color: selected ? Style.selectedFillFor(root.popupFg, Commons.Color.accent) : "transparent"
+            borderSpec: selected ? Border.controlSpec("normal", root.popupFg, Commons.Color.accent) : Border.none()
 
             Row {
               id: sourceInner
@@ -273,8 +280,8 @@ BarWidget {
               Text {
                 textFormat: Text.PlainText
                 text: sourceRow.player && sourceRow.player.isPlaying ? "󰏤" : "󰐊"
-                color: root.bar.foreground
-                font.family: root.bar.fontFamily
+                color: root.popupFg
+                font.family: root.barFontFamily
                 font.pixelSize: Style.font.body
                 width: Style.space(18)
                 horizontalAlignment: Text.AlignHCenter
@@ -289,8 +296,8 @@ BarWidget {
                 Text {
                   textFormat: Text.PlainText
                   text: sourceRow.sourceTitle
-                  color: root.bar.foreground
-                  font.family: root.bar.fontFamily
+                  color: root.popupFg
+                  font.family: root.barFontFamily
                   font.pixelSize: Style.font.bodySmall
                   font.bold: sourceRow.selected
                   elide: Text.ElideRight
@@ -300,8 +307,8 @@ BarWidget {
                 Text {
                   textFormat: Text.PlainText
                   text: sourceRow.sourceDetail
-                  color: Qt.darker(root.bar.foreground, 1.5)
-                  font.family: root.bar.fontFamily
+                  color: Qt.darker(root.popupFg, 1.5)
+                  font.family: root.barFontFamily
                   font.pixelSize: Style.font.caption
                   elide: Text.ElideRight
                   width: parent.width

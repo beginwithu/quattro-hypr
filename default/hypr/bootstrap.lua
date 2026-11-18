@@ -44,12 +44,22 @@ local function resolve_quattro_path()
   return "/usr/share/quattro"
 end
 
--- Load generated state from ~/.local/state, user modules from ~/.config, and
--- Quattro defaults from $QUATTRO_PATH.
-package.path = home
-  .. "/.local/state/?.lua;"
-  .. home
-  .. "/.config/?.lua;"
+-- Load generated state from XDG_STATE_HOME, user modules from XDG_CONFIG_HOME,
+-- and Quattro defaults from $QUATTRO_PATH.
+local state_home = os.getenv("XDG_STATE_HOME")
+if not state_home or state_home == "" then
+  state_home = (home or "") .. "/.local/state"
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME")
+if not config_home or config_home == "" then
+  config_home = (home or "") .. "/.config"
+end
+
+package.path = state_home
+  .. "/?.lua;"
+  .. config_home
+  .. "/?.lua;"
   .. resolve_quattro_path()
   .. "/?.lua;"
   .. package.path

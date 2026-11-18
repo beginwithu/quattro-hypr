@@ -569,6 +569,7 @@ Panel {
       payload.iface = info.iface
       if (info.ssid) payload.ssid = info.ssid
     }
+    if (!bar || !bar.shell) return
     bar.shell.summon("quattro.wifiqr", JSON.stringify(payload))
   }
 
@@ -760,6 +761,7 @@ Panel {
     var connection = ""
     if (info.type === "wifi") connection = info.ssid || "Wi-Fi"
     else if (info.type === "ethernet") connection = Commons.I18n.t("network.ethernet")
+    if (!bar || !bar.shell) return
     bar.shell.summon("quattro.speedtest", connection ? JSON.stringify({ connection: connection }) : "{}")
   }
 

@@ -1,4 +1,4 @@
-# Optional AUR packages (installed via yay when --with-aur is passed to install.sh)
+# Optional AUR packages (install manually as needed with: yay -S <pkg>)
 qtengine
 google-chrome
 tzupdate

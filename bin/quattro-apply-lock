@@ -18,6 +18,18 @@ if [[ -z $target_user && -n ${PKEXEC_UID:-} ]]; then
 fi
 target_user=${target_user:-$USER}
 
+if [[ -z ${QUATTRO_PATH:-} ]]; then
+  script_root=$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." 2>/dev/null && pwd || true)
+  target_home=$(getent passwd "$target_user" 2>/dev/null | cut -d: -f6 || true)
+  if [[ -n $script_root && -d $script_root/default/systemd ]]; then
+    QUATTRO_PATH=$script_root
+  elif [[ -n $target_home && -d $target_home/.local/share/quattro/default/systemd ]]; then
+    QUATTRO_PATH="$target_home/.local/share/quattro"
+  else
+    QUATTRO_PATH=/usr/share/quattro
+  fi
+fi
+
 as_root() {
   if (( EUID == 0 )); then
     "$@"

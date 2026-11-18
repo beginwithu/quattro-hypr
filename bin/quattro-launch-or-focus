@@ -9,11 +9,12 @@ if (($# == 0)); then
 fi
 
 WINDOW_PATTERN="$1"
-LAUNCH_COMMAND="${2:-"uwsm-app -- $WINDOW_PATTERN"}"
 WINDOW_ADDRESS=$(hyprctl clients -j | jq -r --arg p "$WINDOW_PATTERN" '.[]|select((.class|test("\\b" + $p + "\\b";"i")) or (.title|test("\\b" + $p + "\\b";"i")))|.address' | head -n1)
 
 if [[ -n $WINDOW_ADDRESS ]]; then
   hyprctl dispatch "hl.dsp.focus({ window = \"address:$WINDOW_ADDRESS\" })" >/dev/null 2>&1 || hyprctl dispatch focuswindow "address:$WINDOW_ADDRESS"
+elif (( $# >= 2 )) && [[ -n $2 ]]; then
+  exec setsid bash -c "$2"
 else
-  eval exec setsid $LAUNCH_COMMAND
+  exec setsid uwsm-app -- "$WINDOW_PATTERN"
 fi

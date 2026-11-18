@@ -4,7 +4,7 @@ o.window({ tag = "floating-window" }, { center = true })
 o.window({ tag = "floating-window" }, { size = { 875, 600 } })
 
 o.window(
-  "(org.quattro.btop|org.quattro.terminal|org.quattro.bash|org.codeberg.dnkl.foot|org.gnome.NautilusPreviewer|org.gnome.Papers|Quattro|About|TUI.float|imv|mpv)",
+  "(org.quattro.btop|org.quattro.terminal|org.quattro.bash|org.gnome.NautilusPreviewer|org.gnome.Papers|Quattro|About|TUI.float|imv|mpv)",
   {
     tag = "+floating-window",
   }

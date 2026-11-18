@@ -20,7 +20,7 @@ if (($# == 0)); then
   # sublime-text-4 ships `subl`; older defaults stored `sublime_text`.
   [[ $editor == sublime_text ]] && editor=subl
 
-  [[ -n $editor ]] && echo "$editor" || echo "plain"
+  [[ -n $editor ]] && echo "$editor" || echo "nvim"
   exit 0
 fi
 

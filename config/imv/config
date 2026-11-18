@@ -12,5 +12,5 @@
 # Rotate the currently open image by 90 degrees
 <Ctrl+r> = exec mogrify -rotate 90 "$imv_current_file"
 
-# Edit the current image in Omasnap (or Arch fallback editor) and quit the viewer
-<Ctrl+e> = exec sh -c 'f=$1; for e in omasnap "swappy -f" "satty -f" pinta; do set -- $e; command -v $1 >/dev/null && exec $@ "$f"; done' _ "$imv_current_file" & ; quit
+# Edit the current image in an available image editor and quit the viewer
+<Ctrl+e> = exec quattro-edit-image "$imv_current_file"; quit

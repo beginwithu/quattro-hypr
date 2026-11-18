@@ -298,7 +298,7 @@ Item {
       if (root.hasPendingStayAwakePersist) {
         var pending = root.pendingStayAwakePersist
         root.hasPendingStayAwakePersist = false
-        root.persistStayAwake(pending)
+        Qt.callLater(function() { root.persistStayAwake(pending) })
         return
       }
 

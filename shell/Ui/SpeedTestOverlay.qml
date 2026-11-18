@@ -76,8 +76,9 @@ PanelWindow {
   readonly property color onScrimDim: Qt.rgba(1, 1, 1, 0.55)
   readonly property color onScrimUrgent: "#ff6b6b"
 
-  visible: open
-  screen: {
+  property var targetScreen: null
+
+  function focusedScreen() {
     var screens = Quickshell.screens
     if (!screens || screens.length === 0) return null
     var fm = Hyprland.focusedMonitor
@@ -88,9 +89,22 @@ PanelWindow {
     }
     return screens[0]
   }
-  // The window is instantiated hidden, so re-acquire focus after mapping and
-  // fire the ignition sweep once the surface is actually on screen.
+
+  Connections {
+    target: Quickshell
+    function onScreensChanged() {
+      if (!root.open) return
+      var screens = Quickshell.screens || []
+      if (screens.indexOf(root.targetScreen) === -1) root.targetScreen = root.focusedScreen()
+    }
+  }
+
+  visible: open
+  screen: targetScreen
+  // The window is instantiated hidden, so snapshot the focused monitor once on
+  // open, re-acquire focus after mapping, and fire the ignition sweep once on screen.
   onOpenChanged: {
+    targetScreen = open ? focusedScreen() : null
     if (open) Qt.callLater(function() {
       if (!root.open) return
       keyCatcher.forceActiveFocus()

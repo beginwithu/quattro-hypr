@@ -69,7 +69,7 @@ laravel)
 symfony)
   echo -e "Installing PHP and Symfony...\n"
   install_php
-  quattro-pkg-add symfony-cli
+  quattro-pkg-aur-add symfony-cli
   echo -e "\nYou can now run: symfony new --webapp myproject"
   ;;
 python)

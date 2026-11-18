@@ -13,8 +13,12 @@ set_fallback_default_browser() {
     return
   fi
 
-  # Hand links to whichever of the two Chromium-family defaults stays behind.
-  if [[ $1 != "google-chrome.desktop" ]] && quattro-cmd-present google-chrome-stable; then
+  # Hand links to whichever Chromium-family default stays behind.
+  if [[ $1 != "brave-origin.desktop" ]] && quattro-cmd-present brave-origin; then
+    env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser brave-origin.desktop || true
+  elif [[ $1 != "brave-browser.desktop" ]] && quattro-cmd-present brave; then
+    env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser brave-browser.desktop || true
+  elif [[ $1 != "google-chrome.desktop" ]] && quattro-cmd-present google-chrome-stable; then
     env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser google-chrome.desktop || true
   elif [[ $1 != "chromium.desktop" ]] && quattro-cmd-present chromium; then
     env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser chromium.desktop || true
