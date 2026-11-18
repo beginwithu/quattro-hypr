@@ -152,7 +152,7 @@ install_runtime() {
   echo "==> Installing Quattro runtime to $INSTALL_DIR..."
   mkdir -p "$INSTALL_DIR"
 
-  for item in applications bin config default install shell themes icon.png icon.txt logo.svg logo.txt version LICENSE; do
+  for item in applications bin config default packages shell themes icon.png icon.txt logo.svg logo.txt version LICENSE; do
     if [[ -d $PROJECT_DIR/$item ]]; then
       rm -rf "${INSTALL_DIR:?}/$item"
       mkdir -p "$INSTALL_DIR/$item"

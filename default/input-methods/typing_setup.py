@@ -14,7 +14,7 @@ def keyboard_catalog():
   # Read the same choices as the ISO and first-boot form, then convert console
   # keymaps through systemd's mapping, just as localectl does during install.
   choices = setup.run(["bash", "-c", 'source "$1"; printf "%s\\n" "$QUATTRO_KEYBOARD_LAYOUTS"',
-                       "bash", str(setup.ROOT / "install/provisioning/setup-form.sh")])
+                       "bash", str(setup.ROOT / "default/input-methods/keyboard-layouts.sh")])
   mappings = {}
   for line in Path("/usr/share/systemd/kbd-model-map").read_text().splitlines():
     fields = line.split()

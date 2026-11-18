@@ -634,9 +634,6 @@
   "setup.direct-boot": {
     "label": "Direct Boot"
   },
-  "setup.reset": {
-    "label": "Reset Computer"
-  },
   "install.package": {
     "label": "Package"
   },

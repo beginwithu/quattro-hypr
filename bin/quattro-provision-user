@@ -11,7 +11,7 @@ Usage: quattro finalize user [--force] [--first-install]
 
 Runs the per-user setup steps that /etc/skel can't seed:
 dev-aware skill symlinks, xdg-user-dirs + gtk bookmarks (need \$HOME),
-default browser/mailto, and install/user/all.sh.
+default browser, and default/first-run/all.sh.
 
 For shipped configs see /etc/skel (new users) and quattro-reinstall-configs
 (existing users explicitly resyncing).
@@ -61,25 +61,15 @@ if quattro-done check finalize-user && (( force == 0 )); then
   exit 0
 fi
 
-export QUATTRO_PATH="${QUATTRO_PATH:-/usr/share/quattro}"
-export QUATTRO_INSTALL="${QUATTRO_INSTALL:-$QUATTRO_PATH/install}"
+export QUATTRO_PATH="${QUATTRO_PATH:-$HOME/.local/share/quattro}"
+export QUATTRO_FIRST_RUN="${QUATTRO_FIRST_RUN:-$QUATTRO_PATH/default/first-run}"
 export QUATTRO_SETUP_CONTEXT="${QUATTRO_SETUP_CONTEXT:-runtime}"
 export PATH="$QUATTRO_PATH/bin:$PATH"
 
-if (( first_install )) && [[ $QUATTRO_SETUP_CONTEXT == "runtime" ]]; then
-  # The ISO chroot doesn't set a context; quattro-provision-owner runs first-install
-  # finalization too but with QUATTRO_SETUP_CONTEXT=provision-owner already set.
-  export QUATTRO_SETUP_CONTEXT=iso-chroot
-fi
-
-if [[ -n ${QUATTRO_INSTALL_LOG_FILE:-} && -f $QUATTRO_INSTALL/helpers/logging.sh ]]; then
-  source "$QUATTRO_INSTALL/helpers/logging.sh"
-else
-  run_logged() {
-    local script="$1"
-    bash -eE -c 'source "$1"' bash "$script"
-  }
-fi
+run_logged() {
+  local script="$1"
+  bash -eE -c 'source "$1"' bash "$script"
+}
 
 mkdir -p ~/Downloads ~/Pictures ~/Videos ~/.config/gtk-3.0
 xdg-user-dirs-update --set TEMPLATES "$HOME"
@@ -100,7 +90,7 @@ for dir in Downloads Projects Pictures Videos; do
   grep -qxF "$bookmark" ~/.config/gtk-3.0/bookmarks || echo "$bookmark" >>~/.config/gtk-3.0/bookmarks
 done
 
-source "$QUATTRO_INSTALL/user/all.sh"
+source "$QUATTRO_FIRST_RUN/all.sh"
 
 quattro-refresh-applications
 for default_browser in brave-origin.desktop brave-browser.desktop google-chrome.desktop chromium.desktop; do

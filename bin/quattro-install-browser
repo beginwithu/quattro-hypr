@@ -6,7 +6,7 @@
 
 set -e
 
-source "$QUATTRO_PATH/install/helpers/browser-policy.sh"
+source "$QUATTRO_PATH/default/chromium/browser-policy.sh"
 
 opt_path="${QUATTRO_OPT_PATH:-/opt}"
 

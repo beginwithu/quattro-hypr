@@ -1,0 +1,8 @@
+run_logged "$QUATTRO_FIRST_RUN/theme.sh"
+run_logged "$QUATTRO_FIRST_RUN/chromium.sh"
+run_logged "$QUATTRO_FIRST_RUN/xcompose.sh"
+run_logged "$QUATTRO_FIRST_RUN/language.sh"
+run_logged "$QUATTRO_FIRST_RUN/input-method.sh"
+run_logged "$QUATTRO_FIRST_RUN/mise-work.sh"
+run_logged "$QUATTRO_FIRST_RUN/default-keyring.sh"
+run_logged "$QUATTRO_FIRST_RUN/mise.sh"

@@ -23,7 +23,7 @@ while IFS= read -r -d '' script; do
       script_errors=$((script_errors + 1))
     fi
   fi
-done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/install" -type f -print0)
+done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/default/first-run" "$PROJECT_DIR/default/chromium/browser-policy.sh" "$PROJECT_DIR/default/chromium/as-root.sh" "$PROJECT_DIR/default/input-methods/keyboard-layouts.sh" "$PROJECT_DIR/default/quattro/luks-rekey.sh" -type f -print0)
 while IFS= read -r -d '' bin_file; do
   base="${bin_file##*/}"
   [[ $base == "quattro-security-functions" ]] && continue
