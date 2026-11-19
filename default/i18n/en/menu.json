@@ -74,9 +74,6 @@
   "learn.tmux-keybindings": {
     "label": "Tmux"
   },
-  "learn.community": {
-    "label": "Community"
-  },
   "appearance.theme": {
     "label": "Theme"
   },
@@ -315,12 +312,6 @@
   "trigger.toggle.screensaver-off": {
     "label": "Screensaver Off"
   },
-  "trigger.toggle.crash-capture-on": {
-    "label": "Crash Capture On"
-  },
-  "trigger.toggle.crash-capture-off": {
-    "label": "Crash Capture Off"
-  },
   "trigger.emoji": {
     "label": "Emoji"
   },
@@ -489,9 +480,6 @@
   "setup.default": {
     "label": "Defaults"
   },
-  "agent": {
-    "label": "Agent"
-  },
   "setup.default.browser": {
     "label": "Browser",
     "title": "Default Browser"
@@ -517,19 +505,6 @@
   "setup.default.browser.zen": {
     "label": "Zen"
   },
-  "setup.default.dictation": {
-    "label": "Dictation",
-    "title": "Default Dictation"
-  },
-  "setup.default.dictation.hex": {
-    "label": "Hex"
-  },
-  "setup.default.dictation.superwhisper": {
-    "label": "Superwhisper"
-  },
-  "setup.default.dictation.voxtype": {
-    "label": "Voxtype"
-  },
   "setup.default.terminal": {
     "label": "Terminal",
     "title": "Default Terminal"
@@ -550,17 +525,11 @@
     "label": "Editor",
     "title": "Default Editor"
   },
-  "setup.default.editor.plain": {
-    "label": "Plain"
-  },
   "setup.default.editor.neovim": {
     "label": "Neovim"
   },
   "setup.default.editor.vscode": {
     "label": "VSCode"
-  },
-  "setup.default.editor.cursor": {
-    "label": "Cursor"
   },
   "setup.default.editor.zed": {
     "label": "Zed"
@@ -631,14 +600,8 @@
   "setup.config.xcompose": {
     "label": "XCompose"
   },
-  "setup.direct-boot": {
-    "label": "Direct Boot"
-  },
   "install.package": {
     "label": "Package"
-  },
-  "install.ai": {
-    "label": "AI"
   },
   "install.service": {
     "label": "Service"
@@ -700,9 +663,6 @@
   "install.aur": {
     "label": "AUR"
   },
-  "install.preinstalls": {
-    "label": "Preinstalls"
-  },
   "install.browser.chromium": {
     "label": "Chromium"
   },
@@ -745,9 +705,6 @@
   "install.service.notion": {
     "label": "Notion"
   },
-  "install.service.once": {
-    "label": "ONCE"
-  },
   "install.service.bitwarden": {
     "label": "Bitwarden"
   },
@@ -756,9 +713,6 @@
   },
   "install.editor.vscode": {
     "label": "VSCode"
-  },
-  "install.editor.cursor": {
-    "label": "Cursor"
   },
   "install.editor.zed": {
     "label": "Zed"
@@ -889,13 +843,6 @@
   "remove.package": {
     "label": "Package"
   },
-  "remove.ai": {
-    "label": "AI",
-    "title": "Remove"
-  },
-  "remove.dictation": {
-    "label": "Dictation"
-  },
   "remove.service": {
     "label": "Services",
     "title": "Remove"
@@ -924,9 +871,6 @@
   "remove.windows": {
     "label": "Windows"
   },
-  "remove.preinstalls": {
-    "label": "Preinstalls"
-  },
   "remove.security": {
     "label": "Security",
     "title": "Remove"
@@ -942,9 +886,6 @@
   },
   "remove.security.sudoless-docker": {
     "label": "Sudoless Docker"
-  },
-  "remove.ai.hermes": {
-    "label": "Hermes Desktop"
   },
   "remove.browser.chromium": {
     "label": "Chromium"
@@ -984,42 +925,6 @@
   },
   "remove.service.ssh-agent": {
     "label": "SSH Agent"
-  },
-  "remove.ai.amp": {
-    "label": "Amp Desktop"
-  },
-  "remove.ai.chatgpt": {
-    "label": "ChatGPT Desktop"
-  },
-  "remove.ai.claude": {
-    "label": "Claude Desktop"
-  },
-  "remove.dictation.hex": {
-    "label": "Hex"
-  },
-  "remove.dictation.superwhisper": {
-    "label": "Superwhisper"
-  },
-  "remove.dictation.voxtype": {
-    "label": "Voxtype"
-  },
-  "remove.ai.grok-bot": {
-    "label": "Grok Bot"
-  },
-  "remove.ai.lm-studio": {
-    "label": "LM Studio"
-  },
-  "remove.ai.ollama": {
-    "label": "Ollama"
-  },
-  "remove.ai.openclaw": {
-    "label": "OpenClaw"
-  },
-  "remove.ai.perplexity": {
-    "label": "Perplexity"
-  },
-  "remove.ai.t3-code": {
-    "label": "T3 Code"
   },
   "remove.gaming.steam": {
     "label": "Steam"
@@ -1120,12 +1025,6 @@
   "update.quattro": {
     "label": "Quattro"
   },
-  "update.channel": {
-    "label": "Channel"
-  },
-  "update.kernel": {
-    "label": "Kernel"
-  },
   "update.config": {
     "label": "Config",
     "title": "Reset to default"
@@ -1152,18 +1051,6 @@
   },
   "update.time": {
     "label": "Time"
-  },
-  "update.channel.stable": {
-    "label": "Stable"
-  },
-  "update.channel.rc": {
-    "label": "RC"
-  },
-  "update.channel.edge": {
-    "label": "Edge"
-  },
-  "update.channel.dev": {
-    "label": "Dev"
   },
   "update.process.hyprsunset": {
     "label": "Hyprsunset"

@@ -13,12 +13,12 @@ var CODE_SHAPE = /(?:^|[^\w-])((?:[A-Za-z]-)?\d{2,4}[\s-]\d{2,5}|(?:[A-Za-z]-)?\
 // Uppercase alphanumeric with at least one digit and one letter: "A9F3K2".
 var CODE_ALNUM = /(?:^|[^\w-])([A-Z0-9]{5,8})(?![\w-])/g
 
-// The code must sit near its keyword, or "Claude Code" would offer the next
+// The code must sit near its keyword, or "VS Code" would offer the next
 // build number in the body.
 var NEAR_BEFORE = 24
 var NEAR_AFTER = 72
 
-// "Claude Code", "VS Code": a capitalised word before a capitalised "Code" is
+// "VS Code", "Source Code": a capitalised word before a capitalised "Code" is
 // a product name. "use code SAVE20" and "Your Verification Code" are not.
 function isProductName(t, at, word) {
   if (String(word).toLowerCase() !== "code") return false

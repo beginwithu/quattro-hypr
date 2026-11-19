@@ -23,8 +23,7 @@ def keyboard_catalog():
     layout = fields[1].split(",")[0]
     variant = fields[3].split(",")[0]
     mappings.setdefault(fields[0], layout + (":" + variant if variant != "-" else ""))
-  # The console names systemd's table lacks convert as keyboard_xkb_settings in
-  # quattro-provision-owner does, so a choice types what it did at install.
+  # Console keymap names that systemd's table lacks, mapped to XKB layout:variant.
   mappings.update({"bg-cp1251": "bg:phonetic", "colemak": "us:colemak", "cz": "cz:qwerty",
                    "kyrgyz": "kg", "de_CH-latin1": "ch", "no-latin1": "no"})
   catalog = {}

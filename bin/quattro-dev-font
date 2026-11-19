@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # quattro:summary=Add branded glyphs to the Quattro icon font
 # quattro:args=[list|add] <name> <svg-file-or-url> [--codepoint U+E9xx] [--font PATH]
-# quattro:examples=quattro dev font list | quattro dev font add ollama https://simpleicons.org/icons/ollama.svg
+# quattro:examples=quattro dev font list | quattro dev font add tailscale https://simpleicons.org/icons/tailscale.svg
 """Append monochrome SVG marks to default/fonts/quattro/quattro.ttf.
 
 The font is a private-use icon font: the menu renders a mark by setting
@@ -610,7 +610,7 @@ def main():
     sub.add_parser('list', parents=[common], help='show the marks the font carries')
     add = sub.add_parser('add', parents=[common],
                          help='append a mark from a monochrome SVG')
-    add.add_argument('name', help='glyph name, e.g. ollama')
+    add.add_argument('name', help='glyph name, e.g. tailscale')
     add.add_argument('svg', help='SVG file or URL')
     add.add_argument('--codepoint', help='private-use codepoint (default: next free)')
     add.add_argument('--label', help='README label (default: the glyph name)')

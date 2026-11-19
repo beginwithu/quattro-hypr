@@ -146,7 +146,7 @@ function o.preinstalled_bindings_enabled()
     return _G.quattro_preinstalled_bindings == true
   end
 
-  return not file_exists(paths.state_home .. "/quattro/preinstalls-removed")
+  return true
 end
 
 function o.bind(keys, description, dispatcher, options)

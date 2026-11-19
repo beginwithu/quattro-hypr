@@ -154,7 +154,7 @@ if (( notifications_were_running )); then
   fi
 fi
 
-# Invitation toasts (like Voxtype/fingerprint setup) die with the old
+# Invitation toasts (like fingerprint setup) die with the old
 # shell, and their notify-send waiters hang forever: the dying server
 # never emits NotificationClosed. A still-running quattro-*-invitation
 # unit is therefore an unanswered invitation — re-run it so its toast

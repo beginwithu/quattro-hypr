@@ -1,5 +1,0 @@
-#!/bin/bash
-
-# quattro:summary=Print the active Quattro package channel
-
-echo "arch-standalone"

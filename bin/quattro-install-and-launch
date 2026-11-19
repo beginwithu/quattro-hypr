@@ -2,7 +2,7 @@
 
 # quattro:summary=Install a packaged app and launch it once it finishes
 # quattro:args=<display-name> <packages> <desktop-id>
-# quattro:examples=quattro install and launch Cursor cursor-bin cursor
+# quattro:examples=quattro install and launch Bitwarden 'bitwarden bitwarden-cli' bitwarden
 
 name="${1-}"
 packages="${2-}"

@@ -86,12 +86,6 @@
       "text": "quattro-version-branch"
     },
     {
-      "type": "command",
-      "key": "│ ├󰔫",
-      "keyColor": "blue",
-      "text": "channel=$(quattro-version-channel); echo \"$channel\""
-    },
-    {
       "type": "kernel",
       "key": "│ ├",
       "keyColor": "blue"

@@ -204,7 +204,7 @@ run_root_transaction() {
       progress_bar.png
       progress_box.png
     )
-    plymouth_default_assets=("${plymouth_theme_assets[@]}" logos/oma.png)
+    plymouth_default_assets=("${plymouth_theme_assets[@]}")
     sddm_theme_assets=(Main.qml bullet.png entry-failed.png entry.png lock-failed.png lock.png logo.png)
     sddm_default_assets=("${sddm_theme_assets[@]}" metadata.desktop theme.conf)
 
@@ -372,10 +372,5 @@ fi
 
 if [[ $mode != "refresh-sddm" ]]; then
   sudo plymouth-set-default-theme quattro
-
-  if quattro-cmd-present limine-mkinitcpio; then
-    sudo limine-mkinitcpio
-  else
-    sudo mkinitcpio -P
-  fi
+  sudo mkinitcpio -P
 fi

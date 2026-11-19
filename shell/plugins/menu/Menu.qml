@@ -340,13 +340,6 @@ Item {
       },
       actionFor: function(value) { return "quattro-powerprofiles-set autodetect " + Util.shellQuote(value) }
     },
-    // Kernel names are package names, the same in every language.
-    "kernels": {
-      script: "current=$(quattro-kernel get 2>/dev/null); quattro-kernel list 2>/dev/null | while read -r k; do [[ -z $k ]] && continue; printf '%s\\t%s\\t%s\\n' \"$k\" \"$k\" \"$current\"; done",
-      icon: "\uf17c",
-      volatile: true,
-      actionFor: function(value) { return "quattro-kernel set " + Util.shellQuote(value) }
-    },
     // Rows carry a fourth field (the English name) so searching "danish"
     // finds the row labeled with its native name; mergeProviderRows turns
     // it into an alias.

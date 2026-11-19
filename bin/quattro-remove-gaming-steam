@@ -5,7 +5,6 @@
 
 set -e
 
-quattro-lifecycle-dispatch pre-remove steam
 quattro-pkg-drop steam
 
 rm -rf \

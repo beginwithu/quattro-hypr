@@ -1,8 +1,7 @@
 // The notification daemon: Quickshell's NotificationServer owns
-// org.freedesktop.Notifications. docs/notifications.md describes the system.
+// org.freedesktop.Notifications.
 //
-// The engine began as Omapager, Copyright (c) 2026 Neil Jagdish Patel, under
-// the MIT License (https://github.com/omacom/omapager).
+// Based on work Copyright (c) 2026 Neil Jagdish Patel, under the MIT License.
 
 import QtQuick
 import Quickshell
@@ -1467,8 +1466,7 @@ Item {
     // Put the last few back on screen.
     function showHistory(): string { service.replayHistory(); return "ok" }
 
-    // Take cards off the screen by summary substring, used by the first-run
-    // notifications once their action has been clicked.
+    // Take cards off the screen by summary substring once their action has been clicked.
     function dismiss(summary: string): string {
       var needle = String(summary || "")
       if (!needle) return "none"

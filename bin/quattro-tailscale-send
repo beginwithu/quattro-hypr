@@ -2,7 +2,7 @@
 
 # quattro:summary=Send files to a machine on your tailnet with Taildrop
 # quattro:args=<machine> [file...]
-# quattro:examples=quattro tailscale send dhh-fd | quattro tailscale send dhh-fd ~/Downloads/notes.pdf
+# quattro:examples=quattro tailscale send my-desktop | quattro tailscale send my-desktop ~/Downloads/notes.pdf
 
 set -euo pipefail
 

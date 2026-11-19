@@ -173,8 +173,8 @@ install_runtime() {
 
   echo "==> Linking quattro-* commands into $BIN_LINK_DIR..."
   mkdir -p "$BIN_LINK_DIR"
-  for link in "$BIN_LINK_DIR"/quattro-* "$BIN_LINK_DIR"/omacut; do
-    [[ -L $link && (! -e $link || ${link##*/} == "omacut") ]] && rm -f "$link"
+  for link in "$BIN_LINK_DIR"/quattro-*; do
+    [[ -L $link && ! -e $link ]] && rm -f "$link"
   done
   for bin_file in "$PROJECT_DIR"/bin/*; do
     local name="${bin_file##*/}"
@@ -333,6 +333,26 @@ EOF
     xdg-mime default org.gnome.Nautilus.desktop inode/directory || true
   fi
 
+  # Seed unlocked default keyring if none exists so logins do not prompt
+  local keyring_dir="$HOME/.local/share/keyrings"
+  mkdir -p "$keyring_dir"
+  chmod 700 "$keyring_dir"
+  if [[ ! -f $keyring_dir/Default_keyring.keyring ]]; then
+    cat >"$keyring_dir/Default_keyring.keyring" <<EOF
+[keyring]
+display-name=Default keyring
+ctime=$(date +%s)
+mtime=0
+lock-on-idle=false
+lock-after=false
+EOF
+    chmod 600 "$keyring_dir/Default_keyring.keyring"
+  fi
+  if [[ ! -f $keyring_dir/default ]]; then
+    printf 'Default_keyring\n' >"$keyring_dir/default"
+    chmod 644 "$keyring_dir/default"
+  fi
+
   # Refresh font cache
   if command -v fc-cache >/dev/null 2>&1; then
     fc-cache -f "$HOME/.local/share/fonts" || true
@@ -351,42 +371,6 @@ generate_initial_theme() {
 
   if command -v quattro-theme-set-qt >/dev/null 2>&1; then
     quattro-theme-set-qt || true
-  fi
-}
-
-cleanup_pacman_repos() {
-  local cleaned=0
-
-  # Remove any leftover [quattro] / [omarchy] custom repo block from /etc/pacman.conf without adding any repo
-  if [[ -f /etc/pacman.conf ]] && grep -qE '^[[:space:]]*\[(quattro|omarchy)\][[:space:]]*$|pkgs\.omarchy\.org' /etc/pacman.conf; then
-    echo "==> Removing leftover [quattro] repository from /etc/pacman.conf..."
-    awk '
-      /^[[:space:]]*\[(quattro|omarchy)\][[:space:]]*$/ { skip = 1; next }
-      skip && /^[[:space:]]*\[/ { skip = 0 }
-      skip { next }
-      /pkgs\.omarchy\.org/ { next }
-      { print }
-    ' /etc/pacman.conf | sudo tee /etc/pacman.conf.tmp >/dev/null
-    sudo mv /etc/pacman.conf.tmp /etc/pacman.conf
-    sudo chmod 0644 /etc/pacman.conf
-    sudo rm -f /var/lib/pacman/sync/quattro.db* /var/lib/pacman/sync/omarchy.db*
-    cleaned=1
-  fi
-
-  # If a previous Channel action overwrote /etc/pacman.d/mirrorlist with an omarchy.org mirror, restore stock Arch mirror
-  if [[ -f /etc/pacman.d/mirrorlist ]] && grep -qE 'omarchy\.org' /etc/pacman.d/mirrorlist; then
-    echo "==> Restoring standard Arch Linux mirrorlist..."
-    if [[ -f /etc/pacman.d/mirrorlist.bak ]] && ! grep -qE 'omarchy\.org' /etc/pacman.d/mirrorlist.bak; then
-      sudo cp -f /etc/pacman.d/mirrorlist.bak /etc/pacman.d/mirrorlist
-    else
-      printf 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n' | sudo tee /etc/pacman.d/mirrorlist >/dev/null
-    fi
-    sudo chmod 0644 /etc/pacman.d/mirrorlist
-    cleaned=1
-  fi
-
-  if (( cleaned )); then
-    PACMAN_SYNC_FORCE=1
   fi
 }
 
@@ -494,7 +478,6 @@ EOF
 }
 
 if ! $SANDBOX; then
-  cleanup_pacman_repos
   setup_cachyos_repos
   install_packages
 fi

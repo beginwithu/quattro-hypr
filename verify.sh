@@ -23,7 +23,7 @@ while IFS= read -r -d '' script; do
       script_errors=$((script_errors + 1))
     fi
   fi
-done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/default/first-run" "$PROJECT_DIR/default/chromium/browser-policy.sh" "$PROJECT_DIR/default/chromium/as-root.sh" "$PROJECT_DIR/default/input-methods/keyboard-layouts.sh" "$PROJECT_DIR/default/quattro/luks-rekey.sh" -type f -print0)
+done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/default/chromium/browser-policy.sh" "$PROJECT_DIR/default/chromium/as-root.sh" "$PROJECT_DIR/default/input-methods/keyboard-layouts.sh" -type f -print0)
 while IFS= read -r -d '' bin_file; do
   base="${bin_file##*/}"
   [[ $base == "quattro-security-functions" ]] && continue
@@ -52,7 +52,6 @@ echo "==> 3. Checking JSON & XML configs..."
 json_errors=0
 for jf in \
   "$PROJECT_DIR/config/quattro/shell.json" \
-  "$PROJECT_DIR/config/qtengine/config.json" \
   "$PROJECT_DIR/etc/fastfetch/config.jsonc"; do
   if ! python3 -m json.tool "$jf" >/dev/null 2>&1; then
     echo "  Invalid JSON: $jf" >&2
@@ -121,7 +120,6 @@ expected_files=(
   "$tmp_home/.local/state/quattro/current/theme/btop.theme"
   "$tmp_home/.local/state/quattro/current/theme/hyprland.lua"
   "$tmp_home/.local/state/quattro/current/theme/qt6ct.colors"
-  "$tmp_home/.local/state/quattro/current/theme/qtengine.colors"
   "$tmp_home/.local/state/quattro/current/theme/shell.toml"
   "$tmp_home/.local/state/quattro/current/theme/gtk.css"
   "$tmp_home/.config/gtk-4.0/gtk.css"
@@ -146,10 +144,10 @@ for ff in "$tmp_home/.config/brave-origin-flags.conf" "$tmp_home/.config/chrome-
 done
 (( flags_unresolved == 0 )) && pass "Browser flag extension paths resolved to sandbox QUATTRO_PATH" || fail "$flags_unresolved browser flag file(s) still contain unresolved path"
 
-if [[ $(HOME="$tmp_home" QUATTRO_PATH="$tmp_home/.local/share/quattro" "$tmp_home/.local/bin/quattro-version-channel") == "arch-standalone" ]]; then
-  pass "quattro-version-channel reports arch-standalone"
+if [[ -n $(HOME="$tmp_home" QUATTRO_PATH="$tmp_home/.local/share/quattro" "$tmp_home/.local/bin/quattro-version") ]]; then
+  pass "quattro-version reports installed version"
 else
-  fail "quattro-version-channel output unexpected"
+  fail "quattro-version output unexpected"
 fi
 
 if (( failures == 0 )); then

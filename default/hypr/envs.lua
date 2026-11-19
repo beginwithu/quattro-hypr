@@ -20,9 +20,7 @@ end
 -- Force all apps to use Wayland.
 hl.env("GDK_BACKEND", "wayland,x11,*")
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
-if file_readable("/usr/lib/qt6/plugins/platformthemes/libqtengine.so") or file_readable("/usr/lib/qt/plugins/platformthemes/libqtengine.so") then
-  hl.env("QT_QPA_PLATFORMTHEME", "qtengine")
-elseif file_readable("/usr/lib/qt6/plugins/platformthemes/libqt6ct.so") then
+if file_readable("/usr/lib/qt6/plugins/platformthemes/libqt6ct.so") then
   hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
 end
 hl.env("MOZ_ENABLE_WAYLAND", "1")

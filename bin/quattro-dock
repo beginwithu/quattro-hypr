@@ -3,7 +3,7 @@
 # quattro:summary=Configure the dock shown on floating workspaces
 # quattro:group=dock
 # quattro:args=position [top|bottom|left|right] | autohide [on|off|toggle] | pinned [<desktop-id>...] | pin <desktop-id> | unpin <desktop-id>
-# quattro:examples=quattro dock position left | quattro dock pin folio
+# quattro:examples=quattro dock position left | quattro dock pin org.gnome.Nautilus
 
 set -euo pipefail
 

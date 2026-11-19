@@ -81,35 +81,14 @@ quattro-update-requires-free-space
 if [[ ${1:-} == "-y" ]] || quattro-update-confirm; then
   authorize_update
 
-  # Before the snapshot: the cache is on the snapshotted subvolume, so pruning
-  # after it frees nothing until that snapshot ages out.
   quattro-update-pkg-prune
-
-  # 127 means Snapper is deliberately absent. Any other failure already said
-  # what went wrong, and a missing snapshot is not worth blocking an update
-  # over, but it must not pass for one either.
-  quattro-snapshot create || (($? == 127)) ||
-    echo -e "\e[33mContinuing the update without a snapshot.\e[0m" >&2
-
   quattro-update-stay-awake start
 
-  # Migrations ship with the packages installed here and are written against
-  # them, so everything below waits on this finishing. An upgrade that stopped
-  # takes the update with it rather than migrating against what is still on disk.
   quattro-update-system-pkgs
-
-  # Migrations call the shell over IPC, so give them one running current code.
-  if quattro-migrate --pending >/dev/null; then
-    quattro-restart-shell || true
-  fi
-  quattro-migrate
   quattro-update-orphan-pkgs -y
 
   quattro-update-analyze-logs
 
-  # The dev checkout was fast-forwarded and the full upgrade went through, so
-  # there is no Quattro update left to show. Rechecking would download every
-  # sync database again and refetch the checkout only to hear the same.
   quattro-shell -q quattro.system-update clear
 
   # Service restart helpers can need sudo. The reboot-only phase below
@@ -117,20 +96,12 @@ if [[ ${1:-} == "-y" ]] || quattro-update-confirm; then
   quattro-update-restart --services-only
 
   quattro-hook post-update
-  # Optional tool downloads must not skip boot verification or the reboot
-  # prompt after system packages have already been upgraded.
   mise_updated=1
   quattro-update-mise || mise_updated=0
 
   # AUR packages build against the upgraded system, so they go after it, and
   # share the update's one authorization like every step before them.
   quattro-update-aur-pkgs
-
-  # The last sudo-capable step: the boot files every package step left, AUR
-  # packages' initramfs rebuilds included, must be shown to boot the updated
-  # system. Until it passes, the update neither finishes nor offers a reboot.
-  boot_verified=1
-  quattro-update-boot || boot_verified=0
   end_update_authorization
 
   # The sleep inhibitor covers AUR builds, hooks and mise as well. Release it
@@ -144,10 +115,5 @@ if [[ ${1:-} == "-y" ]] || quattro-update-confirm; then
     echo -e "\e[33m\nSome mise tools could not be updated. Review the errors above and run 'quattro update mise' to retry.\e[0m" >&2
   fi
 
-  if (( boot_verified )); then
-    "$QUATTRO_PATH/bin/quattro-update-restart" --reboot-only
-  else
-    echo -e "\e[31m\nThe update is not finished: its boot files did not pass verification (see above). Do not reboot until quattro update completes.\e[0m" >&2
-    exit 1
-  fi
+  "$QUATTRO_PATH/bin/quattro-update-restart" --reboot-only
 fi

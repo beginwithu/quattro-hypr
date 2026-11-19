@@ -11,7 +11,7 @@
 hl.gesture({ fingers = 3, direction = "left", action = function() hl.dispatch(hl.dsp.focus({ workspace = "r-1" })) end })
 hl.gesture({ fingers = 3, direction = "right", action = function() hl.dispatch(hl.dsp.focus({ workspace = "r+1" })) end })
 
--- Push up for the AI console, and pull down for the Quattro menu.
+-- Push up for the Quake console, and pull down for the Quattro menu.
 hl.gesture({ fingers = 3, direction = "up", action = "special", workspace_name = "qconsole" })
 hl.gesture({ fingers = 3, direction = "down", action = function() hl.dispatch(hl.dsp.global("quattro:menu.root")) end })
 

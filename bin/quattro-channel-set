@@ -1,9 +1,0 @@
-#!/bin/bash
-
-# quattro:summary=Switch package channel (disabled in standalone Arch setup)
-# quattro:hidden=true
-
-# Channel switching and custom repository configuration are disabled.
-# This installation uses the system's existing Arch Linux repositories only.
-echo "Channel switching is disabled; Quattro does not configure custom pacman channels or repositories." >&2
-exit 1

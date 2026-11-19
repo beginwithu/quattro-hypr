@@ -427,7 +427,7 @@ dynamic_bindings() {
 
       [[ -z $description && $dispatcher == "__lua" ]] && continue
 
-      # The Copilot key just duplicates an existing binding, so keep it hidden
+      # Hardware assistant key duplicates an existing binding, so keep it hidden
       [[ $key == "code:201" ]] && continue
 
       case "$key" in

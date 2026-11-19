@@ -31,9 +31,7 @@ open_image() {
   local path="$1"
 
   [[ -r $path ]] || exit 1
-  if command -v omasnap >/dev/null 2>&1; then
-    exec omasnap --notify "$path"
-  elif command -v imv >/dev/null 2>&1; then
+  if command -v imv >/dev/null 2>&1; then
     exec setsid uwsm-app -- imv "$path"
   elif command -v satty >/dev/null 2>&1; then
     exec setsid uwsm-app -- satty -f "$path"

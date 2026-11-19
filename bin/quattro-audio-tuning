@@ -257,7 +257,7 @@ case "$action" in
     # shellcheck disable=SC1090
     source "$selected/tuning.conf"
 
-    # At first-run the session is up but the sink can still be settling.
+    # Right after login the session is up but the sink can still be settling.
     for _ in {1..20}; do
       speaker_sink="$(sink_matching "$sink_pattern")"
       [[ -n $speaker_sink ]] && break

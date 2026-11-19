@@ -49,7 +49,6 @@
   "learn.neovim": {"icon":"","label":"Neovim","action":"quattro-launch-webapp 'https://www.lazyvim.org/keymaps'"},
   "learn.bash": {"icon":"󱆃","label":"Bash","action":"quattro-launch-webapp 'https://devhints.io/bash'"},
   "learn.tmux-keybindings": {"icon":"","label":"Tmux","action":"quattro-menu-tmux-keybindings"},
-  "learn.community": {"icon":"󰙯","label":"Community","action":"quattro-launch-discord-community"},
 
   // Appearance
   "appearance.theme": {"icon":"󰸌","label":"Theme","aliases":["theme","themes"],"action":"quattro-shell shell summon quattro.image-picker '{\"source\":\"themes\"}'"},
@@ -191,10 +190,8 @@
   "setup.default.terminal.ghostty": {"icon":"","label":"Ghostty","checked":"[[ \"$(quattro-default-terminal)\" == \"ghostty\" ]]","action":"quattro-default-terminal ghostty"},
   "setup.default.terminal.kitty": {"icon":"","label":"Kitty","checked":"[[ \"$(quattro-default-terminal)\" == \"kitty\" ]]","action":"quattro-default-terminal kitty"},
   "setup.default.editor": {"icon":"","label":"Editor","title":"Default Editor"},
-  "setup.default.editor.plain": {"icon":"","label":"Plain","when":"quattro-cmd-present plain","checked":"[[ \"$(quattro-default-editor)\" == \"plain\" ]]","action":"quattro-default-editor plain"},
   "setup.default.editor.neovim": {"icon":"","label":"Neovim","checked":"[[ \"$(quattro-default-editor)\" == \"nvim\" ]]","action":"quattro-default-editor nvim"},
   "setup.default.editor.vscode": {"icon":"","label":"VSCode","checked":"[[ \"$(quattro-default-editor)\" == \"code\" ]]","action":"quattro-default-editor code"},
-  "setup.default.editor.cursor": {"icon":"","iconFont":"quattro","label":"Cursor","checked":"[[ \"$(quattro-default-editor)\" == \"cursor\" ]]","action":"quattro-default-editor cursor"},
   "setup.default.editor.zed": {"icon":"","label":"Zed","checked":"[[ \"$(quattro-default-editor)\" == \"zeditor\" ]]","action":"quattro-default-editor zed"},
   "setup.default.editor.sublime": {"icon":"","label":"Sublime Text","checked":"[[ \"$(quattro-default-editor)\" == \"subl\" ]]","action":"quattro-default-editor sublime_text"},
   "setup.default.editor.helix": {"icon":"","label":"Helix","checked":"[[ \"$(quattro-default-editor)\" == \"helix\" ]]","action":"quattro-default-editor helix"},
@@ -231,7 +228,6 @@
   "setup.network.dns.google": {"icon":"󰊭","label":"Google","checked":"[[ \"$(quattro-dns)\" == \"Google\" ]]","action":"quattro-dns Google"},
   "setup.network.dns.custom": {"icon":"","label":"Custom","checked":"[[ \"$(quattro-dns)\" == \"Custom\" ]]","action":"quattro-launch-floating-terminal-with-presentation 'quattro-dns Custom'"},
   "setup.network.qr": {"icon":"󰐲","label":"QR Code","aliases":["wifi-qr"],"when":"quattro-network-wifi-connected","action":"quattro-shell shell summon quattro.wifiqr"},
-  "setup.direct-boot": {"icon":"","label":"Direct Boot","when":"! quattro-hw-aarch64-apple && [[ ! -f /etc/limine-entry-tool.d/zz-quattro-dgx-spark.conf ]]","action":"quattro-launch-floating-terminal-with-presentation quattro-setup-direct-boot"},
 
   // Install
   "install.package": {"icon":"󰣇","label":"Package","action":"xdg-terminal-exec --app-id=org.quattro.terminal quattro-pkg-install"},
@@ -254,7 +250,6 @@
   "install.terminal": {"icon":"","label":"Terminal"},
   "install.tui": {"icon":"","label":"TUI","action":"quattro-launch-floating-terminal-with-presentation quattro-tui-install"},
   "install.aur": {"icon":"󰣇","label":"AUR","action":"xdg-terminal-exec --app-id=org.quattro.terminal quattro-pkg-aur-install"},
-  "install.preinstalls": {"icon":"󰏓","label":"Preinstalls","disabled":"[[ ! -f $HOME/.local/state/quattro/preinstalls-removed ]]","action":"quattro-launch-floating-terminal-with-presentation quattro-install-preinstalls"},
   "install.browser.chromium": {"icon":"","label":"Chromium","disabled":"quattro-pkg-present chromium","action":"quattro-launch-floating-terminal-with-presentation 'quattro-install-browser chromium'"},
   "install.browser.chrome": {"icon":"","label":"Chrome","disabled":"quattro-pkg-present google-chrome","action":"quattro-launch-floating-terminal-with-presentation 'quattro-install-browser chrome'"},
   "install.browser.edge": {"icon":"󰇩","label":"Edge","when":"quattro-hw-x86","disabled":"quattro-pkg-present microsoft-edge-stable-bin","action":"quattro-launch-floating-terminal-with-presentation 'quattro-install-browser edge'"},
@@ -268,12 +263,10 @@
   "install.service.microsoft": {"icon":"󰍲","label":"Microsoft","disabled":"[[ -f \"$HOME/.local/share/applications/Microsoft Outlook.desktop\" && -f \"$HOME/.local/share/applications/Microsoft Word.desktop\" && -f \"$HOME/.local/share/applications/Microsoft Excel.desktop\" && -f \"$HOME/.local/share/applications/Microsoft PowerPoint.desktop\" && -f \"$HOME/.local/share/applications/Microsoft Teams.desktop\" && -f \"$HOME/.local/share/applications/Microsoft OneDrive.desktop\" ]]","action":"quattro-launch-floating-terminal-with-presentation quattro-install-service-microsoft"},
   "install.service.nordvpn": {"icon":"󱇱","label":"NordVPN","disabled":"quattro-pkg-present nordvpn-bin","action":"quattro-launch-floating-terminal-with-presentation quattro-install-service-nordvpn"},
   "install.service.notion": {"icon":"","label":"Notion","disabled":"quattro-pkg-present notion-desktop","action":"quattro-install-and-launch Notion notion-desktop com.notion.app.desktop.notion"},
-  "install.service.once": {"icon":"󰏖","label":"ONCE","disabled":"quattro-pkg-present once-bin","action":"quattro-launch-floating-terminal-with-presentation quattro-install-service-once"},
   "install.service.signal": {"icon":"󰭹","label":"Signal","disabled":"quattro-pkg-present signal-desktop","action":"quattro-launch-floating-terminal-with-presentation quattro-install-service-signal"},
   "install.service.slack": {"icon":"󰒱","label":"Slack","disabled":"quattro-pkg-present slack-desktop","action":"quattro-launch-floating-terminal-with-presentation quattro-install-service-slack"},
   "install.service.tailscale": {"icon":"","iconFont":"quattro","label":"Tailscale","disabled":"quattro-pkg-present tailscale","action":"quattro-launch-floating-terminal-with-presentation quattro-install-service-tailscale"},
   "install.editor.vscode": {"icon":"","label":"VSCode","disabled":"quattro-pkg-present visual-studio-code-bin","action":"quattro-launch-floating-terminal-with-presentation quattro-install-editor-vscode"},
-  "install.editor.cursor": {"icon":"","iconFont":"quattro","label":"Cursor","disabled":"quattro-pkg-present cursor-bin","action":"quattro-install-and-launch Cursor cursor-bin cursor"},
   "install.editor.zed": {"icon":"","label":"Zed","disabled":"quattro-pkg-present zed","action":"quattro-launch-floating-terminal-with-presentation quattro-install-editor-zed"},
   "install.editor.sublime": {"icon":"","label":"Sublime Text","disabled":"quattro-pkg-present sublime-text-4","action":"quattro-install-and-launch 'Sublime Text' sublime-text-4 sublime_text"},
   "install.editor.helix": {"icon":"","label":"Helix","disabled":"quattro-pkg-present helix","action":"quattro-launch-floating-terminal-with-presentation quattro-install-editor-helix"},
@@ -326,7 +319,6 @@
   "remove.browser": {"icon":"","label":"Browser","title":"Remove"},
   "remove.webapp": {"icon":"","label":"Web App","when":"grep -qE '^Exec=.*(quattro-launch-webapp|quattro-webapp-handler)' $HOME/.local/share/applications/*.desktop","action":"quattro-webapp-remove"},
   "remove.tui": {"icon":"","label":"TUI","when":"grep -qE '^Exec=.*(\\$TERMINAL|xdg-terminal-exec).*-e' $HOME/.local/share/applications/*.desktop","action":"quattro-tui-remove"},
-  "remove.preinstalls": {"icon":"󰏓","label":"Preinstalls","when":"[[ ! -f $HOME/.local/state/quattro/preinstalls-removed ]]","action":"quattro-launch-floating-terminal-with-presentation quattro-remove-preinstalls"},
   "remove.security": {"icon":"","label":"Security","title":"Remove"},
   "remove.security.fingerprint": {"icon":"󰈷","label":"Fingerprint","when":"quattro-pkg-present fprintd","action":"quattro-launch-floating-terminal-with-presentation quattro-remove-security-fingerprint"},
   "remove.security.fido2": {"icon":"","label":"Fido2","when":"quattro-pkg-present pam-u2f","action":"quattro-launch-floating-terminal-with-presentation quattro-remove-security-fido2"},
@@ -378,7 +370,6 @@
   "remove.development.elixir.phoenix": {"icon":"","label":"Phoenix","when":"compgen -G \"$HOME/.mix/archives/phx_new*\"","action":"quattro-launch-floating-terminal-with-presentation 'quattro-remove-dev-env phoenix'"},
 
   // Update
-  "update.kernel": {"icon":"","label":"Kernel","when":"(( $(quattro-kernel list | wc -l) > 1 ))","provider":"kernels"},
   "update.config": {"icon":"","label":"Config","title":"Reset to default"},
   "update.themes": {"icon":"󰸌","label":"Extra Themes","when":"quattro-theme-extras","action":"quattro-launch-floating-terminal-with-presentation quattro-theme-update"},
   "update.process": {"icon":"","label":"Process","title":"Restart"},

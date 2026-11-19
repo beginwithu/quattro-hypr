@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# quattro:summary=Initialize user session services and desktop defaults once per user
+# quattro:args=[--force]
+# quattro:hidden=true
+
+set -euo pipefail
+
+force=0
+if [[ ${1:-} == "--force" ]]; then
+  force=1
+fi
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/quattro"
+marker="$state_dir/session-initialized"
+mkdir -p "$state_dir"
+
+if [[ -f $marker ]] && (( force == 0 )); then
+  exit 0
+fi
+
+quattro-input-method configure --defaults >/dev/null 2>&1 || true
+
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  for unit in \
+    bt-agent.service \
+    quattro-recover-internal-monitor.service \
+    quattro-sleep-lock.service \
+    quattro-fcitx5.service; do
+    if [[ -f "$HOME/.config/systemd/user/$unit" ]]; then
+      systemctl --user enable --now "$unit" >/dev/null 2>&1 || true
+    fi
+  done
+fi
+
+if command -v gsettings >/dev/null 2>&1; then
+  gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark" >/dev/null 2>&1 || true
+  gsettings set org.gnome.desktop.interface color-scheme "prefer-dark" >/dev/null 2>&1 || true
+  gsettings set org.gnome.desktop.interface icon-theme "Adwaita" >/dev/null 2>&1 || true
+  gsettings set org.gnome.desktop.interface gtk-enable-primary-paste true >/dev/null 2>&1 || true
+fi
+
+if command -v quattro-audio-tuning >/dev/null 2>&1; then
+  quattro-audio-tuning on >/dev/null 2>&1 || true
+fi
+
+: >"$marker"

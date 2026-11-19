@@ -169,26 +169,6 @@ authenticate() {
 }
 authenticate "First, confirm it's you."
 
-# A reader its platform keeps off until the owner agrees (a Mac's Touch ID)
-# is explained and turned on here, before fprintd is asked about it. Every
-# other platform has no such hook, so this is a no-op there. Resolving as the
-# user first runs nothing as root where there is nothing to run. Setup on a
-# platform that can't be told goes on as on one without a hook: a reader its
-# platform keeps off stays off, so fprintd doesn't find it, and any other
-# reader still enrolls.
-if ! enable_hook=$(quattro-lifecycle-dispatch --resolve enable-fingerprint); then
-  echo -e "\e[33mThe fingerprint sensor's platform support couldn't be checked, so a reader the platform keeps off stays off.\e[0m"
-  enable_hook=
-fi
-if [[ -n $enable_hook ]]; then
-  if ! sudo "$QUATTRO_PATH/bin/quattro-lifecycle-dispatch" enable-fingerprint; then
-    echo -e "\e[31mThe fingerprint sensor was not turned on, so nothing was enrolled.\e[0m"
-    exit 1
-  fi
-  # The owner may have read past sudo's timeout before answering.
-  authenticate "Confirm it's you again."
-fi
-
 echo -e "\e[32m\nLet's set up your right index finger as the first fingerprint.\e[0m"
 # A press sensor needs a touch for each sample; a swipe sensor a moving finger.
 # When fprintd can't say which, the prompts name neither. Each line stays short,

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # quattro:summary=Set the default editor used by quattro-launch-editor
-# quattro:args=[plain|code|cursor|zed|sublime_text|helix|vim|emacs|nvim]
-# quattro:examples=quattro default editor | quattro default editor plain | quattro default editor helix
+# quattro:args=[code|zed|sublime_text|helix|vim|emacs|nvim]
+# quattro:examples=quattro default editor | quattro default editor nvim | quattro default editor helix
 
 installing=false
 if [[ ${1:-} == "--install" ]]; then
@@ -25,9 +25,7 @@ if (($# == 0)); then
 fi
 
 case "$1" in
-plain) selection="plain"; editor="plain"; name="Plain"; glyph= ;;
 code) selection="code"; editor="code"; name="VSCode"; glyph= ;;
-cursor) selection="cursor"; editor="cursor"; name="Cursor"; glyph= ;;
 zed | zeditor) selection="zed"; editor="zeditor"; name="Zed"; glyph= ;;
 sublime_text | subl) selection="sublime_text"; editor="subl"; name="Sublime Text"; glyph= ;;
 helix) selection="helix"; editor="helix"; name="Helix"; glyph= ;;
@@ -35,7 +33,7 @@ vim) selection="vim"; editor="vim"; name="Vim"; glyph= ;;
 emacs) selection="emacs"; editor="emacs"; name="Emacs"; glyph= ;;
 nvim) selection="nvim"; editor="nvim"; name="Neovim"; glyph= ;;
 *)
-  echo "Usage: quattro-default-editor <plain|code|cursor|zed|sublime_text|helix|vim|emacs|nvim>"
+  echo "Usage: quattro-default-editor <code|zed|sublime_text|helix|vim|emacs|nvim>"
   exit 1
   ;;
 esac
@@ -45,12 +43,7 @@ if quattro-cmd-missing "$editor"; then
     exec quattro-launch-floating-terminal-with-presentation quattro-default-editor --install "$selection"
   else
     case "$selection" in
-    plain)
-      echo "plain is not installed; install it manually or choose another editor." >&2
-      exit 1
-      ;;
     code) quattro-install-editor-vscode ;;
-    cursor) quattro-pkg-aur-add cursor-bin ;;
     zed) quattro-install-editor-zed ;;
     sublime_text) quattro-pkg-aur-add sublime-text-4 ;;
     helix) quattro-install-editor-helix ;;

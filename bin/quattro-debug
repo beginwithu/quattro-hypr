@@ -39,7 +39,7 @@ fi
 cat > "$LOG_FILE" <<EOF
 Date: $(date)
 Hostname: $(uname -n)
-Quattro Package: $(pacman -Q quattro-dev 2>/dev/null || pacman -Q quattro 2>/dev/null || quattro-version 2>/dev/null || echo "unknown")
+Quattro Version: $(quattro-version 2>/dev/null || echo "unknown")
 
 =========================================
 SYSTEM INFORMATION

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# quattro:summary=Apply the current theme colors and icon theme to Qt apps (qt6ct & qtengine)
+# quattro:summary=Apply the current theme colors and icon theme to Qt apps via qt6ct
 # quattro:hidden=true
 
 set -euo pipefail
@@ -9,7 +9,6 @@ config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
 icon_theme="Adwaita"
 
-# 1. Configure qt6ct (stock Arch [extra] Qt6 platform theme)
 qt6ct_colors="$state_home/quattro/current/theme/qt6ct.colors"
 qt6ct_conf="$config_home/qt6ct/qt6ct.conf"
 if [[ -f $qt6ct_colors ]] && { command -v qt6ct >/dev/null 2>&1 || [[ -f $qt6ct_conf || -f /usr/lib/qt6/plugins/platformthemes/libqt6ct.so ]]; }; then
@@ -45,20 +44,3 @@ os.replace(tmp, real_path)
 PY
   fi
 fi
-
-# 2. Configure qtengine (if installed)
-CONFIG="$config_home/qtengine/config.json"
-[[ -f $CONFIG ]] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
-
-if [[ $(jq -r '.theme.iconTheme // empty' "$CONFIG") == "$icon_theme" ]]; then
-  exit 0
-fi
-
-# Write through a dotfiles symlink rather than replacing it.
-config=$(realpath "$CONFIG")
-if ! jq --arg icon_theme "$icon_theme" '.theme.iconTheme = $icon_theme' "$config" >"$config.quattro-tmp"; then
-  rm -f "$config.quattro-tmp"
-  exit 1
-fi
-mv "$config.quattro-tmp" "$config"

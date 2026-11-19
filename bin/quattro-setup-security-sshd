@@ -2,7 +2,7 @@
 
 # quattro:summary=Set up the OpenSSH server, open the firewall, and authorize an SSH key
 # quattro:args=[--key=<public-key>] [--gh-keys <github-username>]
-# quattro:examples=quattro-setup-security-sshd | quattro-setup-security-sshd --gh-keys dhh | quattro-setup-security-sshd --key="ssh-ed25519 AAAA... user@host"
+# quattro:examples=quattro-setup-security-sshd | quattro-setup-security-sshd --gh-keys octocat | quattro-setup-security-sshd --key="ssh-ed25519 AAAA... user@host"
 # quattro:requires-sudo=true
 
 set -e
@@ -133,7 +133,7 @@ authorize_keys_from_github() {
 prompt_for_github_user() {
   local username
 
-  username=$(gum input --prompt "$(quattro-i18n sshd.githubUserPrompt)" --placeholder "dhh") || exit 1
+  username=$(gum input --prompt "$(quattro-i18n sshd.githubUserPrompt)" --placeholder "username") || exit 1
   if [[ -z $username ]]; then
     echo -e "\e[31mNo GitHub username given.\e[0m" >&2
     exit 1

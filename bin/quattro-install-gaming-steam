@@ -15,7 +15,6 @@ echo "Installing Steam..."
 # GPU.
 quattro-install-gaming-gpu-lib32
 quattro-pkg-add steam
-quattro-lifecycle-dispatch post-install steam
 
 echo ""
 echo "Steam will start automatically now. This might take a while..."
