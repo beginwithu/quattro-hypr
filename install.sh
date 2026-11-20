@@ -392,6 +392,8 @@ install_system_configs() {
     /etc/sddm.conf.d \
     /usr/share/sddm/themes/quattro \
     /usr/share/quattro/default/i18n \
+    /usr/share/quattro/titlebars \
+    /usr/share/licenses/quattro-hyprland-titlebars \
     /etc/profile.d \
     /usr/share/uwsm/env.d \
     /etc/fastfetch \
@@ -456,6 +458,7 @@ EOF
   fi
 
   # Install packaged root-owned privileged helpers and sudoers rules
+  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-build-titlebars" /usr/bin/quattro-build-titlebars
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-dns" /usr/bin/quattro-dns
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-sudo-passwordless" /usr/bin/quattro-sudo-passwordless
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-theme-set-browser-policy" /usr/bin/quattro-theme-set-browser-policy
@@ -465,6 +468,19 @@ EOF
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/bin/quattro-security-functions" /usr/bin/quattro-security-functions
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/tmpfiles.d/quattro-nopasswd-sudo.conf" /etc/tmpfiles.d/quattro-nopasswd-sudo.conf
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/05-quattro-passwordless-revoke.hook" /usr/share/libalpm/hooks/05-quattro-passwordless-revoke.hook
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/90-quattro-titlebars-rebuild.hook" /usr/share/libalpm/hooks/90-quattro-titlebars-rebuild.hook
+
+  # Install Hyprland floating titlebars plugin source, licenses, and build native plugin
+  sudo rm -rf /usr/share/quattro/titlebars
+  sudo install -d -m 0755 -o root -g root /usr/share/quattro/titlebars
+  sudo cp -r --no-preserve=ownership "$PROJECT_DIR/default/hypr/titlebars/." /usr/share/quattro/titlebars/
+  sudo chown -R root:root /usr/share/quattro/titlebars
+  sudo chmod -R a+rX,go-w /usr/share/quattro/titlebars
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/hypr/titlebars/LICENSE" /usr/share/licenses/quattro-hyprland-titlebars/LICENSE
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/hypr/titlebars/LICENSE.MIT" /usr/share/licenses/quattro-hyprland-titlebars/LICENSE.MIT
+  if sudo /usr/bin/quattro-build-titlebars --system; then
+    rm -f "$HOME/.local/state/quattro/titlebars/titlebars.so"
+  fi
   for sudoers_rule in quattro-dns quattro-theme-browser quattro-locale-generate quattro-tzupdate; do
     if [[ -f $PROJECT_DIR/etc/sudoers.d/$sudoers_rule ]] && { ! command -v visudo >/dev/null 2>&1 || visudo -cf "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" >/dev/null 2>&1; }; then
       sudo install -Dm440 -o root -g root "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" "/etc/sudoers.d/$sudoers_rule"

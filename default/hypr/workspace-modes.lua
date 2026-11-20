@@ -23,7 +23,10 @@ local WORKSPACE_TAG = "quattro-floating-workspace"
 local OPENED_TAG = "quattro-mode-opened"
 local OPEN_RULE = "quattro-floating-open-"
 local LAST_WORKSPACE = 2147483647
-local TITLEBARS = "/usr/lib/quattro-hyprland-titlebars/titlebars.so"
+local TITLEBARS_PATHS = {
+  "/usr/lib/quattro-hyprland-titlebars/titlebars.so",
+  paths.state_home .. "/quattro/titlebars/titlebars.so",
+}
 
 local M = {}
 
@@ -446,21 +449,25 @@ end
 -- Titlebars come from quattro-hyprland-titlebars, loaded once something floats.
 -- The plugin reloads the config once it is in, which is the pass that finds its
 -- options here. Its options reset on every load, so it draws nothing until enabled.
-local function titlebars_installed()
-  local file = io.open(TITLEBARS, "r")
-  if not file then
-    return false
+local function titlebars_path()
+  for _, path in ipairs(TITLEBARS_PATHS) do
+    local file = io.open(path, "r")
+    if file then
+      file:close()
+      return path
+    end
   end
-  file:close()
-  return true
+
+  return nil
 end
 
 local function titlebars()
-  if not titlebars_installed() then
+  local plugin_path = titlebars_path()
+  if not plugin_path then
     return
   end
 
-  hl.plugin.load(TITLEBARS)
+  hl.plugin.load(plugin_path)
 
   if not hl.plugin.hyprbars then
     return
@@ -545,8 +552,11 @@ function M.apply()
 
   if anything_floats() then
     set_up_floating()
-  elseif titlebars_loaded() and titlebars_installed() then
-    hl.plugin.load(TITLEBARS)
+  elseif titlebars_loaded() then
+    local plugin_path = titlebars_path()
+    if plugin_path then
+      hl.plugin.load(plugin_path)
+    end
   end
 end
 

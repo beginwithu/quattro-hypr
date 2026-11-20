@@ -14,15 +14,11 @@ o.shell_quote = shell_quote
 -- (chrome-<host>_<path>-<profile>) aren't included.
 o.chromium_browsers = "((google-)?[cC]hrom(e|ium)|[bB]rave-(browser|origin)|[mM]icrosoft-edge|Vivaldi-stable|helium)"
 
--- Apps that draw their own header with a close button: those browsers and GNOME
--- apps with a header bar. Floating workspaces give them no titlebar. Web apps
--- keep theirs, having no tab strip to drag the window by.
---
--- Their maximize button stays off (GNOME's default button layout) and their
--- maximize requests stay suppressed: Hyprland reports every app as maximized and
--- takes any maximize request as a toggle, so Chrome's request to return to
--- "maximized" after leaving fullscreen would maximize a normal window.
-o.self_framed_apps = "(" .. o.chromium_browsers .. "|org\\.gnome\\.(DiskUtility|Papers))"
+-- Apps that draw their own GNOME header bar with window controls. Floating
+-- workspaces give them no extra titlebar. Chromium-based browsers keep the
+-- floating titlebar so they get minimize/maximize/close controls and a uniform
+-- drag bar alongside other floating windows.
+o.self_framed_apps = "org\\.gnome\\.(DiskUtility|Papers)"
 
 local function file_exists(path)
   local file = io.open(path, "r")

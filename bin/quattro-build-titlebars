@@ -1,0 +1,110 @@
+#!/bin/bash
+
+# quattro:summary=Build the Hyprland floating window titlebars plugin
+# quattro:args=[--system|--user]
+
+set -euo pipefail
+
+MODE=""
+SRC_DIR=""
+
+while (( $# > 0 )); do
+  case "$1" in
+    --system) MODE="system" ;;
+    --user) MODE="user" ;;
+    --source)
+      shift
+      [[ $# -gt 0 ]] || { echo "quattro-build-titlebars: --source requires a directory" >&2; exit 1; }
+      SRC_DIR="$1"
+      ;;
+    -h|--help)
+      echo "Usage: quattro-build-titlebars [--system|--user] [--source DIR]"
+      exit 0
+      ;;
+    *)
+      echo "Usage: quattro-build-titlebars [--system|--user] [--source DIR]" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [[ -z $MODE ]]; then
+  if (( EUID == 0 )); then
+    MODE="system"
+  else
+    MODE="user"
+  fi
+fi
+
+if [[ -z $SRC_DIR ]]; then
+  if [[ $MODE == "system" ]]; then
+    if [[ -f /usr/share/quattro/titlebars/main.cpp ]]; then
+      SRC_DIR="/usr/share/quattro/titlebars"
+    elif [[ -n ${QUATTRO_PATH:-} && -f $QUATTRO_PATH/default/hypr/titlebars/main.cpp ]]; then
+      SRC_DIR="$QUATTRO_PATH/default/hypr/titlebars"
+    fi
+  else
+    QUATTRO_DIR="${QUATTRO_PATH:-$HOME/.local/share/quattro}"
+    if [[ -f $QUATTRO_DIR/default/hypr/titlebars/main.cpp ]]; then
+      SRC_DIR="$QUATTRO_DIR/default/hypr/titlebars"
+    elif [[ -f /usr/share/quattro/titlebars/main.cpp ]]; then
+      SRC_DIR="/usr/share/quattro/titlebars"
+    fi
+  fi
+fi
+
+if [[ -z $SRC_DIR || ! -f $SRC_DIR/main.cpp ]]; then
+  echo "quattro-build-titlebars: titlebars source directory not found" >&2
+  exit 1
+fi
+
+for cmd in g++ pkg-config; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "quattro-build-titlebars: missing required build tool: $cmd" >&2
+    exit 1
+  fi
+done
+
+if ! pkg-config --exists hyprland; then
+  echo "quattro-build-titlebars: hyprland development headers (hyprland.pc) not found" >&2
+  exit 1
+fi
+
+if [[ $MODE == "system" ]]; then
+  OUT_DIR="/usr/lib/quattro-hyprland-titlebars"
+else
+  OUT_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/titlebars"
+fi
+OUT_FILE="$OUT_DIR/titlebars.so"
+
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+DEPS=(hyprland libdrm libinput libudev pixman-1 wayland-server xkbcommon)
+read -r -a CFLAGS <<<"$(pkg-config --cflags "${DEPS[@]}")"
+read -r -a LIBS <<<"$(pkg-config --libs "${DEPS[@]}")"
+
+SOURCES=(
+  "$SRC_DIR/main.cpp"
+  "$SRC_DIR/barDeco.cpp"
+  "$SRC_DIR/BarPassElement.cpp"
+  "$SRC_DIR/appName.cpp"
+)
+
+g++ -shared -fPIC -std=c++23 -O2 -fno-gnu-unique \
+  "${CFLAGS[@]}" \
+  "${SOURCES[@]}" \
+  -o "$TMP_DIR/titlebars.so" \
+  "${LIBS[@]}" -lrt
+
+mkdir -p "$OUT_DIR"
+TMP_OUT="$OUT_DIR/.titlebars.so.$$"
+if [[ $MODE == "system" ]]; then
+  install -m 0755 -o root -g root "$TMP_DIR/titlebars.so" "$TMP_OUT"
+else
+  install -m 0755 "$TMP_DIR/titlebars.so" "$TMP_OUT"
+fi
+mv -f "$TMP_OUT" "$OUT_FILE"
+
+echo "Built $OUT_FILE"

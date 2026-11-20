@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = hyprland
+
+[Action]
+Description = Rebuilding Quattro Hyprland titlebars plugin...
+When = PostTransaction
+Exec = /usr/bin/quattro-build-titlebars --system

@@ -48,6 +48,7 @@ expac
 fastfetch
 fd
 fzf
+gcc
 git
 gum
 imagemagick
@@ -61,6 +62,7 @@ localsend
 lua51
 neovim
 pacman-contrib
+pkgconf
 python-gobject
 ripgrep
 socat

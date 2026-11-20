@@ -112,6 +112,8 @@ expected_files=(
   "$tmp_home/.config/chrome-flags.conf"
   "$tmp_home/.config/chromium-flags.conf"
   "$tmp_home/.local/share/quattro/bin/quattro"
+  "$tmp_home/.local/share/quattro/bin/quattro-build-titlebars"
+  "$tmp_home/.local/share/quattro/default/hypr/titlebars/main.cpp"
   "$tmp_home/.local/share/quattro/config/quattro/shell.json"
   "$tmp_home/.local/bin/quattro"
   "$tmp_home/.local/state/quattro/current/theme/colors.toml"
