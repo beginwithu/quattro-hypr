@@ -11,6 +11,14 @@ BROWSER_POLICY_MANAGED_DIRS=(
   /etc/brave/policies/managed
 )
 
+# Brave uses a generated theme extension instead of BrowserThemeColor so the
+# omnibox and suggestion dropdown inherit the active Quattro theme palette.
+BROWSER_POLICY_COLOR_DIRS=(
+  /etc/chromium/policies/managed
+  /etc/opt/chrome/policies/managed
+  /etc/opt/edge/policies/managed
+)
+
 # Ancestors of the managed dirs, shortest first. A writable or attacker-owned
 # parent can rename the leaf aside; install -d follows a planted symlink.
 BROWSER_POLICY_PARENT_DIRS=(

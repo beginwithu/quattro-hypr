@@ -2,8 +2,8 @@
 
 # quattro:summary=Take a screenshot
 # quattro:group=capture
-# quattro:args=[smart|region|windows|fullscreen|scroll] [copy|save]
-# quattro:examples=quattro screenshot | quattro capture screenshot region
+# quattro:args=[smart|region|windows|fullscreen] [copy|save|edit]
+# quattro:examples=quattro screenshot | quattro capture screenshot region | quattro capture screenshot edit
 # quattro:aliases=quattro screenshot
 
 SCREENSHOT_DIR="${QUATTRO_SCREENSHOT_DIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots}"
@@ -17,6 +17,7 @@ for arg in "$@"; do
     output) mode="fullscreen" ;;
     copy) action="copy" ;;
     save) action="save" ;;
+    edit) action="edit" ;;
   esac
 done
 
@@ -41,15 +42,31 @@ grim -g "$geom" "$out_file" || exit 1
 cleanup_freeze
 freeze_pid=""
 
-if [[ $action == "copy" ]]; then
+if [[ $action == "edit" ]]; then
+  wl-copy --type image/png < "$out_file" 2>/dev/null || true
+  exec quattro-edit-image "$out_file"
+elif [[ $action == "copy" ]]; then
   wl-copy --type image/png < "$out_file"
   rm -f "$out_file"
-  command -v quattro-notification-send >/dev/null 2>&1 && quattro-notification-send "Screenshot copied to clipboard" -t 2000 || true
+  if command -v quattro-notification-send >/dev/null 2>&1; then
+    copied_title=$(quattro-i18n capture.screenshotCopied 2>/dev/null || echo "Screenshot copied to clipboard")
+    quattro-notification-send "$copied_title" -t 2000 || true
+  fi
 else
   if [[ $action != "save" ]]; then
     wl-copy --type image/png < "$out_file" 2>/dev/null || true
+    title=$(quattro-i18n capture.screenshotSavedCopied 2>/dev/null || echo "Screenshot saved and copied")
+  else
+    title=$(quattro-i18n capture.screenshotSaved 2>/dev/null || echo "Screenshot saved")
   fi
   if command -v quattro-notification-send >/dev/null 2>&1; then
-    quattro-notification-send "Screenshot saved" "$out_file" -i "$out_file" -t 3000 || true
+    body=$(quattro-i18n capture.screenshotEditHint 2>/dev/null || echo "Edit with Super + , (or click this)")
+    edit_label=$(quattro-i18n capture.screenshotEdit 2>/dev/null || echo "Edit")
+    open_label=$(quattro-i18n capture.screenshotOpen 2>/dev/null || echo "Open")
+    quattro-notification-send "$title" "$body" \
+      -t 10000 --image "$out_file" \
+      --action "$edit_label" quattro-edit-image \
+      --action "$open_label" xdg-open \
+      --with "$out_file" || true
   fi
 fi

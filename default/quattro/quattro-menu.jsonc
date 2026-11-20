@@ -120,7 +120,6 @@
   "appearance.workspace-layout.floating": {"icon":"󰔶","label":"Floating","checked":"[[ $(quattro-hyprland-workspace-layout-default) == \"floating\" ]]","action":"quattro-hyprland-workspace-layout-default floating"},
   "appearance.animations-on": {"icon":"󰗘","label":"Animations On","when":"quattro-hyprland-animations-off","action":"quattro-toggle-animations"},
   "appearance.animations-off": {"icon":"󰗘","label":"Animations Off","when":"! quattro-hyprland-animations-off","action":"quattro-toggle-animations"},
-  "appearance.unlock": {"icon":"󰟵","label":"Unlock","aliases":["unlock"],"action":"unlock=$(quattro-plymouth-switcher); if [[ $unlock == default ]]; then quattro-launch-floating-terminal-with-presentation quattro-plymouth-reset; elif [[ -n $unlock ]]; then quattro-launch-floating-terminal-with-presentation \"quattro-plymouth-set-by-theme $(printf %q \"$unlock\")\"; fi"},
 
   // Trigger
   "trigger.toggle": {"icon":"󰔎","label":"Toggle","aliases":["toggle","toggles"]},
@@ -137,6 +136,7 @@
   "trigger.reminder": {"icon":"󰢌","label":"Reminder","aliases":["reminder"]},
   "trigger.capture": {"icon":"","label":"Capture","aliases":["capture","screenshot","screenrecord","screen-record","screenrecording"]},
   "trigger.capture.screenshot": {"icon":"","label":"Screenshot","action":"quattro-capture-screenshot"},
+  "trigger.capture.screenshot-edit": {"icon":"󰏫","label":"Screenshot & Edit","action":"quattro-capture-screenshot edit"},
   "trigger.capture.screenrecord.stop": {"icon":"","label":"Stop Screenrecording","when":"quattro-capture-screenrecording --status","action":"quattro-capture-screenrecording --stop-recording"},
   "trigger.capture.screenrecord": {"icon":"","label":"Screenrecord"},
   "trigger.capture.text": {"icon":"󰴑","label":"Text","action":"quattro-capture-text"},

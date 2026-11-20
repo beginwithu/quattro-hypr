@@ -37,6 +37,7 @@ o.bind("switch:on:Apple SMC power/lid events", nil, "quattro-system-lid-close", 
 o.bind("switch:off:Apple SMC power/lid events", nil, "quattro-hyprland-monitor-clamshell", { locked = true })
 
 o.bind("PRINT", "Screenshot", "quattro-capture-screenshot")
+o.bind("SHIFT + PRINT", "Screenshot and edit", "quattro-capture-screenshot edit")
 o.bind("SUPER + CTRL + ALT + C", "Screenshot", "quattro-capture-screenshot")
 o.bind("ALT + PRINT", "Screenrecording", "quattro-capture-screenrecording --stop-recording || quattro-menu toggle trigger.capture.screenrecord")
 o.bind("SUPER + ALT + code:34", "Make webcam overlay smaller", "quattro-capture-webcam-resize smaller")

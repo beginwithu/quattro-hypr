@@ -5,7 +5,7 @@ Rectangle {
   id: root
   width: 640
   height: 480
-  color: "#1a1b26"
+  color: "#000000"
 
   property int userIndex: {
     if (userModel.lastUser) {
@@ -147,7 +147,7 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         text: root.currentUser
         textFormat: Text.PlainText
-        color: "#565f89"
+        color: "#888888"
         font.family: "JetBrainsMono Nerd Font"
         font.pixelSize: 13
 

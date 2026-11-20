@@ -282,9 +282,6 @@
   "appearance.animations-off": {
     "label": "Animations Off"
   },
-  "appearance.unlock": {
-    "label": "Unlock"
-  },
   "trigger.toggle": {
     "label": "Toggle"
   },
@@ -326,6 +323,9 @@
   },
   "trigger.capture.screenshot": {
     "label": "Screenshot"
+  },
+  "trigger.capture.screenshot-edit": {
+    "label": "Screenshot & Edit"
   },
   "trigger.capture.screenrecord.stop": {
     "label": "Stop Screenrecording"

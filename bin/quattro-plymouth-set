@@ -200,7 +200,6 @@ run_root_transaction() {
       logo.png
       quattro.plymouth
       quattro.script
-      preview-unlock.png
       progress_bar.png
       progress_box.png
     )
@@ -293,7 +292,7 @@ run_root_transaction() {
 
       copy_trusted_file "$source_root/default/sddm/quattro/Main.qml" "$sddm_stage/Main.qml"
       sed -i \
-        -e "s/#1a1b26/#__QUATTRO_SDDM_BG__/g" \
+        -e "s/#000000/#__QUATTRO_SDDM_BG__/g" \
         -e "s/#ffffff/#__QUATTRO_SDDM_TEXT__/g" \
         -e "s/#__QUATTRO_SDDM_BG__/#$bg_hex/g" \
         -e "s/#__QUATTRO_SDDM_TEXT__/#$text_hex/g" \

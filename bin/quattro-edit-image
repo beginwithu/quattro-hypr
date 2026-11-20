@@ -7,10 +7,13 @@
 file="${1:-}"
 [[ -n $file && -e $file ]] || exit 1
 
-if command -v swappy >/dev/null 2>&1; then
+if command -v satty >/dev/null 2>&1; then
+  exec setsid uwsm-app -- satty \
+    --filename "$file" \
+    --output-filename "$file" \
+    --copy-command wl-copy
+elif command -v swappy >/dev/null 2>&1; then
   exec setsid uwsm-app -- swappy -f "$file"
-elif command -v satty >/dev/null 2>&1; then
-  exec setsid uwsm-app -- satty -f "$file"
 elif command -v pinta >/dev/null 2>&1; then
   exec setsid uwsm-app -- pinta "$file"
 else

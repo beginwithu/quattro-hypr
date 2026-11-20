@@ -6,16 +6,43 @@
 QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 source "$QUATTRO_PATH/default/chromium/browser-policy.sh"
 
-CHROMIUM_THEME=$HOME/.local/state/quattro/current/theme/chromium.theme
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+CURRENT_THEME_DIR="$STATE_HOME/quattro/current/theme"
+CHROMIUM_THEME="$CURRENT_THEME_DIR/chromium.theme"
 THEME_HEX_COLOR=$BROWSER_POLICY_DEFAULT_COLOR
 
 if [[ -f $CHROMIUM_THEME ]]; then
   THEME_HEX_COLOR=$(browser_policy_theme_hex "$(<$CHROMIUM_THEME)")
 fi
 
+# Sync the generated Brave Chrome-theme extension so Brave's toolbar, tab bar,
+# omnibox, and suggestion dropdown all follow the active Quattro palette.
+sync_brave_theme_extension() {
+  local src="$CURRENT_THEME_DIR/brave-theme.json"
+  local dest_dir="$STATE_HOME/quattro/current/brave-theme"
+  local dest="$dest_dir/manifest.json"
+  local hex="${THEME_HEX_COLOR#\#}"
+  local r=$((16#${hex:0:2})) g=$((16#${hex:2:2})) b=$((16#${hex:4:2}))
+  local version="1.${r}.${g}.${b}"
+  local tmp
+
+  [[ -f $src ]] || return 0
+  mkdir -p "$dest_dir"
+  tmp=$(mktemp "$dest_dir/.manifest.XXXXXX") || return 1
+  sed "s/\"version\": \"1\.0\"/\"version\": \"$version\"/" "$src" >"$tmp"
+  mv -f "$tmp" "$dest"
+}
+
+sync_brave_theme_extension || true
+
+if [[ ${1:-} == "--brave-theme-only" ]]; then
+  exit 0
+fi
+
 # Tests override this with a temporary directory list; production uses the
-# fixed trust-root set from browser-policy.sh.
-POLICY_DIRS=("${BROWSER_POLICY_MANAGED_DIRS[@]}")
+# fixed trust-root set from browser-policy.sh (excluding Brave, which uses
+# the generated theme extension above).
+POLICY_DIRS=("${BROWSER_POLICY_COLOR_DIRS[@]}")
 if [[ -n ${QUATTRO_BROWSER_POLICY_DIRS:-} ]]; then
   POLICY_DIRS=()
   while IFS= read -r dir; do

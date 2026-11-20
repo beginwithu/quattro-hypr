@@ -32,8 +32,14 @@ link_widevine_cdm() {
 }
 
 copy_chromium_flags() {
+  local dest="$1"
+  local template="${2:-$QUATTRO_PATH/config/chromium-flags.conf}"
+  local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
   mkdir -p ~/.config
-  sed "s|__QUATTRO_PATH__|$QUATTRO_PATH|g" "$QUATTRO_PATH/config/chromium-flags.conf" >"$1"
+  sed \
+    -e "s|__QUATTRO_PATH__|$QUATTRO_PATH|g" \
+    -e "s|__STATE_HOME__|$state_home|g" \
+    "$template" >"$dest"
   quattro-install-chromium-copy-url
   quattro-install-chromium-ytdlp
   quattro-install-video-decode
@@ -77,7 +83,7 @@ brave)
   quattro-pkg-aur-add brave-bin || exit 1
 
   setup_chromium_policy_directory /etc/brave/policies/managed
-  copy_chromium_flags ~/.config/brave-flags.conf
+  copy_chromium_flags ~/.config/brave-flags.conf "$QUATTRO_PATH/config/brave-origin-flags.conf"
   link_widevine_cdm brave-bin
   quattro-theme-set-browser
   announce_browser_installed "Brave"
@@ -87,7 +93,7 @@ brave-origin)
   quattro-pkg-aur-add brave-origin-bin || exit 1
 
   setup_chromium_policy_directory /etc/brave/policies/managed
-  copy_chromium_flags ~/.config/brave-origin-flags.conf
+  copy_chromium_flags ~/.config/brave-origin-flags.conf "$QUATTRO_PATH/config/brave-origin-flags.conf"
   link_widevine_cdm brave-origin-bin
   quattro-theme-set-browser
   announce_browser_installed "Brave Origin"

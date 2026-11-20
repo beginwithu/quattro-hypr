@@ -207,13 +207,17 @@ install_user_configs() {
     fi
   done
 
-  # Resolve __QUATTRO_PATH__ in Chromium-family browser flags
+  # Resolve __QUATTRO_PATH__ and __STATE_HOME__ in Chromium-family browser flags
+  local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
   for flags_file in \
     "$HOME/.config/brave-origin-flags.conf" \
     "$HOME/.config/chrome-flags.conf" \
     "$HOME/.config/chromium-flags.conf"; do
     if [[ -f $flags_file ]]; then
-      sed -i "s|__QUATTRO_PATH__|$INSTALL_DIR|g" "$flags_file"
+      sed -i \
+        -e "s|__QUATTRO_PATH__|$INSTALL_DIR|g" \
+        -e "s|__STATE_HOME__|$state_home|g" \
+        "$flags_file"
     fi
   done
 
@@ -332,6 +336,19 @@ EOF
   elif command -v xdg-mime >/dev/null 2>&1; then
     xdg-mime default org.gnome.Nautilus.desktop inode/directory || true
   fi
+
+  # Ensure default folders exist and are pinned in Nautilus sidebar bookmarks
+  local gtk_bookmarks="$HOME/.config/gtk-3.0/bookmarks"
+  mkdir -p "$HOME/.config/gtk-3.0"
+  touch "$gtk_bookmarks"
+  local pin_dir pin_uri
+  for pin_dir in Downloads Documents Projects Pictures Videos; do
+    mkdir -p "$HOME/$pin_dir"
+    pin_uri="file://$HOME/$pin_dir"
+    if ! awk -v uri="$pin_uri" '$1 == uri { found = 1; exit } END { exit !found }' "$gtk_bookmarks" 2>/dev/null; then
+      printf '%s %s\n' "$pin_uri" "$pin_dir" >>"$gtk_bookmarks"
+    fi
+  done
 
   # Seed unlocked default keyring if none exists so logins do not prompt
   local keyring_dir="$HOME/.local/share/keyrings"
@@ -462,10 +479,12 @@ EOF
     fi
   done
 
-  # Seed managed browser policy for Brave (prevents Brave from hijacking mimeapps.list)
+  # Seed managed browser policy for Brave (prevents Brave from hijacking mimeapps.list;
+  # remove stale color.json so Brave uses the generated theme extension for full omnibox theming)
   if command -v brave-origin >/dev/null 2>&1 || command -v brave >/dev/null 2>&1; then
     sudo install -d -m 0755 -o root -g root /etc/brave /etc/brave/policies /etc/brave/policies/managed
     sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/chromium/policies/quattro.json" /etc/brave/policies/managed/quattro.json
+    sudo rm -f /etc/brave/policies/managed/color.json
   fi
 
   # Ensure Quickshell lock screen PAM config (/etc/pam.d/quattro-lock-password) is installed
