@@ -25,7 +25,7 @@ o.window({
 -- rule before every later launch.
 o.window("org.quattro.about", { float = true })
 o.window("org.quattro.about", { center = true })
-o.window("org.quattro.about", { size = { 920, 480 } })
+o.window("org.quattro.about", { size = { 960, 580 } })
 
 -- Popped window rounding.
 o.window({ tag = "pop" }, { rounding = 8 })

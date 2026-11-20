@@ -34,8 +34,12 @@ link_widevine_cdm() {
 copy_chromium_flags() {
   local dest="$1"
   local template="${2:-$QUATTRO_PATH/config/chromium-flags.conf}"
+  local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
   mkdir -p ~/.config
-  sed "s|__QUATTRO_PATH__|$QUATTRO_PATH|g" "$template" >"$dest"
+  sed \
+    -e "s|__QUATTRO_PATH__|$QUATTRO_PATH|g" \
+    -e "s|__STATE_HOME__|$state_home|g" \
+    "$template" >"$dest"
   quattro-install-chromium-copy-url
   quattro-install-chromium-ytdlp
   quattro-install-video-decode

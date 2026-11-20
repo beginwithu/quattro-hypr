@@ -9,53 +9,56 @@ source "$QUATTRO_PATH/default/chromium/browser-policy.sh"
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 CURRENT_THEME_DIR="$STATE_HOME/quattro/current/theme"
 CHROMIUM_THEME="$CURRENT_THEME_DIR/chromium.theme"
-COLORS_FILE="$CURRENT_THEME_DIR/colors.toml"
 THEME_HEX_COLOR=$BROWSER_POLICY_DEFAULT_COLOR
 
 if [[ -f $CHROMIUM_THEME ]]; then
   THEME_HEX_COLOR=$(browser_policy_theme_hex "$(<$CHROMIUM_THEME)")
 fi
 
-# Build the 30-hex palette (bg, dark_bg, darker_bg, fg, light_fg) for Brave's
-# live CRX theme policy when colors.toml is available.
-PALETTE_HEX="${THEME_HEX_COLOR#\#}"
-if [[ -f $COLORS_FILE ]] && command -v quattro-theme-color >/dev/null 2>&1; then
-  declare -A palette_map=()
-  while IFS=$'\t' read -r k v; do
-    palette_map[$k]="$v"
-  done < <(quattro-theme-color --file "$COLORS_FILE" --all 2>/dev/null || true)
+# Sync the generated Brave Chrome-theme extension so Brave's toolbar, tab bar,
+# omnibox, and suggestion dropdown all follow the active Quattro palette on
+# launch without triggering Chromium's "Installed theme ... Undo" infobar.
+sync_brave_theme_extension() {
+  local src="$CURRENT_THEME_DIR/brave-theme.json"
+  local dest_dir="$STATE_HOME/quattro/current/brave-theme"
+  local dest="$dest_dir/manifest.json"
+  local version tmp sum hex r g b
 
-  bg_h="${palette_map[background]:-$THEME_HEX_COLOR}"
-  dark_bg_h="${palette_map[dark_background]:-$bg_h}"
-  darker_bg_h="${palette_map[darker_background]:-$dark_bg_h}"
-  fg_h="${palette_map[foreground]:-#e4e4e8}"
-  light_fg_h="${palette_map[light_foreground]:-$fg_h}"
+  [[ -f $src ]] || return 0
 
-  candidate="${bg_h#\#}${dark_bg_h#\#}${darker_bg_h#\#}${fg_h#\#}${light_fg_h#\#}"
-  candidate="${candidate,,}"
-  if [[ $candidate =~ ^[0-9a-f]{30}$ ]]; then
-    PALETTE_HEX="$candidate"
+  if command -v sha256sum >/dev/null 2>&1; then
+    read -r sum _ < <(sha256sum "$src")
+    version="1.$((16#${sum:0:4})).$((16#${sum:4:4}))"
+  else
+    hex="${THEME_HEX_COLOR#\#}"
+    r=$((16#${hex:0:2}))
+    g=$((16#${hex:2:2}))
+    b=$((16#${hex:4:2}))
+    version="1.${r}.${g}.${b}"
   fi
-fi
 
-# Choose the 30-hex palette when passwordless sudo (or root/interactive tty)
-# permits it, otherwise fall back to the 6-hex background color so older
-# sudoers files never trigger a password prompt.
-POLICY_ARG="$PALETTE_HEX"
-if (( EUID != 0 )) && [[ ! -t 0 ]] && [[ ${#PALETTE_HEX} == 30 ]]; then
-  if ! sudo -n -l -l /usr/bin/quattro-theme-set-browser-policy "$PALETTE_HEX" 2>/dev/null | grep -q '!authenticate'; then
-    POLICY_ARG="${THEME_HEX_COLOR#\#}"
-  fi
+  mkdir -p "$dest_dir"
+  tmp=$(mktemp "$dest_dir/.manifest.XXXXXX") || return 1
+  sed "s/\"version\": \"1\.0\"/\"version\": \"$version\"/" "$src" >"$tmp"
+  mv -f "$tmp" "$dest"
+}
+
+sync_brave_theme_extension || true
+
+if [[ ${1:-} == "--brave-theme-only" ]]; then
+  exit 0
 fi
 
 # Tests override this with a temporary directory list; production uses the
-# fixed trust-root set from browser-policy.sh.
+# fixed trust-root set from browser-policy.sh (excluding Brave, which uses
+# the local --load-extension theme synced above).
 POLICY_DIRS=("${BROWSER_POLICY_COLOR_DIRS[@]}")
 BRAVE_POLICY_DIR=/etc/brave/policies/managed
 BRAVE_THEME_DIR=/var/lib/quattro/brave-theme
 if [[ -n ${QUATTRO_BROWSER_POLICY_DIRS:-} ]]; then
   POLICY_DIRS=()
   BRAVE_POLICY_DIR=""
+  BRAVE_THEME_DIR=""
   while IFS= read -r dir; do
     POLICY_DIRS+=("$dir")
   done <<< "$QUATTRO_BROWSER_POLICY_DIRS"
@@ -71,19 +74,20 @@ file_is_canonical() {
   [[ $(stat -c '%U:%G %a' "$file") == "root:root 644" ]]
 }
 
-brave_theme_is_canonical() {
-  [[ -f $BRAVE_POLICY_DIR/quattro-theme.json && ! -L $BRAVE_POLICY_DIR/quattro-theme.json ]] || return 1
-  [[ ! -e $BRAVE_POLICY_DIR/color.json && ! -L $BRAVE_POLICY_DIR/color.json ]] || return 1
-  [[ -f $BRAVE_THEME_DIR/palette && ! -L $BRAVE_THEME_DIR/palette ]] || return 1
-  [[ $(<"$BRAVE_THEME_DIR/palette") == "$POLICY_ARG" ]] || return 1
-  [[ $(stat -c '%U:%G %a' "$BRAVE_POLICY_DIR/quattro-theme.json") == "root:root 644" ]]
+brave_has_stale_policy() {
+  [[ -n $BRAVE_POLICY_DIR && -d $BRAVE_POLICY_DIR && ! -L $BRAVE_POLICY_DIR ]] || return 1
+  [[ -e $BRAVE_POLICY_DIR/quattro-theme.json || -L $BRAVE_POLICY_DIR/quattro-theme.json ||
+     -e $BRAVE_POLICY_DIR/color.json || -L $BRAVE_POLICY_DIR/color.json ||
+     -e $BRAVE_THEME_DIR || -L $BRAVE_THEME_DIR ]]
 }
 
 # Skip the privileged policy write and browser refreshes entirely when every
-# existing managed policy is already canonical.
+# existing managed color.json is already canonical and no legacy Brave theme
+# policy files remain.
 expected_json='{"BrowserThemeColor": "'$THEME_HEX_COLOR'", "BrowserColorScheme": "device"}'
 saw_any=false
 all_unchanged=true
+refresh_brave=false
 for dir in "${POLICY_DIRS[@]}"; do
   [[ -d $dir && ! -L $dir ]] || continue
   saw_any=true
@@ -93,11 +97,10 @@ for dir in "${POLICY_DIRS[@]}"; do
     break
   fi
 done
-if [[ -n $BRAVE_POLICY_DIR && -d $BRAVE_POLICY_DIR && ! -L $BRAVE_POLICY_DIR ]]; then
+if brave_has_stale_policy; then
   saw_any=true
-  if ! brave_theme_is_canonical; then
-    all_unchanged=false
-  fi
+  all_unchanged=false
+  refresh_brave=true
 fi
 
 $saw_any && $all_unchanged && exit 0
@@ -107,14 +110,14 @@ if ! $saw_any && [[ ${QUATTRO_THEME_BROWSER_FORCE:-0} != "1" ]]; then
   exit 0
 fi
 if (( EUID != 0 )) && [[ ${QUATTRO_THEME_HEADLESS:-0} == "1" || ! -t 0 ]] &&
-  ! sudo -n -l -l /usr/bin/quattro-theme-set-browser-policy "$POLICY_ARG" 2>/dev/null | grep -q '!authenticate'; then
+  ! sudo -n -l -l /usr/bin/quattro-theme-set-browser-policy "${THEME_HEX_COLOR#\#}" 2>/dev/null | grep -q '!authenticate'; then
   exit 0
 fi
 
 failed=0
 # A script's background job reads /dev/null unless told otherwise, which would
 # turn the writer's terminal sudo prompt into a pkexec dialog. Keep stdin.
-quattro-theme-set-browser-policy "$POLICY_ARG" <&0 &
+quattro-theme-set-browser-policy "${THEME_HEX_COLOR#\#}" <&0 &
 policy_pid=$!
 
 # While the policy writes, find the running browsers with one process table
@@ -131,12 +134,15 @@ chrome=google-chrome-stable
 quattro-cmd-present "$chrome" || chrome=google-chrome
 
 browsers_to_refresh=()
-for browser in chromium:chromium "chrome:$chrome" msedge:microsoft-edge-stable brave:brave; do
+for browser in chromium:chromium "chrome:$chrome" msedge:microsoft-edge-stable; do
   [[ -n ${running_names[${browser%%:*}]:-} ]] && quattro-cmd-present "${browser#*:}" && browsers_to_refresh+=("${browser#*:}")
 done
-# Match on the binary path: the running process is named plain "brave", and a
-# bare brave-origin pattern would also match the installer's own terminal.
-[[ $running_args == *"/opt/brave-origin-bin/"* ]] && quattro-cmd-present brave-origin && browsers_to_refresh+=(brave-origin)
+if $refresh_brave; then
+  [[ -n ${running_names[brave]:-} ]] && quattro-cmd-present brave && browsers_to_refresh+=(brave)
+  # Match on the binary path: the running process is named plain "brave", and a
+  # bare brave-origin pattern would also match the installer's own terminal.
+  [[ $running_args == *"/opt/brave-origin-bin/"* ]] && quattro-cmd-present brave-origin && browsers_to_refresh+=(brave-origin)
+fi
 
 wait "$policy_pid" || failed=1
 

@@ -207,13 +207,17 @@ install_user_configs() {
     fi
   done
 
-  # Resolve __QUATTRO_PATH__ in Chromium-family browser flags
+  # Resolve __QUATTRO_PATH__ and __STATE_HOME__ in Chromium-family browser flags
+  local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
   for flags_file in \
     "$HOME/.config/brave-origin-flags.conf" \
     "$HOME/.config/chrome-flags.conf" \
     "$HOME/.config/chromium-flags.conf"; do
     if [[ -f $flags_file ]]; then
-      sed -i "s|__QUATTRO_PATH__|$INSTALL_DIR|g" "$flags_file"
+      sed -i \
+        -e "s|__QUATTRO_PATH__|$INSTALL_DIR|g" \
+        -e "s|__STATE_HOME__|$state_home|g" \
+        "$flags_file"
     fi
   done
 
@@ -309,9 +313,10 @@ EOF
   cp -a "$PROJECT_DIR/etc/xkb/rules/evdev" "$HOME/.config/xkb/rules/evdev"
   cp -a "$PROJECT_DIR/etc/xkb/symbols/quattro" "$HOME/.config/xkb/symbols/quattro"
 
-  if [[ ! -f $HOME/.config/fastfetch/config.jsonc ]]; then
-    mkdir -p "$HOME/.config/fastfetch"
-    cp -a "$PROJECT_DIR/etc/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
+  # Keep /etc/fastfetch/config.jsonc as the default so quattro-launch-about does
+  # not mistake an untouched user copy for a custom layout and skip auto-sizing.
+  if [[ -f $HOME/.config/fastfetch/config.jsonc ]] && cmp -s "$HOME/.config/fastfetch/config.jsonc" "$PROJECT_DIR/etc/fastfetch/config.jsonc"; then
+    rm -f "$HOME/.config/fastfetch/config.jsonc"
   fi
 
   if [[ ! -f $HOME/.config/mpv/mpv.conf ]]; then
@@ -476,12 +481,13 @@ EOF
   done
 
   # Seed managed browser policy for Brave (prevents Brave from hijacking mimeapps.list;
-  # remove stale color.json and seed live CRX theme policy for full omnibox theming)
+  # remove stale color.json and legacy CRX theme policy so Brave uses the local
+  # --load-extension theme without triggering "Installed theme" infobars)
   if command -v brave-origin >/dev/null 2>&1 || command -v brave >/dev/null 2>&1; then
     sudo install -d -m 0755 -o root -g root /etc/brave /etc/brave/policies /etc/brave/policies/managed
     sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/chromium/policies/quattro.json" /etc/brave/policies/managed/quattro.json
-    sudo rm -f /etc/brave/policies/managed/color.json
-    QUATTRO_PATH="$INSTALL_DIR" PATH="$BIN_LINK_DIR:$INSTALL_DIR/bin:$PATH" "$INSTALL_DIR/bin/quattro-theme-set-browser" || true
+    sudo rm -f /etc/brave/policies/managed/color.json /etc/brave/policies/managed/quattro-theme.json
+    sudo rm -rf /var/lib/quattro/brave-theme
   fi
 
   # Ensure Quickshell lock screen PAM config (/etc/pam.d/quattro-lock-password) is installed

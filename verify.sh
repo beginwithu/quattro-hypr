@@ -124,6 +124,8 @@ expected_files=(
   "$tmp_home/.local/state/quattro/current/theme/qt6ct.colors"
   "$tmp_home/.local/state/quattro/current/theme/shell.toml"
   "$tmp_home/.local/state/quattro/current/theme/gtk.css"
+  "$tmp_home/.local/state/quattro/current/theme/brave-theme.json"
+  "$tmp_home/.local/state/quattro/current/brave-theme/manifest.json"
   "$tmp_home/.config/gtk-4.0/gtk.css"
   "$tmp_home/.local/state/quattro/current/icons/org.gnome.Nautilus.svg"
 )
@@ -139,12 +141,18 @@ done
 
 flags_unresolved=0
 for ff in "$tmp_home/.config/brave-origin-flags.conf" "$tmp_home/.config/chrome-flags.conf" "$tmp_home/.config/chromium-flags.conf"; do
-  if grep -q '__QUATTRO_PATH__' "$ff" || grep -q '/usr/share/quattro' "$ff"; then
+  if grep -q '__QUATTRO_PATH__' "$ff" || grep -q '__STATE_HOME__' "$ff" || grep -q '/usr/share/quattro' "$ff"; then
     echo "  Unresolved path in: $ff" >&2
     flags_unresolved=$((flags_unresolved + 1))
   fi
 done
 (( flags_unresolved == 0 )) && pass "Browser flag extension paths resolved to sandbox QUATTRO_PATH" || fail "$flags_unresolved browser flag file(s) still contain unresolved path"
+
+if python3 -m json.tool "$tmp_home/.local/state/quattro/current/brave-theme/manifest.json" >/dev/null 2>&1; then
+  pass "Generated Brave theme extension manifest is valid JSON"
+else
+  fail "Generated Brave theme extension manifest is invalid JSON"
+fi
 
 if [[ -n $(HOME="$tmp_home" QUATTRO_PATH="$tmp_home/.local/share/quattro" "$tmp_home/.local/bin/quattro-version") ]]; then
   pass "quattro-version reports installed version"

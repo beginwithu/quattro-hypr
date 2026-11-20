@@ -8,6 +8,7 @@
 # it instead of resizing after the first paint. Bash defers WINCH traps while read
 # blocks, so poll for size changes and re-render fastfetch whenever it is resized.
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 LOGO_FILE="$HOME/.config/quattro/branding/about.txt"
 FIT_FILE="$HOME/.local/state/quattro/windows/about.fit"
 QUATTRO_FASTFETCH_DIR=/etc/fastfetch
@@ -37,13 +38,26 @@ POLL_SECONDS=0.5
 # logo and nothing about About, which is why it is a file of its own.
 source quattro-branding-about-animation
 
+# A user copy that still matches Quattro's own fastfetch config byte-for-byte
+# (e.g. seeded by an older installer run) is not a custom layout.
+is_stock_fastfetch_config() {
+  local candidate=$1
+  local stock
+
+  for stock in "$QUATTRO_FASTFETCH_DIR/config.jsonc" "$QUATTRO_PATH/etc/fastfetch/config.jsonc"; do
+    [[ -f $stock ]] && cmp -s "$candidate" "$stock" && return 0
+  done
+
+  return 1
+}
+
 # A user's own fastfetch config can relocate or restyle the logo in ways this
 # measurement cannot see, so leave sizing to the float rule in that case. It can
 # sit in any of several directories fastfetch searches ahead of Quattro's own, so
 # ask fastfetch for that order rather than keep a copy here for its next release
 # to outdate.
 custom_fastfetch_config() {
-  local directory listed=false
+  local directory candidate listed=false
 
   # A whole line at a time, because a home directory may contain a space, and the
   # marker fastfetch puts beside the config it settled on is not part of the path.
@@ -51,13 +65,17 @@ custom_fastfetch_config() {
     listed=true
     directory=${directory% (\*)}
     [[ ${directory%/} == "$QUATTRO_FASTFETCH_DIR" ]] && return 1
-    [[ -f ${directory%/}/config.jsonc ]] && return 0
+    candidate=${directory%/}/config.jsonc
+    if [[ -f $candidate ]]; then
+      is_stock_fastfetch_config "$candidate" && return 1
+      return 0
+    fi
   done < <(fastfetch --list-config-paths 2>/dev/null)
 
   # Silence is not the same answer as "none of them", so fall back to the
   # directory fastfetch has always looked in first rather than read it as one.
   [[ $listed == true ]] && return 1
-  [[ -f $HOME/.config/fastfetch/config.jsonc ]]
+  [[ -f $HOME/.config/fastfetch/config.jsonc ]] && ! is_stock_fastfetch_config "$HOME/.config/fastfetch/config.jsonc"
 }
 
 # wc -L counts display columns only in a UTF-8 locale. A session that never set
@@ -407,6 +425,7 @@ if [[ ${1:-} == "--render" ]]; then
     # every repaint.
     if [[ $fitted == false ]] && (( ++passes <= 2 )); then
       fit_window && fitted=true
+      [[ $resized == true ]] && continue
     fi
     # An empty frame list plays nothing, so a logo that cannot be animated waits
     # here exactly as the still one did, and there is one loop rather than two.
