@@ -41,8 +41,4 @@ if command -v gsettings >/dev/null 2>&1; then
   gsettings set org.gnome.desktop.interface gtk-enable-primary-paste true >/dev/null 2>&1 || true
 fi
 
-if command -v quattro-audio-tuning >/dev/null 2>&1; then
-  quattro-audio-tuning on >/dev/null 2>&1 || true
-fi
-
 : >"$marker"

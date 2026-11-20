@@ -11,7 +11,7 @@ Notes for working on `quattro-shell` and the rest of this repository.
 - `shell/services/` - host-level QML/JS services (`PluginRegistry.qml`, `BarWidgetRegistry.qml`, `AppLibrary.qml`, `BackgroundIntro.qml`, `BackgroundSwitch.qml`, `BrightnessKeys.qml`, plus capability-scoped plugin facades `Plugin*Api.qml`).
 - `shell/plugins/` - first-party plugins loaded from `manifest.json`:
   - `bar/` (`quattro.bar`) and `bar/widgets/` / `bar/indicators/`
-  - `dock/`, `menu/`, `osd/`, `lock/`, `notifications/`, `background/`, `clipboard/`, `dev-gallery/`, `emojis/`, `image-picker/`, `polkit/`, `reminders/`, `screensaver/`, `share-picker/`
+  - `dock/`, `menu/`, `osd/`, `lock/`, `notifications/`, `background/`, `clipboard/`, `emojis/`, `image-picker/`, `polkit/`, `reminders/`, `screensaver/`, `share-picker/`, `video-cut/`
   - `panels/` (`audio`, `bluetooth`, `clock`, `disk-speedtest`, `dropbox`, `elsewhen`, `monitor`, `network`, `power`, `speedtest`, `tailscale`, `weather`, `wifiqr`)
   - `services/` (`battery`, `idle`, `media`, `nightlight`, `remote-session`)
 - `config/quattro/shell.json` - default shell layout (`bar`, `dock`, `idle`, `plugins`). User overrides live at `~/.config/quattro/shell.json` (canonical once created; no deep-merge).
@@ -85,7 +85,7 @@ quattro-shell shell debugBarGeometry
   - Nautilus (`org.gnome.Nautilus.desktop`) as the default file manager (`inode/directory`), themed via `gtk-4.0/gtk.css` and dynamic icon rendering.
   - Built-in Python Cloudflare client in `bin/quattro-network-speedtest` for the speedtest panel (no external `quattro-speedtest` package dependency).
   - Passwordless DNS switching in `shell/plugins/panels/network/` via packaged `/usr/bin/quattro-dns` and `/etc/sudoers.d/quattro-dns`.
-  - Arch branding (`icon.png`, `logo.svg`, `icon.txt`, `logo.txt`) and `QUATTRO` pixel logo (`default/sddm/quattro/logo.png`, `default/plymouth/logo.png`).
+  - Arch branding (`icon.png`, `logo.svg`, `icon.txt`, `logo.txt`) and `QUATTRO` pixel logo (`default/sddm/quattro/logo.png`).
   - Direct overwrite behavior in `install.sh` (no backup directory or `.bak` generation) and SDDM Wayland login provisioning.
 - After editing scripts, Lua configs, JSON configs, or shell files, run:
   ```bash

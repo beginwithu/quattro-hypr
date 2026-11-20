@@ -38,7 +38,6 @@ copy_chromium_flags() {
   sed "s|__QUATTRO_PATH__|$QUATTRO_PATH|g" "$template" >"$dest"
   quattro-install-chromium-copy-url
   quattro-install-chromium-ytdlp
-  quattro-install-video-decode
 }
 
 setup_firefox_wayland() {

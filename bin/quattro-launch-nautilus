@@ -1,6 +1,0 @@
-#!/bin/bash
-
-# quattro:summary=Launch Files (the old name, kept for personal bindings)
-# quattro:hidden=true
-
-exec quattro-launch-files "$@"

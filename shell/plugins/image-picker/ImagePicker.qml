@@ -321,29 +321,7 @@ Item {
   property var imageArray: []
   readonly property var matchingImageIndices: ImagePickerModel.matchingIndices(imageArray, filterText)
   onMatchingImageIndicesChanged: updateVisibleItems()
-  onSelectedIndexChanged: {
-    updateVisibleItems()
-    introPrepareTimer.restart()
-  }
-  onThemeModeChanged: if (themeMode) introPrepareTimer.restart()
-
-  Timer {
-    id: introPrepareTimer
-    interval: 75
-    onTriggered: {
-      if (root.opened && root.themeMode && !introPrepare.running) {
-        introPrepare.theme = root.nameForPath(root.currentPath())
-        introPrepare.command = ["quattro-theme-bg-boot-intro", "--prepare-theme", root.nameForPath(root.currentPath())]
-        introPrepare.running = true
-      }
-    }
-  }
-
-  Process {
-    id: introPrepare
-    property string theme: ""
-    onExited: if (root.opened && root.themeMode && theme !== root.nameForPath(root.currentPath())) introPrepareTimer.restart()
-  }
+  onSelectedIndexChanged: updateVisibleItems()
 
   function updateVisibleItems() {
     ImagePickerModel.syncWindow(visibleImages, ImagePickerModel.visibleWindow(matchingImageIndices, selectedIndex, previewRadius))

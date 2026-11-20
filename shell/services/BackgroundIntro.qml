@@ -77,7 +77,6 @@ Item {
   }
 
   function prepareTheme(fromPath, token, colors, shell) {
-    framePoll.stop()
     themeFade.stop()
     themeCutReveal.stop()
     revealDelayFrames = 0
@@ -99,7 +98,6 @@ Item {
   function revealTheme() {
     if (!themeToken && !cover) return
     themeFinishing = false
-    framePoll.stop()
     themeFallback.stop()
     // A background change keeps the theme, so it hands over no palette.
     if (themeToken && (themeColors || themeShell)) {
@@ -112,7 +110,6 @@ Item {
     themeColors = ""
     themeShell = ""
     if (startupPending) {
-      // The login reveal starts on moving video, without showing its final still.
       themeBackground = ""
       startupMediaReady = true
       revealStartup()
@@ -121,8 +118,6 @@ Item {
     }
   }
 
-  // OWE hands the desktop back to the shell when an intro ends or is cut
-  // short, and the new still may still be decoding then.
   function finishTheme(token, cut) {
     if (token !== themeToken) return
     themeCut = !!cut
@@ -146,7 +141,6 @@ Item {
 
   function cancelTheme() {
     themeFinishing = false
-    framePoll.stop()
     themeFallback.stop()
     themeFade.stop()
     themeCutReveal.stop()
@@ -224,40 +218,12 @@ Item {
     onTriggered: root.revealTheme()
   }
 
-  // A renderer left over from another intro can first fade from its still.
-  // Keep that preparation hidden until the actual video is fully revealed.
-  // Stop once nothing is covered: a still wallpaper never reports video.
-  Timer {
-    id: framePoll
-    interval: 16
-    repeat: true
-    onTriggered: {
-      if (!root.cover && !root.themeToken) stop()
-      else if (!frameStatus.running) frameStatus.running = true
-    }
-  }
-
-  Process {
-    id: frameStatus
-    command: ["owe", "render-status"]
-    property string token: ""
-    onStarted: token = root.themeToken
-    stdout: StdioCollector { id: frameStatusOut }
-    onExited: function(exitCode) {
-      if (exitCode !== 0 || token !== root.themeToken || (!token && !root.cover)) return
-      try {
-        var status = JSON.parse(frameStatusOut.text)
-        if (status.kind === "video" && status.ready && !status.has_transition && status.time_pos > 0)
-          root.revealTheme()
-      } catch (e) {}
-    }
-  }
-
   // A shell restart shares this compositor session; a new login does not.
   FileView {
     id: sessionMarker
     path: Quickshell.env("HOME") + "/.local/state/quattro/background-intro.session-id"
     blockLoading: true
+    atomicWrites: true
     watchChanges: false
     printErrors: false
   }
@@ -275,17 +241,11 @@ Item {
 
   Component.onCompleted: {
     checked = true
+    var sid = Quickshell.env("QUATTRO_SESSION_ID") || Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
+    if (sid && !sessionConsumed) sessionMarker.setText(sid + "\n")
     if (!startupBackgroundPath && !startupPending) startupBackground.running = true
-    introProc.running = true
-  }
-
-  onBackgroundActiveChanged: {
-    if (!backgroundActive && checked) {
-      if (cover || themeToken) {
-        framePoll.start()
-        if (!frameStatus.running) frameStatus.running = true
-      }
-    }
+    startupSettled = true
+    finishStartup()
   }
 
   // Cover the bar as well as the wallpaper on a new login. Shell restarts
@@ -408,21 +368,12 @@ Item {
         }
       }
 
-      // Give the ready image a frame to reach the compositor before OWE
-      // releases the shell's wallpaper underneath this cover.
+      // Give the ready image a frame to reach the compositor before revealing
+      // the shell's wallpaper underneath this cover.
       FrameAnimation {
         running: outgoingFrame.status === Image.Ready && panel.coverFrames < 2
         onTriggered: panel.coverFrames += 1
       }
-    }
-  }
-
-  Process {
-    id: introProc
-    command: ["quattro-theme-bg-boot-intro"]
-    onExited: {
-      root.startupSettled = true
-      root.finishStartup()
     }
   }
 }

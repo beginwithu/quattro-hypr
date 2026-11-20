@@ -3,12 +3,9 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 
-// Sequence a background change around an intro. The outgoing frame is held
-// under BackgroundIntro's cover, the link moves once that cover is on screen,
-// the new still goes in beneath it, OWE plays the clip, and the cover fades
-// once the clip is moving, or opens with the ordinary cut onto a still without
-// one. Each step waits on the event that allows it, so the commands that
-// start a change only hand it over.
+// Sequence a background change around BackgroundIntro's cover. The outgoing
+// frame is held under the cover, the link moves once that cover is on screen,
+// the new still goes in beneath it, and the cover opens with the slanted cut.
 Item {
   id: root
 
@@ -22,10 +19,6 @@ Item {
   // The change in progress, named by its cover's token.
   property string token: ""
   property string still: ""
-  property string clip: ""
-  // Whether OWE already holds the clip decoded, as a theme switch prepares it
-  // while its templates render.
-  property bool prepared: false
   property bool linked: false
   property bool started: false
   property int serial: 0
@@ -35,8 +28,6 @@ Item {
   // A selection made while an earlier change is still covered or revealing
   // waits for it, since its outgoing frame would miss that change's cover.
   property string queuedPath: ""
-  // A theme switch reloads Hyprland once no intro plays: a reload pauses
-  // video presentation.
   property bool reloadPending: false
   // The link's next target while an earlier ln still runs, so the link always
   // ends on the latest selection.
@@ -44,14 +35,14 @@ Item {
 
   // A theme switch waits while this is set, so it cannot capture a frame from
   // under a cover or take over from a change still being set up.
-  readonly property bool busy: !!intro && (intro.themeToken !== "" || intro.revealing) || snapshotProc.running
+  readonly property bool busy: !!intro && (intro.themeToken !== "" || intro.revealing)
 
   // The background the latest selection names. The link only moves once a
   // change is under way, so a selection still queued or covered is not there
   // yet.
   function selected() {
     if (queuedPath) return queuedPath
-    if (token && intro && (snapshotProc.running || token === intro.themeToken)) return still
+    if (token && intro && token === intro.themeToken) return still
     return backgroundService ? backgroundService.currentBackground : ""
   }
 
@@ -60,17 +51,15 @@ Item {
     return path && !Util.isVideoPath(path) ? path : ""
   }
 
-  // quattro-theme-bg-set's selection, with the intro it found for it.
-  function switchTo(path, clipPath) {
+  // quattro-theme-bg-set's selection.
+  function switchTo(path, _clipPath) {
     path = String(path || "").trim()
     if (!path || !intro || !backgroundService) return "unavailable"
     if (busy) {
       queuedPath = path
     } else if (path !== backgroundService.currentBackground) {
-      // A playing intro hides the shell's background, so even a still
-      // without an intro of its own has to come in under the cover.
-      if (clipPath || backgroundService.suspended) {
-        begin(path, clipPath)
+      if (backgroundService.suspended) {
+        begin(path)
       } else {
         link(path)
         backgroundService.setBackground(path, false)
@@ -91,24 +80,13 @@ Item {
     linkProc.running = true
   }
 
-  function begin(path, clipPath) {
+  function begin(path) {
     serial += 1
     token = "background-" + serial
     still = path
-    clip = clipPath
-    prepared = false
     linked = false
     started = false
-    if (backgroundService.suspended) {
-      // A playing video shows a frame only OWE can capture.
-      snapshotProc.forToken = token
-      snapshotProc.file = transitionCache + "/previous-" + serial + ".ppm"
-      snapshotProc.command = ["bash", "-c", 'mkdir -p "$1" && exec owe render "$2"', "_", transitionCache,
-                              JSON.stringify({ cmd: "snapshot", path: snapshotProc.file })]
-      snapshotProc.running = true
-    } else {
-      cover(displayedStill())
-    }
+    cover(displayedStill())
   }
 
   function cover(path) {
@@ -118,13 +96,11 @@ Item {
 
   // A theme switch has put up its cover and repointed the link itself; the
   // rest is the same as a background change, plus Hyprland's reload.
-  function play(tok, stillPath, clipPath, preparedFlag) {
+  function play(tok, stillPath, _clipPath, _preparedFlag) {
     reloadPending = true
     if (!intro || tok !== intro.themeToken) return "superseded"
     token = tok
     still = stillPath
-    clip = clipPath
-    prepared = preparedFlag === "true"
     linked = true
     started = false
     own(intro.themeBackground)
@@ -141,41 +117,25 @@ Item {
     if (!token || !intro || token !== intro.themeToken) return
     var coverStatus = intro.themeCoverStatus(token)
     if (coverStatus === "loading") return
-    // Moving the link cancels a playing intro and hands the desktop back to
-    // the shell, so it waits for the cover.
     if (!linked) {
       if (pendingLink !== still && !(linkProc.running && linkProc.target === still)) link(still)
       return
     }
-    // An earlier clip ends once the link has moved on from it.
-    if (started || playProc.running) return
+    if (started) return
     started = true
-    // The shell holds the new still before OWE hands the desktop back, so the
-    // old one cannot flash between the clip and the still. With the
-    // background plugin disabled the cover still has to come down.
     if (backgroundService) backgroundService.setBackground(still, true)
-    if (clip && coverStatus !== "error") {
-      playProc.forToken = token
-      playProc.command = prepared
-        ? ["owe", "intro", "--start", "first-frame", "--refresh", clip]
-        : ["bash", "-c", 'owe refresh >/dev/null && exec owe intro --start first-frame "$1"', "_", clip]
-      playProc.running = true
-    } else {
-      intro.finishTheme(token, !clip)
-    }
+    intro.finishTheme(token, true)
   }
 
   function settle() {
     if (busy) return
-    if (reloadPending && !playProc.running && !reloadLock.running) reloadLock.running = true
+    if (reloadPending && !reloadLock.running) reloadLock.running = true
     var kept = []
     for (var path of ownedCovers) {
       if (path === intro.themeBackground) kept.push(path)
       else Quickshell.execDetached(["rm", "-f", path])
     }
     ownedCovers = kept
-    // The queued selection goes back through quattro-theme-bg-set, which
-    // finds its intro under the settings and theme as they are now.
     if (queuedPath) {
       Quickshell.execDetached(["quattro-theme-bg-set", queuedPath])
       queuedPath = ""
@@ -195,35 +155,15 @@ Item {
     function onRevealingChanged() { Qt.callLater(root.settle) }
   }
 
-  // A theme switch holds this lock while it stages, and may start an intro
-  // of its own before releasing it. The reload is decided once the lock is
-  // taken and runs before it is released, so no new intro can start between.
   Process {
     id: reloadLock
     command: ["flock", root.themeSetLock, "bash", "-c", 'echo locked; read -r go; [[ $go != reload ]] || exec quattro-restart-hyprctl']
     stdinEnabled: true
     stdout: SplitParser {
       onRead: {
-        var go = !root.busy && !playProc.running
+        var go = !root.busy
         if (go) root.reloadPending = false
         reloadLock.write(go ? "reload\n" : "wait\n")
-      }
-    }
-  }
-
-  Process {
-    id: snapshotProc
-    property string forToken: ""
-    property string file: ""
-    onExited: function(exitCode) {
-      // A theme switch that took the cover meanwhile wins.
-      if (forToken !== root.token || root.intro.themeToken !== "") {
-        Quickshell.execDetached(["rm", "-f", file])
-      } else if (exitCode === 0) {
-        root.own(file)
-        root.cover(file)
-      } else {
-        root.cover(root.displayedStill())
       }
     }
   }
@@ -235,17 +175,6 @@ Item {
       if (root.pendingLink) Qt.callLater(root.startLink)
       else if (root.token && target === root.still) root.linked = true
       root.advance()
-    }
-  }
-
-  Process {
-    id: playProc
-    property string forToken: ""
-    onExited: {
-      // Played or not, the cover then fades to the still beneath it.
-      if (root.intro) root.intro.finishTheme(forToken)
-      root.advance()
-      root.settle()
     }
   }
 }

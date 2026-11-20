@@ -4,9 +4,8 @@
 #   /usr/share/uwsm/env.d/10-quattro          (Hyprland session via uwsm)
 #   /usr/share/quattro/default/bash/envs      (bash rc chain; SSH/non-login)
 
-# /etc/quattro.conf is written by quattro-dev-link and reset by
-# quattro-dev-unlink. When absent, force the packaged default instead of
-# preserving a stale inherited value.
+# Optional system-wide override in /etc/quattro.conf. When absent, resolve the
+# user-local install (~/.local/share/quattro) before falling back to /usr/share/quattro.
 if [ -f /etc/quattro.conf ]; then
   . /etc/quattro.conf
 fi

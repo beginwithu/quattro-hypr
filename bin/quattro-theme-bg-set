@@ -21,11 +21,8 @@ fi
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/quattro-theme-set.lock"
 flock 9
 
-INTRO=$(quattro-theme-bg-boot-intro --resolve-enabled "$BACKGROUND")
-
-# The shell sequences the change, with the intro or the ordinary transition,
-# and repoints the link itself once nothing on screen can flash.
-if [[ $(quattro-shell shell switchBackground "$BACKGROUND" "$INTRO" 2>/dev/null) != "ok" ]]; then
+# The shell sequences the change and repoints the link itself once nothing on screen can flash.
+if [[ $(quattro-shell shell switchBackground "$BACKGROUND" "" 2>/dev/null) != "ok" ]]; then
   ln -nsf "$BACKGROUND" "$CURRENT_BACKGROUND_LINK"
   quattro-shell -q background set "$BACKGROUND"
 fi

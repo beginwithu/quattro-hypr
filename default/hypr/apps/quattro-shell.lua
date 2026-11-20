@@ -11,11 +11,5 @@ hl.layer_rule({ match = { namespace = "quattro-bar" }, no_anim = true, animation
 -- for normal open/close, and skip it for panel handoff.
 hl.layer_rule({ match = { namespace = "^(quattro-menu|quattro-image-selector|quattro-emojis|quattro-clipboard|quattro-keyboard-panel|quattro-osd|quattro-reminders|quattro-network-qr|quattro-dock|quattro-dock-apps|quattro-share-picker|quattro-video-cut|org\\.quattro\\.screensaver)$" }, no_anim = true, animation = "none" })
 
--- A boot intro hands the desktop between OWE's video layer and the shell's
--- background layer. The media fades itself, so a compositor fade on either
--- layer only dips the screen toward the empty desktop during the handoff.
-hl.layer_rule({ match = { namespace = "^(quattro-background|owe-background)$" }, no_anim = true, animation = "none" })
-
--- Dev gallery is the main shell workbench; open it maximized like
--- SUPER+ALT+F so component previews have the whole workspace.
-o.window({ class = "^org.quickshell$", title = "^Quattro shell – dev gallery$" }, { maximize = true })
+-- The background layer handles its own transitions; disable compositor fades.
+hl.layer_rule({ match = { namespace = "^quattro-background$" }, no_anim = true, animation = "none" })

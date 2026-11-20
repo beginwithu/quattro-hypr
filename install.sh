@@ -217,11 +217,6 @@ install_user_configs() {
     fi
   done
 
-  # Keep custom_picker_binary pointed at quattro-share-picker unless user overrides it
-  if [[ -f $HOME/.config/hypr/xdph.conf ]] && grep -q '^    # custom_picker_binary = hyprland-preview-share-picker' "$HOME/.config/hypr/xdph.conf"; then
-    sed -i 's|^    # custom_picker_binary = hyprland-preview-share-picker|    custom_picker_binary = quattro-share-picker|' "$HOME/.config/hypr/xdph.conf"
-  fi
-
   # Seed ~/.bashrc
   cp -a "$PROJECT_DIR/default/bashrc" "$HOME/.bashrc"
 
@@ -321,11 +316,12 @@ EOF
   fi
 
   # Install user systemd units
-  mkdir -p "$HOME/.config/systemd/user/wireplumber.service.d"
+  mkdir -p "$HOME/.config/systemd/user"
   for unit in "$PROJECT_DIR"/default/systemd/user/*.service; do
     cp -a "$unit" "$HOME/.config/systemd/user/"
   done
-  cp -a "$PROJECT_DIR/default/systemd/user/wireplumber.service.d/"*.conf "$HOME/.config/systemd/user/wireplumber.service.d/"
+  rm -f "$HOME/.config/systemd/user/wireplumber.service.d/10-quattro-camera-access.conf" \
+        "$HOME/.config/systemd/user/quattro-speaker-tuning.service"
 
   # Install default mimeapps if user doesn't have one yet
   if [[ ! -f $HOME/.config/mimeapps.list ]]; then
@@ -466,11 +462,10 @@ EOF
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-locale-generate" /usr/bin/quattro-locale-generate
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-apply-lock" /usr/bin/quattro-apply-lock
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-hw-laptop-closed" /usr/bin/quattro-hw-laptop-closed
-  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-windows-vm" /usr/bin/quattro-windows-vm
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/bin/quattro-security-functions" /usr/bin/quattro-security-functions
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/tmpfiles.d/quattro-nopasswd-sudo.conf" /etc/tmpfiles.d/quattro-nopasswd-sudo.conf
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/05-quattro-passwordless-revoke.hook" /usr/share/libalpm/hooks/05-quattro-passwordless-revoke.hook
-  for sudoers_rule in quattro-dns quattro-theme-browser quattro-locale-generate; do
+  for sudoers_rule in quattro-dns quattro-theme-browser quattro-locale-generate quattro-tzupdate; do
     if [[ -f $PROJECT_DIR/etc/sudoers.d/$sudoers_rule ]] && { ! command -v visudo >/dev/null 2>&1 || visudo -cf "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" >/dev/null 2>&1; }; then
       sudo install -Dm440 -o root -g root "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" "/etc/sudoers.d/$sudoers_rule"
     fi
