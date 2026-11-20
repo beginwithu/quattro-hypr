@@ -2,6 +2,8 @@
 
 Minimal [Hyprland](https://hypr.land/) desktop configuration and Quickshell environment for standard Arch Linux.
 
+![showcase.png](showcase.png)
+
 ## Directory layout
 
 - `config/` - user dotfiles (`hypr`, `foot`, `alacritty`, `kitty`, `ghostty`, `btop`, `tmux`, `starship.toml`, etc.)
