@@ -52,8 +52,8 @@ WidgetButton {
       font.family: root.fontFamily
       font.pixelSize: root.fontSize
       color: root.active && root.useActiveColor ? root.activeColor : root.foreground
-      y: (parent.height - height) / 2
-        + (labelMetrics.descent - labelMetrics.ascent + labelMetrics.tightBoundingRect("0").height) / 2
+      y: Math.round((parent.height - height) / 2
+        + Math.round(height / 2 - (Math.round(baselineOffset) + labelMetrics.tightBoundingRect("0").y + labelMetrics.tightBoundingRect("0").height / 2)))
       renderType: Text.NativeRendering
     }
 
