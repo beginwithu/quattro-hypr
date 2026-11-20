@@ -51,8 +51,6 @@ Panel {
   //   "scale"      - the shown display's scale presets.
   //   "resolution" - the resolutions it advertises, when it has more than one
   //                  to offer.
-  //   "refresh"    - the refresh rates its resolution offers, when one is
-  //                  faster than 60Hz.
   //   "mirror"     - Mirror or Extend, when there's a built-in display and an
   //                  external one to mirror it on.
   //   "layout"     - the arrangement of the displays; ctrl+h/j/k/l places
@@ -86,8 +84,6 @@ Panel {
         scales: scales,
         scaleIndex: Model.matchingScaleIndex(scales, display.scale, display.width, display.height),
         resolutions: resolutions.length > 1 ? resolutions : [],
-        refreshes: Model.refreshOptions(display.availableModes, display.width, display.height),
-        refreshRate: Number(display.refreshRate) || 0,
         specs: Model.displaySpecs(display, Commons.I18n.formatNumber)
       })
     }
@@ -238,7 +234,6 @@ Panel {
     list.push("textsize")
     if (current && current.scales.length > 0) list.push("scale")
     if (current && current.resolutions.length > 0) list.push("resolution")
-    if (current && current.refreshes.length > 0) list.push("refresh")
     if (mirrorAvailable) list.push("mirror")
     if (layoutMovable) list.push("layout")
     return list
@@ -248,7 +243,6 @@ Panel {
     if (section === "displays") return segments.length
     if (section === "scale") return current ? current.scales.length : 0
     if (section === "resolution") return current ? current.resolutions.length : 0
-    if (section === "refresh") return current ? current.refreshes.length : 0
     if (section === "mirror") return mirrorModes.length
     if (section === "layout") return 1
     return 0  // sliders: only the sentinel at -1
@@ -293,7 +287,7 @@ Panel {
       var next = Math.max(0, Math.min(segments.length - 1, currentIndex + delta))
       selectDisplay(segments[next].name)
       selectedIndex = next
-    } else if (focusSection === "scale" || focusSection === "resolution" || focusSection === "refresh" || focusSection === "mirror") {
+    } else if (focusSection === "scale" || focusSection === "resolution" || focusSection === "mirror") {
       selectedIndex = Math.max(0, Math.min(sectionCount(focusSection) - 1, selectedIndex + delta))
     }
   }
@@ -308,8 +302,6 @@ Panel {
       setScale(current.name, current.scales[selectedIndex])
     else if (focusSection === "resolution" && selectedIndex >= 0 && selectedIndex < current.resolutions.length)
       setResolution(current.name, current.resolutions[selectedIndex])
-    else if (focusSection === "refresh" && selectedIndex >= 0 && selectedIndex < current.refreshes.length)
-      setResolution(current.name, current.current + "@" + current.refreshes[selectedIndex].rate)
     // The picker, sliders and layout: moving is the action.
   }
 
@@ -1230,68 +1222,6 @@ Panel {
             }
           }
 
-          // ---------- Refresh rate ----------
-          PanelSeparator {
-            visible: root.current !== null && root.current.refreshes.length > 0
-            foreground: root.bar.foreground
-          }
-
-          Column {
-            visible: root.current !== null && root.current.refreshes.length > 0
-            width: parent.width
-            spacing: Style.space(6) + panelColumn.sliderInset
-            bottomPadding: panelColumn.sliderInset
-
-            Item {
-              width: parent.width
-              implicitHeight: Math.max(refreshHeader.implicitHeight, refreshCurrent.implicitHeight)
-
-              PanelSectionHeader {
-                id: refreshHeader
-                text: Commons.I18n.t("monitor.refreshRate")
-                foreground: root.bar.foreground
-                fontFamily: root.bar.fontFamily
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-              }
-
-              Text {
-                id: refreshCurrent
-                textFormat: Text.PlainText
-                text: root.current ? Commons.I18n.formatNumber(Math.round(root.current.refreshRate)) + " Hz" : ""
-                color: Qt.darker(root.bar.foreground, 1.4)
-                font.family: root.bar.fontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                anchors.right: parent.right
-                anchors.rightMargin: Style.space(6)
-                anchors.verticalCenter: parent.verticalCenter
-              }
-            }
-
-            Grid {
-              id: refreshGrid
-              width: parent.width
-              columns: Math.max(1, root.current ? root.current.refreshes.length : 1)
-              spacing: Style.spacing.xs
-
-              readonly property real cellWidth: (width - spacing * (columns - 1)) / columns
-
-              Repeater {
-                model: root.current ? root.current.refreshes : []
-
-                RefreshPill {
-                  required property var modelData
-                  required property int index
-
-                  option: modelData
-                  refreshIndex: index
-                  width: refreshGrid.cellWidth
-                }
-              }
-            }
-          }
-
           // ---------- Layout ----------
           PanelSeparator {
             visible: root.layoutShown
@@ -1476,28 +1406,6 @@ Panel {
 
     onClicked: if (root.current) root.setResolution(root.current.name, resolution)
     onHovered: function(isHovered) { if (isHovered) root.pointAt("resolution", resolutionPill.resolutionIndex) }
-  }
-
-  // A refresh rate at the current resolution, set as that exact mode.
-  component RefreshPill: Button {
-    id: refreshPill
-    required property var option
-    required property int refreshIndex
-
-    text: Commons.I18n.formatNumber(Number(option.label))
-    fontSize: Style.font.caption
-    foreground: root.bar.foreground
-    fontFamily: root.bar.fontFamily
-    horizontalPadding: Style.spacing.sm
-    verticalPadding: Style.spacing.controlPaddingY
-    bordered: true
-
-    active: root.current !== null && Math.round(root.current.refreshRate) === Number(option.label)
-    hasCursor: root.cursorActive && root.focusSection === "refresh" && root.selectedIndex === refreshIndex
-    onHasCursorChanged: if (hasCursor) root.ensureCursorVisible(refreshPill)
-
-    onClicked: if (root.current) root.setResolution(root.current.name, root.current.current + "@" + option.rate)
-    onHovered: function(isHovered) { if (isHovered) root.pointAt("refresh", refreshPill.refreshIndex) }
   }
 
   // Extend puts each display beside the others; Mirror shows the built-in

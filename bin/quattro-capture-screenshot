@@ -60,13 +60,13 @@ else
     title=$(quattro-i18n capture.screenshotSaved 2>/dev/null || echo "Screenshot saved")
   fi
   if command -v quattro-notification-send >/dev/null 2>&1; then
-    body=$(quattro-i18n capture.screenshotEditHint 2>/dev/null || echo "Edit with Super + , (or click this)")
-    edit_label=$(quattro-i18n capture.screenshotEdit 2>/dev/null || echo "Edit")
+    body=$(quattro-i18n capture.screenshotEditHint 2>/dev/null || echo "Open or edit with Super + ,")
     open_label=$(quattro-i18n capture.screenshotOpen 2>/dev/null || echo "Open")
+    edit_label=$(quattro-i18n capture.screenshotEdit 2>/dev/null || echo "Edit")
     quattro-notification-send "$title" "$body" \
       -t 10000 --image "$out_file" \
-      --action "$edit_label" quattro-edit-image \
       --action "$open_label" xdg-open \
+      --action "$edit_label" quattro-edit-image \
       --with "$out_file" || true
   fi
 fi

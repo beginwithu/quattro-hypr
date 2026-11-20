@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # quattro:summary=Write the current theme color into the browser policy directories
-# quattro:args=<rrggbb>
+# quattro:args=<rrggbb|30-hex-palette>
 # quattro:hidden=true
 
 set -euo pipefail
@@ -10,22 +10,25 @@ set -euo pipefail
 # sudoers rule, or re-execed by require_root below — sudo's secure_path decides
 # where a bare helper resolves, and a dev link (etc/sudoers.d/quattro-dev-path)
 # prepends a user-writable checkout bin/ to it. Every helper this script calls
-# by bare name (printf's builtin aside: install, mktemp, rm) is a system tool,
-# never an quattro-* command, so pin PATH to trusted system directories and keep
-# root from resolving one out of that checkout. The unprivileged wrapper phase
-# keeps the caller's PATH so it can still find sudo/pkexec.
+# by bare name (printf's builtin aside: install, mktemp, rm, python3, openssl)
+# is a system tool, never an quattro-* command, so pin PATH to trusted system
+# directories and keep root from resolving one out of that checkout. The
+# unprivileged wrapper phase keeps the caller's PATH so it can still find
+# sudo/pkexec.
 if (( EUID == 0 )); then
   export PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin
 fi
 
-# Enterprise policy trust roots for BrowserThemeColor. Brave is omitted because
-# BrowserThemeColor overrides Chrome theme extensions while leaving Brave's
-# omnibox dropdown unpainted (#202124); Brave uses the generated theme extension.
+# Enterprise policy trust roots for BrowserThemeColor. Brave uses a live-swapped
+# force-installed theme CRX below so both the toolbar and omnibox/dropdown
+# follow the active Quattro palette without restarting Brave.
 POLICY_DIRS=(
   /etc/chromium/policies/managed
   /etc/opt/chrome/policies/managed
   /etc/opt/edge/policies/managed
 )
+BRAVE_POLICY_DIR=/etc/brave/policies/managed
+BRAVE_THEME_DIR=/var/lib/quattro/brave-theme
 
 # The path etc/sudoers.d/quattro-theme-browser names. The privileged half always
 # runs from there rather than from whichever copy was invoked, so the rule
@@ -33,7 +36,7 @@ POLICY_DIRS=(
 PACKAGED_PATH=/usr/bin/quattro-theme-set-browser-policy
 
 usage() {
-  echo "Usage: quattro-theme-set-browser-policy <rrggbb>" >&2
+  echo "Usage: quattro-theme-set-browser-policy <rrggbb|30-hex-palette>" >&2
 }
 
 if (( $# != 1 )); then
@@ -41,16 +44,17 @@ if (( $# != 1 )); then
   exit 1
 fi
 
-color="$1"
+palette="$1"
 
-# Six lowercase hex digits is the whole of what this accepts. The leading "#"
-# is added when the JSON is written rather than passed in: "#" opens a comment
-# in sudoers, and keeping it out of argv lets the sudoers rule spell the
-# argument as a plain six-character glob.
-if [[ ! $color =~ ^[0-9a-f]{6}$ ]]; then
-  echo "quattro-theme-set-browser-policy: expected six lowercase hex digits, got '$color'" >&2
+# Accept either 6 lowercase hex digits (bg) or 30 lowercase hex digits
+# (bg + dark_bg + darker_bg + fg + light_fg). Leading "#" is omitted because
+# "#" opens a comment in sudoers.
+if [[ ! $palette =~ ^([0-9a-f]{6}|[0-9a-f]{30})$ ]]; then
+  echo "quattro-theme-set-browser-policy: expected 6 or 30 lowercase hex digits, got '$palette'" >&2
   exit 1
 fi
+
+color="${palette:0:6}"
 
 # True when sudo would run this exact command without stopping for a password.
 # `sudo -l` on its own reports whether a command is permitted, which the blanket
@@ -72,7 +76,7 @@ require_root() {
   fi
 }
 
-require_root "$color"
+require_root "$palette"
 
 failed=0
 staged=""
@@ -119,5 +123,211 @@ for policy_dir in "${POLICY_DIRS[@]}"; do
   rm -f "$staged"
   staged=""
 done
+
+# Brave live theme: pack a signed CRX3 theme extension into alternating A/B
+# slots under /var/lib/quattro/brave-theme and point ExtensionSettings at the
+# newly packed slot so `brave --refresh-platform-policy` swaps the theme live
+# in every open Brave window (including omnibox & suggestion dropdown).
+if [[ -d $BRAVE_POLICY_DIR && ! -L $BRAVE_POLICY_DIR ]]; then
+  rm -f "$BRAVE_POLICY_DIR/color.json"
+  if ! python3 - "$palette" "$BRAVE_POLICY_DIR" "$BRAVE_THEME_DIR" <<'PY'
+import hashlib
+import io
+import json
+import os
+import struct
+import subprocess
+import sys
+import tempfile
+import zipfile
+
+palette_arg, policy_dir, theme_dir = sys.argv[1:4]
+
+
+def hex_to_rgb(h):
+    return [int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)]
+
+
+def clamp(v):
+    return max(0, min(255, int(round(v))))
+
+
+def shift_rgb(rgb, factor):
+    return [clamp(c * factor) for c in rgb]
+
+
+if len(palette_arg) == 30:
+    bg = hex_to_rgb(palette_arg[0:6])
+    dark_bg = hex_to_rgb(palette_arg[6:12])
+    darker_bg = hex_to_rgb(palette_arg[12:18])
+    fg = hex_to_rgb(palette_arg[18:24])
+    light_fg = hex_to_rgb(palette_arg[24:30])
+else:
+    bg = hex_to_rgb(palette_arg[0:6])
+    lum = 0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]
+    if lum < 128:
+        dark_bg = shift_rgb(bg, 0.78)
+        darker_bg = shift_rgb(bg, 0.62)
+        fg = [228, 228, 232]
+        light_fg = [166, 170, 180]
+    else:
+        dark_bg = shift_rgb(bg, 0.94)
+        darker_bg = shift_rgb(bg, 0.88)
+        fg = [44, 48, 58]
+        light_fg = [92, 96, 112]
+
+os.makedirs(theme_dir, mode=0o755, exist_ok=True)
+os.chmod(theme_dir, 0o755)
+
+
+def ensure_key(path):
+    if not os.path.isfile(path) or os.path.islink(path):
+        fd, tmp = tempfile.mkstemp(dir=theme_dir, prefix=".key.")
+        os.close(fd)
+        try:
+            subprocess.run(
+                ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", tmp],
+                check=True,
+                stderr=subprocess.DEVNULL,
+            )
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, path)
+        except Exception:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+    pub = subprocess.check_output(
+        ["openssl", "pkey", "-in", path, "-pubout", "-outform", "DER"],
+        stderr=subprocess.DEVNULL,
+    )
+    crx_id = hashlib.sha256(pub).digest()[:16]
+    ext_id = crx_id.hex().translate(str.maketrans("0123456789abcdef", "abcdefghijklmnop"))
+    return pub, crx_id, ext_id
+
+
+def varint(n):
+    out = bytearray()
+    while n > 0x7F:
+        out.append((n & 0x7F) | 0x80)
+        n >>= 7
+    out.append(n)
+    return bytes(out)
+
+
+def pb_bytes(field_num, data):
+    return varint((field_num << 3) | 2) + varint(len(data)) + data
+
+
+def atomic_write(path, data, mode=0o644):
+    parent = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=parent, prefix=".tmp.")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+key_a = os.path.join(theme_dir, "slot-a.pem")
+key_b = os.path.join(theme_dir, "slot-b.pem")
+pub_a, crx_id_a, ext_id_a = ensure_key(key_a)
+pub_b, crx_id_b, ext_id_b = ensure_key(key_b)
+
+state_file = os.path.join(theme_dir, "state.json")
+prev_slot = "b"
+seq = 0
+if os.path.isfile(state_file) and not os.path.islink(state_file):
+    try:
+        with open(state_file, "r", encoding="utf-8") as f:
+            st = json.load(f)
+        prev_slot = st.get("slot", "b")
+        seq = int(st.get("seq", 0))
+    except Exception:
+        pass
+
+slot = "a" if prev_slot != "a" else "b"
+seq = (seq % 65000) + 1
+version = f"1.{seq}"
+
+if slot == "a":
+    key_path, pub, crx_id, ext_id = key_a, pub_a, crx_id_a, ext_id_a
+else:
+    key_path, pub, crx_id, ext_id = key_b, pub_b, crx_id_b, ext_id_b
+
+manifest = {
+    "manifest_version": 3,
+    "name": "Quattro Theme",
+    "version": version,
+    "theme": {
+        "colors": {
+            "frame": dark_bg,
+            "frame_inactive": darker_bg,
+            "toolbar": bg,
+            "tab_text": fg,
+            "tab_background_text": light_fg,
+            "bookmark_text": fg,
+            "toolbar_button_icon": fg,
+            "omnibox_background": bg,
+            "omnibox_text": fg,
+            "ntp_background": bg,
+            "ntp_text": fg,
+        }
+    },
+}
+
+zbuf = io.BytesIO()
+with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as zf:
+    zf.writestr("manifest.json", json.dumps(manifest, separators=(",", ":")))
+zbytes = zbuf.getvalue()
+
+signed_data = pb_bytes(1, crx_id)
+to_sign = b"CRX3 SignedData\x00" + struct.pack("<I", len(signed_data)) + signed_data + zbytes
+sig = subprocess.check_output(
+    ["openssl", "dgst", "-sha256", "-sign", key_path],
+    input=to_sign,
+    stderr=subprocess.DEVNULL,
+)
+proof = pb_bytes(1, pub) + pb_bytes(2, sig)
+header = pb_bytes(2, proof) + pb_bytes(10000, signed_data)
+crx_bytes = b"Cr24" + struct.pack("<II", 3, len(header)) + header + zbytes
+
+crx_path = os.path.join(theme_dir, f"theme-{slot}.crx")
+atomic_write(crx_path, crx_bytes, 0o644)
+
+updates_path = os.path.join(theme_dir, "updates.xml")
+updates_xml = (
+    "<?xml version='1.0' encoding='UTF-8'?>\n"
+    "<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>\n"
+    f"  <app appid='{ext_id}'><updatecheck codebase='file://{crx_path}' version='{version}' /></app>\n"
+    "</gupdate>\n"
+).encode("utf-8")
+atomic_write(updates_path, updates_xml, 0o644)
+
+policy_path = os.path.join(policy_dir, "quattro-theme.json")
+policy_data = {
+    "ExtensionSettings": {
+        ext_id: {
+            "installation_mode": "force_installed",
+            "update_url": f"file://{updates_path}",
+        }
+    }
+}
+atomic_write(policy_path, (json.dumps(policy_data, indent=2) + "\n").encode("utf-8"), 0o644)
+atomic_write(
+    state_file,
+    (json.dumps({"slot": slot, "seq": seq, "palette": palette_arg}) + "\n").encode("utf-8"),
+    0o644,
+)
+atomic_write(os.path.join(theme_dir, "palette"), (palette_arg + "\n").encode("utf-8"), 0o644)
+PY
+  then
+    echo "quattro-theme-set-browser-policy: failed to update Brave live theme policy" >&2
+    failed=1
+  fi
+fi
 
 exit "$failed"

@@ -207,17 +207,13 @@ install_user_configs() {
     fi
   done
 
-  # Resolve __QUATTRO_PATH__ and __STATE_HOME__ in Chromium-family browser flags
-  local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+  # Resolve __QUATTRO_PATH__ in Chromium-family browser flags
   for flags_file in \
     "$HOME/.config/brave-origin-flags.conf" \
     "$HOME/.config/chrome-flags.conf" \
     "$HOME/.config/chromium-flags.conf"; do
     if [[ -f $flags_file ]]; then
-      sed -i \
-        -e "s|__QUATTRO_PATH__|$INSTALL_DIR|g" \
-        -e "s|__STATE_HOME__|$state_home|g" \
-        "$flags_file"
+      sed -i "s|__QUATTRO_PATH__|$INSTALL_DIR|g" "$flags_file"
     fi
   done
 
@@ -480,11 +476,12 @@ EOF
   done
 
   # Seed managed browser policy for Brave (prevents Brave from hijacking mimeapps.list;
-  # remove stale color.json so Brave uses the generated theme extension for full omnibox theming)
+  # remove stale color.json and seed live CRX theme policy for full omnibox theming)
   if command -v brave-origin >/dev/null 2>&1 || command -v brave >/dev/null 2>&1; then
     sudo install -d -m 0755 -o root -g root /etc/brave /etc/brave/policies /etc/brave/policies/managed
     sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/chromium/policies/quattro.json" /etc/brave/policies/managed/quattro.json
     sudo rm -f /etc/brave/policies/managed/color.json
+    QUATTRO_PATH="$INSTALL_DIR" PATH="$BIN_LINK_DIR:$INSTALL_DIR/bin:$PATH" "$INSTALL_DIR/bin/quattro-theme-set-browser" || true
   fi
 
   # Ensure Quickshell lock screen PAM config (/etc/pam.d/quattro-lock-password) is installed
