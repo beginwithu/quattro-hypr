@@ -118,8 +118,8 @@
   "appearance.workspace-layout.dwindle": {"icon":"󱓻","label":"Tiling","checked":"[[ $(quattro-hyprland-workspace-layout-default) == \"dwindle\" ]]","action":"quattro-hyprland-workspace-layout-default dwindle"},
   "appearance.workspace-layout.scrolling": {"icon":"󰝥","label":"Scrolling","checked":"[[ $(quattro-hyprland-workspace-layout-default) == \"scrolling\" ]]","action":"quattro-hyprland-workspace-layout-default scrolling"},
   "appearance.workspace-layout.floating": {"icon":"󰔶","label":"Floating","checked":"[[ $(quattro-hyprland-workspace-layout-default) == \"floating\" ]]","action":"quattro-hyprland-workspace-layout-default floating"},
-  "appearance.animations-on": {"icon":"󰗘","label":"Animations On","when":"quattro-hyprland-animations-off","action":"quattro-toggle-animations"},
-  "appearance.animations-off": {"icon":"󰗘","label":"Animations Off","when":"! quattro-hyprland-animations-off","action":"quattro-toggle-animations"},
+  "appearance.animations-on": {"icon":"󰗘","label":"Animations On","when":"! quattro-hyprland-animations-off","action":"quattro-toggle-animations"},
+  "appearance.animations-off": {"icon":"󰗘","label":"Animations Off","when":"quattro-hyprland-animations-off","action":"quattro-toggle-animations"},
 
   // Trigger
   "trigger.toggle": {"icon":"󰔎","label":"Toggle","aliases":["toggle","toggles"]},
