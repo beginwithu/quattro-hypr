@@ -18,14 +18,13 @@ if (( EUID == 0 )); then
   export PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin
 fi
 
-# Enterprise policy trust roots for BrowserThemeColor. Brave is omitted because
-# BrowserThemeColor overrides Chrome theme extensions while leaving Brave's
-# omnibox dropdown unpainted (#202124); Brave uses the local --load-extension
-# theme synced by quattro-theme-set-browser.
+# Enterprise policy trust roots. The list is fixed here rather than taken from
+# the caller: the caller chooses a color, never a path.
 POLICY_DIRS=(
   /etc/chromium/policies/managed
   /etc/opt/chrome/policies/managed
   /etc/opt/edge/policies/managed
+  /etc/brave/policies/managed
 )
 BRAVE_POLICY_DIR=/etc/brave/policies/managed
 BRAVE_THEME_DIR=/var/lib/quattro/brave-theme
@@ -121,10 +120,10 @@ for policy_dir in "${POLICY_DIRS[@]}"; do
   staged=""
 done
 
-# Clean up any legacy Brave theme policy/CRX artifacts so Brave uses the local
-# --load-extension theme without triggering "Installed theme" infobars.
+# Clean up any legacy Brave CRX theme policy artifacts so BrowserThemeColor
+# takes effect cleanly without triggering "Installed theme" infobars.
 if [[ -d $BRAVE_POLICY_DIR && ! -L $BRAVE_POLICY_DIR ]]; then
-  rm -f -- "$BRAVE_POLICY_DIR/color.json" "$BRAVE_POLICY_DIR/quattro-theme.json" || failed=1
+  rm -f -- "$BRAVE_POLICY_DIR/quattro-theme.json" || failed=1
 fi
 if [[ -d $BRAVE_THEME_DIR && ! -L $BRAVE_THEME_DIR ]]; then
   rm -rf -- "$BRAVE_THEME_DIR" || failed=1
