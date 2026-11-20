@@ -25,18 +25,45 @@ if [[ -n $background ]]; then
   foot_osc+=$(printf '\033]11;[%d]%s\007' "$percent" "$background")
 fi
 
+shopt -s nullglob
+declare -A seen_ttys=()
+
 for foot_pid in $foot_pids; do
-  children="/proc/$foot_pid/task/$foot_pid/children"
-  if [[ -e $children ]]; then
-    { child_pids=$(<"$children"); } 2>/dev/null || continue
-  else
-    # A kernel built without CONFIG_PROC_CHILDREN keeps no such list.
-    child_pids=$(pgrep -P "$foot_pid")
-  fi
-  for child_pid in $child_pids; do
-    tty=$(readlink "/proc/$child_pid/fd/1" 2>/dev/null)
-    if [[ $tty == /dev/pts/* && -w $tty ]]; then
-      printf '%b' "$foot_osc" >"$tty" 2>/dev/null || true
+  found_pty=0
+  # Read the PTY index directly from foot's own /dev/ptmx master fds.
+  # Privileged or file-capability children (like btop with cap_perfmon) set
+  # PR_SET_DUMPABLE=0 and make /proc/<child>/fd/1 unreadable, whereas foot's
+  # own fdinfo is always readable and works for both standalone foot and
+  # foot --server.
+  for fd_link in "/proc/$foot_pid/fd"/*; do
+    [[ $(readlink "$fd_link" 2>/dev/null) == "/dev/ptmx" ]] || continue
+    fd_num=${fd_link##*/}
+    tty_index=$(awk '/^tty-index:[[:space:]]*/ { print $2; exit }' "/proc/$foot_pid/fdinfo/$fd_num" 2>/dev/null)
+    if [[ $tty_index =~ ^[0-9]+$ ]]; then
+      tty="/dev/pts/$tty_index"
+      found_pty=1
+      if [[ -z ${seen_ttys[$tty]:-} && -w $tty ]]; then
+        seen_ttys[$tty]=1
+        printf '%s' "$foot_osc" >"$tty" 2>/dev/null || true
+      fi
     fi
   done
+
+  # Fallback for kernels whose /proc/<pid>/fdinfo lacks tty-index.
+  if (( found_pty == 0 )); then
+    children="/proc/$foot_pid/task/$foot_pid/children"
+    if [[ -e $children ]]; then
+      { child_pids=$(<"$children"); } 2>/dev/null || continue
+    else
+      # A kernel built without CONFIG_PROC_CHILDREN keeps no such list.
+      child_pids=$(pgrep -P "$foot_pid")
+    fi
+    for child_pid in $child_pids; do
+      tty=$(readlink "/proc/$child_pid/fd/1" 2>/dev/null)
+      if [[ $tty == /dev/pts/* && -z ${seen_ttys[$tty]:-} && -w $tty ]]; then
+        seen_ttys[$tty]=1
+        printf '%s' "$foot_osc" >"$tty" 2>/dev/null || true
+      fi
+    done
+  fi
 done

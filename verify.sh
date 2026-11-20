@@ -128,6 +128,8 @@ expected_files=(
   "$tmp_home/.local/state/quattro/current/theme/gtk.css"
   "$tmp_home/.config/gtk-4.0/gtk.css"
   "$tmp_home/.local/state/quattro/current/icons/org.gnome.Nautilus.svg"
+  "$tmp_home/.local/share/icons/Quattro/scalable/places/folder.svg"
+  "$tmp_home/.local/share/icons/Quattro-alt/scalable/places/folder.svg"
 )
 
 missing_deployed=0

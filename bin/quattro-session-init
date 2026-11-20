@@ -35,9 +35,13 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 if command -v gsettings >/dev/null 2>&1; then
-  gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark" >/dev/null 2>&1 || true
-  gsettings set org.gnome.desktop.interface color-scheme "prefer-dark" >/dev/null 2>&1 || true
-  gsettings set org.gnome.desktop.interface icon-theme "Adwaita" >/dev/null 2>&1 || true
+  if command -v quattro-theme-set-gnome >/dev/null 2>&1; then
+    quattro-theme-set-gnome >/dev/null 2>&1 || true
+  else
+    gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark" >/dev/null 2>&1 || true
+    gsettings set org.gnome.desktop.interface color-scheme "prefer-dark" >/dev/null 2>&1 || true
+    gsettings set org.gnome.desktop.interface icon-theme "Adwaita" >/dev/null 2>&1 || true
+  fi
   gsettings set org.gnome.desktop.interface gtk-enable-primary-paste true >/dev/null 2>&1 || true
 fi
 

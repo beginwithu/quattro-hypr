@@ -6,8 +6,12 @@
 set -euo pipefail
 
 config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
 icon_theme="Adwaita"
+if [[ -f "$data_home/icons/Quattro/index.theme" ]]; then
+  icon_theme="Quattro"
+fi
 
 qt6ct_colors="$state_home/quattro/current/theme/qt6ct.colors"
 qt6ct_conf="$config_home/qt6ct/qt6ct.conf"

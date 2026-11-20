@@ -3,7 +3,9 @@
 # quattro:summary=Apply the current theme to GNOME color mode, icons, and GTK4/GTK3 CSS
 # quattro:hidden=true
 
-THEME_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/current/theme"
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+THEME_DIR="$STATE_HOME/quattro/current/theme"
 COLORS_FILE="$THEME_DIR/colors.toml"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 
@@ -35,18 +37,217 @@ sync_gtk_css() {
   mv -f "$tmp" "$gtk_css"
 }
 
+# Build a lightweight user icon theme inheriting Adwaita with folder SVGs
+# recolored to the active theme's accent. Two symlinks (Quattro / Quattro-alt)
+# point at the same atomically swapped target so toggling gsettings icon-theme
+# forces running GTK4/Nautilus windows to reload folder icons live without
+# flashing back to blue Adwaita icons.
+sync_folder_icons() {
+  local mode="$1"
+  local accent
+
+  [[ -f $COLORS_FILE ]] || return 0
+  accent=$(quattro-theme-color --file "$COLORS_FILE" folder_color 2>/dev/null || true)
+  if [[ ! $accent =~ ^#[0-9A-Fa-f]{6}$ ]]; then
+    accent=$(quattro-theme-color --file "$COLORS_FILE" accent 2>/dev/null || true)
+  fi
+  [[ $accent =~ ^#[0-9A-Fa-f]{6}$ ]] || return 0
+
+  python3 - "$accent" "$mode" "$STATE_HOME/quattro/current" "$DATA_HOME/icons" <<'PY'
+import colorsys
+import os
+import re
+import shutil
+import sys
+import tempfile
+
+accent, mode, current_dir, icons_dir = sys.argv[1:5]
+adwaita_dir = "/usr/share/icons/Adwaita/scalable"
+
+if not os.path.isdir(adwaita_dir):
+    sys.exit(0)
+
+def hex_to_hls(h):
+    h = h.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    return colorsys.rgb_to_hls(r, g, b)
+
+def hls_to_hex(H, L, S):
+    L = max(0.0, min(1.0, L))
+    S = max(0.0, min(1.0, S))
+    r, g, b = colorsys.hls_to_rgb(H % 1.0, L, S)
+    return f"#{int(round(r * 255)):02x}{int(round(g * 255)):02x}{int(round(b * 255)):02x}"
+
+def gnome_accent_name(H, S):
+    if S < 0.16:
+        return "slate"
+    deg = (H * 360.0) % 360.0
+    if deg < 18 or deg >= 342:
+        return "red"
+    if deg < 42:
+        return "orange"
+    if deg < 72:
+        return "yellow"
+    if deg < 155:
+        return "green"
+    if deg < 195:
+        return "teal"
+    if deg < 252:
+        return "blue"
+    if deg < 305:
+        return "purple"
+    return "pink"
+
+H, L, S = hex_to_hls(accent)
+max_front_l = 0.72 if mode == "light" else 0.78
+front_l = max(0.56, min(max_front_l, L + 0.08))
+back_l = max(0.26, front_l - 0.20)
+lip_l = max(0.34, front_l - 0.12)
+hi1_l = min(0.92, front_l + 0.08)
+hi2_l = min(0.90, front_l + 0.06)
+
+base_s = min(S, 0.78) if S > 0.05 else S
+back_s = min(0.82, base_s * 1.04) if S > 0.05 else S
+front_s = base_s * 0.90 if S > 0.05 else S
+hi1_s = min(0.88, base_s * 1.05) if S > 0.05 else S
+hi2_s = base_s * 0.72 if S > 0.05 else S
+
+# Adwaita's five folder palette colors:
+#   #438de6 = back tab & emblem glyph
+#   #62a0ea = front bottom lip base
+#   #a4caee = front face
+#   #afd4ff = left specular highlight
+#   #c0d5ea = right specular highlight
+color_map = {
+    "#438de6": hls_to_hex(H, back_l, back_s),
+    "#62a0ea": hls_to_hex(H, lip_l, base_s),
+    "#a4caee": hls_to_hex(H, front_l, front_s),
+    "#afd4ff": hls_to_hex(H, hi1_l, hi1_s),
+    "#c0d5ea": hls_to_hex(H, hi2_l, hi2_s),
+}
+pattern = re.compile("|".join(re.escape(k) for k in color_map), re.IGNORECASE)
+
+slots_dir = os.path.join(current_dir, "icon-theme-slots")
+os.makedirs(slots_dir, exist_ok=True)
+slot = tempfile.mkdtemp(prefix="slot-", dir=slots_dir)
+os.chmod(slot, 0o755)
+
+try:
+    written = 0
+    for subdir in ("places", "status", "mimetypes"):
+        src_dir = os.path.join(adwaita_dir, subdir)
+        if not os.path.isdir(src_dir):
+            continue
+        dst_dir = os.path.join(slot, "scalable", subdir)
+        for name in os.listdir(src_dir):
+            if not name.endswith(".svg"):
+                continue
+            src_path = os.path.join(src_dir, name)
+            try:
+                with open(src_path, "r", encoding="utf-8") as fh:
+                    svg = fh.read()
+            except OSError:
+                continue
+            if "#438de6" not in svg.lower():
+                continue
+            os.makedirs(dst_dir, exist_ok=True)
+            recolored = pattern.sub(lambda m: color_map[m.group(0).lower()], svg)
+            with open(os.path.join(dst_dir, name), "w", encoding="utf-8") as fh:
+                fh.write(recolored)
+            written += 1
+
+    if written == 0:
+        shutil.rmtree(slot, ignore_errors=True)
+        sys.exit(0)
+
+    places_dir = os.path.join(slot, "scalable", "places")
+    if os.path.isfile(os.path.join(places_dir, "user-bookmarks.svg")):
+        bookmark_alias = os.path.join(places_dir, "folder-bookmarks.svg")
+        if not os.path.exists(bookmark_alias):
+            os.symlink("user-bookmarks.svg", bookmark_alias)
+
+    index_theme = """[Icon Theme]
+Name=Quattro
+Comment=Dynamic Quattro theme folder icons
+Inherits=Adwaita,AdwaitaLegacy,hicolor
+Hidden=true
+Directories=scalable/places,scalable/status,scalable/mimetypes
+
+[scalable/places]
+Context=Places
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/status]
+Context=Status
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/mimetypes]
+Context=MimeTypes
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+"""
+    with open(os.path.join(slot, "index.theme"), "w", encoding="utf-8") as fh:
+        fh.write(index_theme)
+
+    os.makedirs(icons_dir, exist_ok=True)
+    current_link = os.path.join(current_dir, "icon-theme")
+    tmp_link = f"{current_link}.tmp.{os.getpid()}"
+    os.symlink(slot, tmp_link)
+    os.replace(tmp_link, current_link)
+
+    for theme_name in ("Quattro", "Quattro-alt"):
+        link_path = os.path.join(icons_dir, theme_name)
+        if os.path.islink(link_path) or not os.path.exists(link_path):
+            tmp_theme_link = f"{link_path}.tmp.{os.getpid()}"
+            os.symlink(current_link, tmp_theme_link)
+            os.replace(tmp_theme_link, link_path)
+
+    # Keep the active slot and one previous slot so concurrent readers never hit
+    # a removed file during a theme switch.
+    entries = []
+    for entry in os.listdir(slots_dir):
+        full = os.path.join(slots_dir, entry)
+        if os.path.isdir(full) and not os.path.islink(full):
+            try:
+                entries.append((os.path.getmtime(full), full))
+            except OSError:
+                pass
+    entries.sort(reverse=True)
+    keep = {slot}
+    for _, path in entries[:2]:
+        keep.add(path)
+    for _, path in entries:
+        if path not in keep:
+            shutil.rmtree(path, ignore_errors=True)
+
+    print(gnome_accent_name(H, S))
+except Exception:
+    shutil.rmtree(slot, ignore_errors=True)
+    raise
+PY
+}
+
+# quattro-theme-color resolves mode from colors.toml (`mode = "light"`), a
+# legacy light.mode marker beside it, or background luminance for user themes.
+mode=$(quattro-theme-color --file "$COLORS_FILE" mode)
+
 sync_gtk_css "$CONFIG_HOME/gtk-4.0/gtk.css"
 sync_gtk_css "$CONFIG_HOME/gtk-3.0/gtk.css"
+gnome_accent=$(sync_folder_icons "$mode" || true)
 
 # gsettings needs a user DBus session. During headless/chroot installs, defer
 # until the user has a real session instead of emitting dconf warnings.
 if [[ -z ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
   exit 0
 fi
-
-# quattro-theme-color resolves mode from colors.toml (`mode = "light"`), a
-# legacy light.mode marker beside it, or background luminance for user themes.
-mode=$(quattro-theme-color --file "$COLORS_FILE" mode)
 
 if [[ $mode == "light" ]]; then
   gsettings set org.gnome.desktop.interface color-scheme "prefer-light"
@@ -56,5 +257,17 @@ else
   gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark"
 fi
 
-# Every theme uses the Adwaita icons, which GTK brings along.
-gsettings set org.gnome.desktop.interface icon-theme "Adwaita"
+if [[ -n $gnome_accent ]]; then
+  gsettings set org.gnome.desktop.interface accent-color "$gnome_accent" >/dev/null 2>&1 || true
+fi
+
+if [[ -f "$DATA_HOME/icons/Quattro/index.theme" ]]; then
+  current_icon_theme=$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null || true)
+  if [[ $current_icon_theme == "'Quattro'" ]]; then
+    gsettings set org.gnome.desktop.interface icon-theme "Quattro-alt"
+  else
+    gsettings set org.gnome.desktop.interface icon-theme "Quattro"
+  fi
+else
+  gsettings set org.gnome.desktop.interface icon-theme "Adwaita"
+fi

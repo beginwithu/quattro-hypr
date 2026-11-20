@@ -18,6 +18,11 @@ export QUATTRO_PATH
 # against a half-written tree, and that failed reload leaves a second engine
 # generation behind that turns the next restart's IPC kill into a crash.
 run_shell() {
+  # Raise the soft file-descriptor limit from the 1024 default so NVIDIA/Wayland
+  # sync_file fences and icon/inotify watchers cannot exhaust FDs during rapid
+  # theme switches and freeze the shell.
+  ulimit -Sn 65536 2>/dev/null || ulimit -Sn 16384 2>/dev/null || true
+
   local startup_background
   startup_background=$(readlink -f "$HOME/.local/state/quattro/current/background" 2>/dev/null)
   QUATTRO_STARTUP_BACKGROUND="$startup_background" QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
