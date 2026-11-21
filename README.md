@@ -1,6 +1,6 @@
 # quattro-hypr
 
-Minimal [Hyprland](https://hypr.land/) desktop configuration and Quickshell environment for standard Arch Linux.
+Minimal [Hyprland](https://hypr.land/) desktop configuration and Quickshell environment for Arch Linux.
 
 ![showcase.png](showcase.png)
 
