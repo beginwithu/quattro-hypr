@@ -29,14 +29,130 @@ Item {
     if (f.length > 0) return f
     return "QUATTRO"
   }
+  readonly property var blockArt: parseBlockArt(artText)
 
   property var palette: [Commons.Color.accent, Commons.Color.foreground]
   property string clockTime: ""
   property string clockDate: ""
 
   function trimArt(raw) {
-    var s = String(raw || "").replace(/\r\n/g, "\n").replace(/^\n+|\n+$/g, "")
+    var s = String(raw || "").replace(/\r\n?/g, "\n").replace(/^\n+|\n+$/g, "")
     return s
+  }
+
+  // Parse pure Unicode block-element art (e.g. icon.txt / logo.txt / block-mode
+  // transcoded images) into merged grid rectangles so it can be painted as a
+  // single solid vector path without font-glyph subpixel seams between blocks.
+  function parseBlockArt(text) {
+    var s = String(text || "")
+    if (s.length === 0) return null
+    var rawLines = s.split("\n")
+    if (rawLines.length === 0) return null
+
+    // 2x2 sub-pixel bitmask per character cell:
+    // bit 0 = top-left, bit 1 = top-right, bit 2 = bottom-left, bit 3 = bottom-right
+    var masks = {
+      " ": 0,
+      "▘": 1, "▝": 2, "▀": 3,
+      "▖": 4, "▌": 5, "▞": 6, "▛": 7,
+      "▗": 8, "▚": 9, "▐": 10, "▜": 11,
+      "▄": 12, "▙": 13, "▟": 14, "█": 15
+    }
+
+    var lines = []
+    var minIndent = -1
+    var hasFilled = false
+    var usesHalfCol = false
+
+    for (var r = 0; r < rawLines.length; r++) {
+      var line = rawLines[r].replace(/ +$/, "")
+      lines.push(line)
+      var firstNonSpace = -1
+      for (var c = 0; c < line.length; c++) {
+        var m = masks[line.charAt(c)]
+        if (m === undefined) return null
+        if (m !== 0) {
+          hasFilled = true
+          if (firstNonSpace < 0) firstNonSpace = c
+          if (((m & 1) !== ((m >> 1) & 1)) || (((m >> 2) & 1) !== ((m >> 3) & 1))) {
+            usesHalfCol = true
+          }
+        }
+      }
+      if (firstNonSpace >= 0 && (minIndent < 0 || firstNonSpace < minIndent)) {
+        minIndent = firstNonSpace
+      }
+    }
+
+    if (!hasFilled) return null
+    if (minIndent < 0) minIndent = 0
+
+    var maxCols = 0
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].length > minIndent ? lines[i].slice(minIndent) : ""
+      lines[i] = trimmed
+      if (trimmed.length > maxCols) maxCols = trimmed.length
+    }
+    if (maxCols === 0) return null
+
+    var colMult = usesHalfCol ? 2 : 1
+    var gridW = maxCols * colMult
+    var gridH = lines.length * 2
+
+    var rects = []
+    var prevRuns = ({})
+
+    for (var lr = 0; lr < lines.length; lr++) {
+      var rowStr = lines[lr]
+      for (var half = 0; half < 2; half++) {
+        var gy = lr * 2 + half
+        var curRuns = ({})
+        var runStart = -1
+
+        for (var gx = 0; gx <= gridW; gx++) {
+          var filled = false
+          if (gx < gridW) {
+            var chIdx = usesHalfCol ? (gx >> 1) : gx
+            if (chIdx < rowStr.length) {
+              var mask = masks[rowStr.charAt(chIdx)]
+              if (usesHalfCol) {
+                var bit = half * 2 + (gx & 1)
+                filled = ((mask >> bit) & 1) !== 0
+              } else {
+                filled = half === 0 ? ((mask & 1) !== 0) : ((mask & 4) !== 0)
+              }
+            }
+          }
+
+          if (filled) {
+            if (runStart < 0) runStart = gx
+          } else if (runStart >= 0) {
+            var runW = gx - runStart
+            var key = runStart + ":" + runW
+            var prev = prevRuns[key]
+            if (prev) {
+              prev.h += 1
+              curRuns[key] = prev
+            } else {
+              var rect = { x: runStart, y: gy, w: runW, h: 1 }
+              rects.push(rect)
+              curRuns[key] = rect
+            }
+            runStart = -1
+          }
+        }
+        prevRuns = curRuns
+      }
+    }
+
+    return {
+      cols: maxCols,
+      rows: lines.length,
+      gridW: gridW,
+      gridH: gridH,
+      colMult: colMult,
+      rects: rects
+    }
   }
 
   function parsePalette(raw) {
@@ -188,7 +304,7 @@ Item {
           radius: width / 2
           x: artContainer.x + artContainer.width / 2 - width / 2
           y: artContainer.y + artContainer.height / 2 - height / 2
-          color: artContainer.currentColor
+          color: artContainer.displayColor
           opacity: 0.06
         }
 
@@ -269,6 +385,31 @@ Item {
               ? root.palette[canvas.colorIndex % root.palette.length]
               : Commons.Color.accent
 
+            property color displayColor: currentColor
+            Behavior on displayColor {
+              ColorAnimation { duration: Style.duration(450); easing.type: Easing.Bezier; easing.bezierCurve: Style.easeOut }
+            }
+            onDisplayColorChanged: if (artCanvas.visible) artCanvas.requestPaint()
+
+            readonly property int blockBaseCell: {
+              var art = root.blockArt
+              if (!art || canvas.width <= 0 || canvas.height <= 0) return 0
+              var maxW = canvas.width * 0.55
+              var maxH = canvas.height * 0.55
+              var preferred = Style.space(13)
+              var raw = Math.min(preferred, maxW / art.cols, maxH / art.gridH)
+              if (art.colMult === 2) {
+                return Math.max(1, Math.floor(raw / 2)) * 2
+              }
+              return Math.max(1, Math.floor(raw))
+            }
+            readonly property int blockCellW: {
+              var art = root.blockArt
+              if (!art || blockBaseCell <= 0) return 0
+              return art.colMult === 2 ? Math.round(blockBaseCell / 2) : blockBaseCell
+            }
+            readonly property int blockCellH: blockBaseCell
+
             readonly property real fitScale: {
               if (artTextItem.implicitWidth <= 0 || artTextItem.implicitHeight <= 0 || canvas.width <= 0 || canvas.height <= 0)
                 return 1.0
@@ -277,13 +418,52 @@ Item {
               return Math.min(1.2, maxW / artTextItem.implicitWidth, maxH / artTextItem.implicitHeight)
             }
 
-            width: Math.max(1, Math.round(artTextItem.implicitWidth * fitScale))
-            height: Math.max(1, Math.round(artTextItem.implicitHeight * fitScale))
+            width: root.blockArt
+              ? Math.max(1, root.blockArt.gridW * blockCellW)
+              : Math.max(1, Math.round(artTextItem.implicitWidth * fitScale))
+            height: root.blockArt
+              ? Math.max(1, root.blockArt.gridH * blockCellH)
+              : Math.max(1, Math.round(artTextItem.implicitHeight * fitScale))
             x: Style.reduceMotion ? Math.round((canvas.width - width) / 2) : Math.round(canvas.posX)
             y: Style.reduceMotion ? Math.round((canvas.height - height) / 2) : Math.round(canvas.posY)
 
+            Canvas {
+              id: artCanvas
+              visible: win.visible && root.blockArt !== null
+              anchors.fill: parent
+              antialiasing: false
+              renderStrategy: Canvas.Cooperative
+
+              readonly property var artData: root.blockArt
+              onArtDataChanged: if (visible) requestPaint()
+              onAvailableChanged: if (available && visible) requestPaint()
+              onVisibleChanged: if (visible) requestPaint()
+              onWidthChanged: if (visible) requestPaint()
+              onHeightChanged: if (visible) requestPaint()
+
+              onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                ctx.clearRect(0, 0, width, height)
+                var art = artData
+                if (!art || width <= 0 || height <= 0) return
+                var cw = artContainer.blockCellW
+                var ch = artContainer.blockCellH
+                if (cw <= 0 || ch <= 0) return
+                ctx.fillStyle = artContainer.displayColor
+                ctx.beginPath()
+                var rects = art.rects
+                for (var i = 0; i < rects.length; i++) {
+                  var r = rects[i]
+                  ctx.rect(r.x * cw, r.y * ch, r.w * cw, r.h * ch)
+                }
+                ctx.fill()
+              }
+            }
+
             Text {
               id: artTextItem
+              visible: root.blockArt === null
               anchors.centerIn: parent
               scale: artContainer.fitScale
               textFormat: Text.PlainText
@@ -292,11 +472,7 @@ Item {
               font.pixelSize: Style.space(18)
               font.bold: true
               lineHeight: 0.95
-              color: artContainer.currentColor
-
-              Behavior on color {
-                ColorAnimation { duration: Style.duration(450); easing.type: Easing.Bezier; easing.bezierCurve: Style.easeOut }
-              }
+              color: artContainer.displayColor
             }
           }
         }
