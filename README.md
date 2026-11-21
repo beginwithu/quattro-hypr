@@ -1,7 +1,7 @@
 # quattro-hypr
 
 Minimal [Hyprland](https://hypr.land/) desktop configuration and Quickshell environment for Arch Linux. 
->(it's an omarchy shell but  without the bloated,ai,or sum)
+>(it's an omarchy shell but  without the bloated)
 
 ![showcase.png](showcase.png)
 
