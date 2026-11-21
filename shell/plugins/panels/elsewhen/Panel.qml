@@ -127,8 +127,8 @@ Panel {
   readonly property bool zoomIdle: zoom === 0 || zoom === 1
   readonly property real bigGlobeOpacity: Util.clamp(zoom / 0.12, 0, 1)
   readonly property real globeStageHeight: Style.space(378)
-  // Far enough for the top row to fall past the whole list.
-  readonly property real knockFall: (listWrap ? listWrap.implicitHeight : 0) + Style.space(220)
+  // Far enough for the top row (even tilted) to fall past the full globe stage.
+  readonly property real knockFall: Math.max(listWrap ? listWrap.implicitHeight : 0, globeStageHeight) + Style.space(240)
 
   // Shift-click the globe to run the transition at a third of the speed.
   readonly property int slowMotionFactor: 3
@@ -1187,6 +1187,9 @@ Panel {
                 y: Style.space(12)
                 width: stage.width
                 spacing: Style.spacing.panelGap
+                // Fade knocked rows out as they fall past the bottom, before the
+                // globe footer and jump bar arrive, so no tilted corner lingers.
+                opacity: Util.clamp((0.78 - root.zoom) / 0.28, 0, 1)
 
                 Column {
                   visible: root.zoom < 1
