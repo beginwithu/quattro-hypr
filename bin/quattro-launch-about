@@ -19,21 +19,14 @@ QUATTRO_FASTFETCH_DIR=/etc/fastfetch
 # copy, so the untranslated config runs as it is.
 ABOUT_CONFIG=${XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/quattro/about-fastfetch.jsonc}
 
-# The logo block in the fastfetch config. The fit below reproduces this layout to
-# size the window, and the sheen has to repaint the very cells fastfetch drew the
-# logo on, so both read the padding from here.
-LOGO_PAD_LEFT=2
-LOGO_PAD_TOP=2
-LOGO_PAD_RIGHT=6
-
-# The content is measured once and then goes on living: an uptime that turns
-# minutes into hours and hours into days, a version string that grows, a module
-# that shows up on the next boot. A window fitted to exactly what was measured
-# has nowhere to put any of it, and the layout clips or scrolls the moment it
-# grows — which is also the moment the logo stops being where it was drawn. Keep
-# a little in hand rather than measure again every time something ticks over.
-FIT_SPARE_COLUMNS=2
-FIT_SPARE_ROWS=1
+# Right padding mirrors the rendered left margin (clamped to this range) so the
+# window hugs the content symmetrically on both stock and custom fastfetch
+# layouts. The cursor sits one row below fastfetch's trailing break line, which
+# already balances the top break rows without needing extra blank rows at the
+# bottom.
+FIT_MIN_RIGHT_PAD=2
+FIT_MAX_RIGHT_PAD=4
+FIT_SPARE_ROWS=0
 
 POLL_SECONDS=0.5
 
@@ -50,12 +43,11 @@ is_stock_fastfetch_config() {
   return 1
 }
 
-# A user's own fastfetch config can relocate or restyle the logo in ways this
-# measurement cannot see, so leave sizing to the float rule in that case. It can
-# sit in any of several directories fastfetch searches ahead of Quattro's own, so
-# ask fastfetch for that order rather than keep a copy here for its next release
-# to outdate.
-custom_fastfetch_config() {
+# Print the active user fastfetch config path when it differs from Quattro's
+# stock config. It can sit in any of several directories fastfetch searches
+# ahead of Quattro's own, so ask fastfetch for that order rather than keep a
+# copy here for its next release to outdate.
+active_custom_fastfetch_config() {
   local directory candidate listed=false
 
   # A whole line at a time, because a home directory may contain a space, and the
@@ -67,6 +59,7 @@ custom_fastfetch_config() {
     candidate=${directory%/}/config.jsonc
     if [[ -f $candidate ]]; then
       is_stock_fastfetch_config "$candidate" && return 1
+      printf '%s\n' "$candidate"
       return 0
     fi
   done < <(fastfetch --list-config-paths 2>/dev/null)
@@ -74,7 +67,16 @@ custom_fastfetch_config() {
   # Silence is not the same answer as "none of them", so fall back to the
   # directory fastfetch has always looked in first rather than read it as one.
   [[ $listed == true ]] && return 1
-  [[ -f $HOME/.config/fastfetch/config.jsonc ]] && ! is_stock_fastfetch_config "$HOME/.config/fastfetch/config.jsonc"
+  if [[ -f $HOME/.config/fastfetch/config.jsonc ]] && ! is_stock_fastfetch_config "$HOME/.config/fastfetch/config.jsonc"; then
+    printf '%s\n' "$HOME/.config/fastfetch/config.jsonc"
+    return 0
+  fi
+
+  return 1
+}
+
+custom_fastfetch_config() {
+  active_custom_fastfetch_config >/dev/null
 }
 
 # wc -L counts display columns only in a UTF-8 locale. A session that never set
@@ -145,10 +147,32 @@ logo_dimensions() {
   printf '%s %s' "$(display_columns <"$LOGO_FILE")" "$(wc -l <"$LOGO_FILE")"
 }
 
+fit_signature() {
+  local config config_stat logo_w logo_h raw sig
+
+  if config=$(active_custom_fastfetch_config); then
+    config_stat=$(stat -c '%Y:%s' "$config" 2>/dev/null || printf '0:0')
+    raw="v2:custom:$config:$config_stat"
+  else
+    read -r logo_w logo_h <<<"$(logo_dimensions 2>/dev/null || true)"
+    [[ -n ${logo_w:-} ]] || return 1
+    config_stat=$(stat -c '%Y:%s' "$QUATTRO_FASTFETCH_DIR/config.jsonc" 2>/dev/null || printf '0:0')
+    raw="v2:stock:$config_stat:${logo_w}x${logo_h}"
+  fi
+
+  read -r sig _ < <(printf '%s' "$raw" | sha256sum)
+  printf '%s' "$sig"
+}
+
 hypr_dispatch() {
-  local lua="$1"
+  local lua="$1" output status
   shift
-  hyprctl dispatch "$lua" >/dev/null 2>&1 || hyprctl dispatch "$@" >/dev/null
+  output=$(hyprctl dispatch "$lua" 2>&1)
+  status=$?
+  if (( status == 0 )) && [[ -z $output || $output == "ok" ]]; then
+    return 0
+  fi
+  hyprctl dispatch "$@" >/dev/null
 }
 
 remember_fit() {
@@ -156,7 +180,7 @@ remember_fit() {
   directory=$(dirname "$FIT_FILE")
   mkdir -p "$directory"
   tmp=$(mktemp "$directory/.about.fit.XXXXXX")
-  printf '%s %s %s %s\n' "$1" "$2" "$3" "$4" >"$tmp"
+  printf '%s %s %s\n' "$1" "$2" "$3" >"$tmp"
   mv "$tmp" "$FIT_FILE"
 }
 
@@ -172,15 +196,15 @@ apply_size_rule() {
 
 # Sized before the terminal is spawned, so the window maps at its final size.
 presize_window() {
-  local logo_w logo_h fit_logo_w fit_logo_h fit_w fit_h
+  local sig fit_sig fit_w fit_h
 
-  if ! custom_fastfetch_config && [[ -r $FIT_FILE ]]; then
-    read -r logo_w logo_h <<<"$(logo_dimensions)"
-    read -r fit_logo_w fit_logo_h fit_w fit_h <"$FIT_FILE"
+  if [[ -r $FIT_FILE ]]; then
+    sig=$(fit_signature 2>/dev/null || true)
+    read -r fit_sig fit_w fit_h <"$FIT_FILE"
 
-    # A different logo needs a different window, so leave that launch to the
-    # float rule and let the fit measure the new size.
-    if [[ -n ${logo_w:-} && $logo_w == "$fit_logo_w" && $logo_h == "$fit_logo_h" ]] &&
+    # A different config or logo needs a different window, so leave that launch
+    # to the float rule and let fit_window measure the new size.
+    if [[ -n ${sig:-} && $sig == "$fit_sig" ]] &&
       [[ $fit_w =~ ^[0-9]+$ && $fit_h =~ ^[0-9]+$ ]]; then
       apply_size_rule "$fit_w" "$fit_h"
       return
@@ -208,29 +232,17 @@ settle_grid() {
 }
 
 fit_window() {
-  custom_fastfetch_config && return 0
+  local sig
+  sig=$(fit_signature 2>/dev/null || true)
+  [[ -n ${sig:-} ]] || return 1
 
-  local logo_w logo_h
-  read -r logo_w logo_h <<<"$(logo_dimensions)"
-  [[ -n ${logo_w:-} ]] || return 1
-
-  # The guard character keeps command substitution from eating the trailing
-  # break line, which provides the bottom padding row.
-  local modules module_w
-  modules=$(about_fastfetch --logo none | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g'; printf X)
-  modules=${modules%X}
-  module_w=$(printf '%s' "$modules" | display_columns)
-
-  # Ask fastfetch how tall its layout came out rather than predicting it from the
-  # logo and the module column: once the logo is the taller of the two, fastfetch
-  # writes a row more than that arithmetic expects, and a window sized by it
-  # scrolls the top padding away.
   measure_layout || return 1
 
-  # Mirror the logo block in the fastfetch config: 2 columns of padding left of
-  # the logo, 6 between logo and modules. Then 2 columns of right padding to
-  # match, a row for the cursor so the trailing break shows, and the spare above.
-  local target_c=$(( LOGO_PAD_LEFT + logo_w + LOGO_PAD_RIGHT + module_w + LOGO_PAD_LEFT + FIT_SPARE_COLUMNS ))
+  local right_pad=$LAYOUT_LEFT_PAD
+  (( right_pad < FIT_MIN_RIGHT_PAD )) && right_pad=$FIT_MIN_RIGHT_PAD
+  (( right_pad > FIT_MAX_RIGHT_PAD )) && right_pad=$FIT_MAX_RIGHT_PAD
+
+  local target_c=$(( LAYOUT_COLS + right_pad ))
   local target_r=$(( LAYOUT_ROWS + 1 + FIT_SPARE_ROWS ))
 
   local nudges=0 rows cols address width height shift_w shift_h target_w target_h
@@ -243,12 +255,12 @@ fit_window() {
     # A window has to land on the terminal's cell boundaries, so take a cell of
     # slack over chasing an exact grid, and remember where it came to rest.
     if (( cols >= target_c && cols <= target_c + 1 && rows >= target_r && rows <= target_r + 1 )); then
-      remember_fit "$logo_w" "$logo_h" "$width" "$height"
+      remember_fit "$sig" "$width" "$height"
       return 0
     fi
 
-    # Two nudges is the budget, and each one is measured before the next is spent.
-    (( ++nudges <= 2 )) || return 1
+    # Three nudges is the budget, and each one is measured before the next is spent.
+    (( ++nudges <= 3 )) || return 1
 
     # Move by the cells the window is off by, rather than scaling it to the grid,
     # which would multiply up the terminal's padding along with them. Dividing a
@@ -268,21 +280,34 @@ fit_window() {
 }
 
 measure_layout() {
-  [[ -n ${LAYOUT_ROWS:-} ]] && return 0
+  [[ -n ${LAYOUT_ROWS:-} && -n ${LAYOUT_COLS:-} ]] && return 0
 
-  local rendered
-  rendered=$(about_fastfetch --pipe false 2>/dev/null; printf X)
+  local rendered clean
+  # Pipe mode lays out logo, padding, and modules on plain lines so one pass
+  # measures both stock and custom fastfetch configs accurately.
+  rendered=$(about_fastfetch --pipe true 2>/dev/null; printf X)
   rendered=${rendered%X}
-  LAYOUT_ROWS=$(printf '%s' "$rendered" | wc -l)
-  (( LAYOUT_ROWS > 0 ))
+  clean=$(printf '%s' "$rendered" | sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' -e 's/\r//g'; printf X)
+  clean=${clean%X}
+
+  LAYOUT_ROWS=$(printf '%s' "$clean" | wc -l)
+  LAYOUT_COLS=$(printf '%s' "$clean" | display_columns)
+  LAYOUT_LEFT_PAD=$(printf '%s\n' "$clean" | awk '
+    /[^ ]/ {
+      match($0, /^ */)
+      if (min == "" || RLENGTH < min) min = RLENGTH
+    }
+    END { print (min == "" ? 0 : min) }
+  ')
+  (( LAYOUT_ROWS > 0 && LAYOUT_COLS > 0 ))
 }
 
-# What the frames were built against. A window that resized, or a logo that was
-# rebranded, needs fastfetch run again before anything is drawn over it.
+# What the frames were built against. A window that resized, or a logo/config
+# that changed, needs fastfetch run again before anything is drawn over it.
 content_changed() {
   [[ $resized == true ]] && return 0
 
-  [[ $(stty size) != "$grid" || $(stat -c %Y "$LOGO_FILE" 2>/dev/null) != "$logo_stamp" ]]
+  [[ $(stty size) != "$grid" || $(stat -c %Y "$WATCH_FILE" 2>/dev/null) != "$watch_stamp" ]]
 }
 
 # A tick either times out, which is the delay, or a key arrives and About closes.
@@ -295,6 +320,7 @@ tick() {
 if [[ ${1:-} == "--render" ]]; then
   printf '\e[?25l'
   write_about_config
+  WATCH_FILE=$(active_custom_fastfetch_config 2>/dev/null || printf '%s' "$LOGO_FILE")
 
   resized=false
   trap 'resized=true' WINCH
@@ -306,9 +332,11 @@ if [[ ${1:-} == "--render" ]]; then
   passes=0
   while :; do
     grid=$(stty size)
-    logo_stamp=$(stat -c %Y "$LOGO_FILE" 2>/dev/null)
+    watch_stamp=$(stat -c %Y "$WATCH_FILE" 2>/dev/null)
     resized=false
     LAYOUT_ROWS=""
+    LAYOUT_COLS=""
+    LAYOUT_LEFT_PAD=""
     clear
     about_fastfetch
     if [[ $fitted == false ]] && (( ++passes <= 2 )); then
@@ -318,7 +346,7 @@ if [[ ${1:-} == "--render" ]]; then
     while ! content_changed; do
       tick "$POLL_SECONDS"
     done
-    if [[ $(stat -c %Y "$LOGO_FILE" 2>/dev/null) != $logo_stamp ]]; then
+    if [[ $(stat -c %Y "$WATCH_FILE" 2>/dev/null) != $watch_stamp ]]; then
       fitted=false
       passes=0
     fi
