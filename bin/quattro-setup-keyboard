@@ -4,4 +4,7 @@
 
 set -euo pipefail
 
-/usr/bin/python3 "$QUATTRO_PATH/default/input-methods/typing_setup.py" keyboard
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+export QUATTRO_PATH
+
+exec /usr/bin/python3 "$QUATTRO_PATH/default/input-methods/typing_setup.py" keyboard

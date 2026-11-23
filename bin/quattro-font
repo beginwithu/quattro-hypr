@@ -12,11 +12,11 @@ usage() {
 }
 
 font_current() {
-  fc-match monospace -f '%{family}\n' | head -n1 | cut -d, -f1
+  fc-match monospace -f '%{family[0]}\n'
 }
 
 font_list() {
-  fc-list :spacing=100 -f "%{family[0]}\n" | grep -v -i -E 'emoji|signwriting|quattro' | sort -u
+  fc-list :spacing=100 -f "%{family[0]}\n" | { grep -v -i -E 'emoji|signwriting|quattro' || true; } | sort -u
 }
 
 font_set() {
@@ -26,19 +26,28 @@ font_set() {
     exit 1
   fi
 
-  if ! fc-list | grep -Fqi -- "$font_name"; then
+  local installed_fonts
+  installed_fonts=$(fc-list)
+  if ! grep -Fqi -- "$font_name" <<<"$installed_fonts"; then
     echo "Font '$font_name' not found." >&2
     exit 1
   fi
 
-  if [[ -f ~/.config/foot/foot.ini ]]; then
-    local foot_size
-    foot_size="$(sed -n 's/^font=[^,]*:size=\([0-9.]\+\).*/\1/p' ~/.config/foot/foot.ini | head -1)"
+  local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+  local foot_ini="$config_home/foot/foot.ini"
+  if [[ -f $foot_ini ]]; then
+    local foot_size sed_font_name
+    foot_size="$(sed -n 's/^font=[^,]*:size=\([0-9.]\+\).*/\1/p; T; q' "$foot_ini")"
     [[ -n $foot_size ]] || foot_size=9
-    sed -i "s/^font=.*/font=$font_name:size=$foot_size/g" ~/.config/foot/foot.ini
+    sed_font_name=$(printf '%s' "$font_name" | sed 's/[\\&/]/\\&/g')
+    sed -i "s/^font=.*/font=$sed_font_name:size=$foot_size/" "$foot_ini"
   fi
 
-  local fontconfig_file="$HOME/.config/fontconfig/fonts.conf"
+  local fontconfig_file="$config_home/fontconfig/fonts.conf"
+  local xml_font_name
+  xml_font_name="${font_name//&/&amp;}"
+  xml_font_name="${xml_font_name//</&lt;}"
+  xml_font_name="${xml_font_name//>/&gt;}"
   mkdir -p "$(dirname "$fontconfig_file")"
   cat >"$fontconfig_file" <<XML
 <?xml version="1.0"?>
@@ -49,7 +58,7 @@ font_set() {
       <string>monospace</string>
     </test>
     <edit name="family" mode="prepend_first" binding="strong">
-      <string>$font_name</string>
+      <string>$xml_font_name</string>
     </edit>
   </match>
 </fontconfig>
