@@ -4,6 +4,9 @@
 # quattro:group=system
 # quattro:hidden=true
 
+
+set -uo pipefail
+
 consume_sleep_events() {
   local line sleep_lock
   sleep_lock="$QUATTRO_PATH/bin/quattro-system-sleep-lock"

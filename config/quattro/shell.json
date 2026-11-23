@@ -31,12 +31,6 @@
       ],
       "centerEnd": [
         {
-          "id": "quattro.elsewhen"
-        },
-        {
-          "id": "quattro.weather"
-        },
-        {
           "id": "quattro.system-update"
         }
       ],

@@ -4,6 +4,9 @@
 # quattro:args=[-q] <target> <method> [args...]
 # quattro:examples=quattro shell shell ping | quattro-shell shell toggle quattro.menu '{"menu":"root"}'
 
+
+set -uo pipefail
+
 QUIET=0
 if [[ ${1:-} == "-q" ]]; then
   QUIET=1

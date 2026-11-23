@@ -34,6 +34,7 @@ ttf-liberation
 woff2-font-awesome
 
 # Default terminal, browser, file manager
+# Note: brave-origin-bin and yay are provided by the [cachyos] repository configured by install.sh
 brave-origin-bin
 foot
 nautilus
@@ -78,7 +79,6 @@ bluez
 bluez-utils
 brightnessctl
 ddcutil
-fcitx5
 ffmpeg
 ffmpegthumbnailer
 gpu-screen-recorder
@@ -99,7 +99,6 @@ slurp
 tesseract
 tesseract-data-eng
 udiskie
-wf-recorder
 wireplumber
 wl-clipboard
 wtype

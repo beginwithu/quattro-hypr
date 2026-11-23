@@ -14,9 +14,9 @@ o.bind("SUPER + CTRL + SPACE", "Background switcher", { menu = "background" })
 o.bind("SUPER + CTRL + W", "Background switcher", { menu = "background" })
 o.bind("SUPER + SHIFT + CTRL + SPACE", "Theme menu", { menu = "theme" })
 o.bind("SUPER + CTRL + T", "Theme menu", { menu = "theme" })
-o.bind("SUPER + BACKSPACE", "Toggle transparency on a window", "quattro-hyprland-window-transparency-toggle")
-o.bind("SUPER + SHIFT + BACKSPACE", "Toggle window gaps", "quattro-hyprland-window-gaps-toggle")
-o.bind("SUPER + CTRL + BACKSPACE", "Toggle single-window square aspect", "quattro-hyprland-window-single-square-aspect-toggle")
+o.bind("SUPER + BACKSPACE", "Toggle transparency on a window", "quattro-hyprland-window transparency-toggle")
+o.bind("SUPER + SHIFT + BACKSPACE", "Toggle window gaps", "quattro-hyprland-window gaps-toggle")
+o.bind("SUPER + CTRL + BACKSPACE", "Toggle single-window square aspect", "quattro-hyprland-window single-square-aspect-toggle")
 o.bind_toggle("SUPER + CTRL + ALT + F", "Toggle full screen desktop", "fullscreen-desktop")
 
 -- xkbcommon names the comma keysym "comma"; the upper-case "COMMA" does not match.
@@ -28,13 +28,10 @@ o.bind("SUPER + SHIFT + ALT + comma", "Open notification history", { ipc = "noti
 o.bind_toggle("SUPER + CTRL + ALT + comma", "Toggle silencing notifications", "notification-silencing")
 
 o.bind_toggle("SUPER + CTRL + I", "Toggle locking on idle", "idle")
-o.bind("SUPER + CTRL + Delete", "Toggle laptop display", "quattro-hyprland-monitor-internal toggle")
-o.bind("SUPER + CTRL + ALT + Delete", "Toggle laptop display mirroring", "quattro-hyprland-monitor-internal-mirror toggle")
+o.bind("SUPER + CTRL + Delete", "Toggle laptop display", "quattro-hyprland-monitor internal toggle")
+o.bind("SUPER + CTRL + ALT + Delete", "Toggle laptop display mirroring", "quattro-hyprland-monitor internal-mirror toggle")
 o.bind("switch:on:Lid Switch", nil, "quattro-system-lid-close", { locked = true })
 o.bind("switch:off:Lid Switch", nil, "quattro-hyprland-monitor-clamshell", { locked = true })
--- Apple Silicon reports its lid through the SMC, under its own switch name.
-o.bind("switch:on:Apple SMC power/lid events", nil, "quattro-system-lid-close", { locked = true })
-o.bind("switch:off:Apple SMC power/lid events", nil, "quattro-hyprland-monitor-clamshell", { locked = true })
 
 o.bind("PRINT", "Screenshot", "quattro-capture-screenshot")
 o.bind("SHIFT + PRINT", "Screenshot and edit", "quattro-capture-screenshot edit")
@@ -99,21 +96,13 @@ end)
 
 o.bind("SUPER + CTRL + S", "Share", { menu = "share" })
 
-o.bind("SUPER + CTRL + PERIOD", "Transcode", "quattro-transcode")
-
-o.bind("SUPER + CTRL + R", "Set reminder", { menu = "reminder-set" })
-o.bind("SUPER + CTRL + ALT + R", "Show reminders", "quattro-reminder show")
-o.bind("SUPER + SHIFT + CTRL + R", "Clear reminders", "quattro-reminder clear")
-
-o.bind("SUPER + CTRL + ALT + T", "Show time", "quattro-notification-time")
-o.bind("SUPER + CTRL + ALT + B", "Show battery remaining", "quattro-notification-battery")
-o.bind("SUPER + CTRL + ALT + W", "Toggle weather", "quattro-notification-weather")
+o.bind("SUPER + CTRL + ALT + T", "Show time", "quattro-notification-send --time")
+o.bind("SUPER + CTRL + ALT + B", "Show battery remaining", "quattro-notification-send --battery")
 
 o.bind("SUPER + CTRL + A", "Audio", { panel = "quattro.audio" })
 o.bind("SUPER + CTRL + B", "Bluetooth", { panel = "quattro.bluetooth" })
 o.bind("SUPER + CTRL + D", "Display", { panel = "quattro.monitor" })
 o.bind("SUPER + CTRL + ALT + D", "Calendar", { panel = "quattro.clock" })
-o.bind("SUPER + CTRL + ALT + E", "World clock", { panel = "quattro.elsewhen" })
 o.bind("SUPER + CTRL + N", "Network", { panel = "quattro.network" })
 o.bind("SUPER + CTRL + P", "Power", { panel = "quattro.power" })
 o.bind("SUPER + SHIFT + T", "Activity", { tui = "btop" })

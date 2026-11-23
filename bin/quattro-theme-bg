@@ -1,0 +1,130 @@
+#!/bin/bash
+
+# quattro:summary=Manage theme wallpapers (set, next, current, install, switcher, cache)
+# quattro:group=theme
+# quattro:name=bg
+# quattro:args=<set <path>|next|current|install|switcher|cache>
+# quattro:examples=quattro theme bg next | quattro theme bg set ~/Pictures/bg.webp | quattro theme bg current
+# quattro:aliases=quattro background | quattro theme bg-switcher
+
+set -euo pipefail
+
+bg_cache() {
+  local theme_name
+  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  quattro-menu-images \
+    --cache-only \
+    "$HOME/.local/state/quattro/current/theme/backgrounds" \
+    "$HOME/.config/quattro/backgrounds/$theme_name"
+}
+
+bg_current() {
+  local bg_path
+  bg_path=$(readlink -f "$HOME/.local/state/quattro/current/background" 2>/dev/null || true)
+  if [[ -n $bg_path ]]; then
+    basename -- "$bg_path" | perl -pe 's/\.[^.]+$//; s/^\d+-//; s/-/ /g; s/\b(\w)/\U$1/g'
+  else
+    echo "Unknown"
+  fi
+}
+
+bg_install() {
+  local theme_name
+  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  if [[ -z $theme_name && -L $HOME/.local/state/quattro/current/theme ]]; then
+    theme_name=$(basename "$(readlink "$HOME/.local/state/quattro/current/theme")")
+  fi
+  local dir="$HOME/.config/quattro/backgrounds/${theme_name}"
+  mkdir -p "$dir"
+  exec quattro-launch-files "$dir"
+}
+
+bg_set() {
+  if [[ -z ${1:-} ]]; then
+    echo "Usage: quattro-theme-bg set <path-to-media>" >&2
+    exit 1
+  fi
+
+  local background current_link="$HOME/.local/state/quattro/current/background"
+  background="$(realpath "$1")"
+  if [[ ! -f $background ]]; then
+    echo "File does not exist: $background" >&2
+    exit 1
+  fi
+
+  exec 9>"${XDG_RUNTIME_DIR:-/tmp}/quattro-theme-set.lock"
+  flock 9
+
+  if [[ $(quattro-shell shell switchBackground "$background" "" 2>/dev/null || true) != "ok" ]]; then
+    ln -nsf "$background" "$current_link"
+    quattro-shell -q background set "$background"
+  fi
+}
+
+bg_next() {
+  local theme_name theme_bg_path user_bg_path current_link
+  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  theme_bg_path="$HOME/.local/state/quattro/current/theme/backgrounds/"
+  user_bg_path="$HOME/.config/quattro/backgrounds/$theme_name/"
+  current_link="$HOME/.local/state/quattro/current/background"
+
+  local -a backgrounds=()
+  mapfile -d '' -t backgrounds < <(
+    find -L "$user_bg_path" "$theme_bg_path" -maxdepth 1 -type f \
+      \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \
+         -o -iname '*.mp4' -o -iname '*.m4v' -o -iname '*.mov' -o -iname '*.webm' -o -iname '*.mkv' -o -iname '*.avi' \) \
+      -print0 2>/dev/null | sort -z
+  )
+  local total=${#backgrounds[@]}
+
+  if (( total == 0 )); then
+    quattro-notification-send "$(quattro-i18n theme.noBackground)" -t 2000
+  else
+    local current_bg index=-1 i next_index
+    current_bg=$(quattro-shell shell selectedBackground 2>/dev/null || true)
+    if [[ -z $current_bg && -L $current_link ]]; then
+      current_bg=$(readlink "$current_link" || true)
+    fi
+
+    for i in "${!backgrounds[@]}"; do
+      if [[ ${backgrounds[$i]} == "$current_bg" ]]; then
+        index=$i
+        break
+      fi
+    done
+
+    if (( index == -1 )); then
+      bg_set "${backgrounds[0]}"
+    else
+      next_index=$(((index + 1) % total))
+      bg_set "${backgrounds[$next_index]}"
+    fi
+  fi
+}
+
+bg_switcher() {
+  local theme_name current_background
+  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  current_background=$(readlink -f "$HOME/.local/state/quattro/current/background" 2>/dev/null || true)
+
+  quattro-menu-images \
+    --selected "$current_background" \
+    "$HOME/.local/state/quattro/current/theme/backgrounds" \
+    "$HOME/.config/quattro/backgrounds/$theme_name"
+}
+
+cmd="${1:-switcher}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  cache) bg_cache ;;
+  current) bg_current ;;
+  install) bg_install ;;
+  next) bg_next ;;
+  set) bg_set "$@" ;;
+  switcher) bg_switcher ;;
+  *)
+    echo "Usage: quattro-theme-bg <set <path>|next|current|install|switcher|cache>" >&2
+    exit 1
+    ;;
+esac

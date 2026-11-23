@@ -56,11 +56,7 @@ tds() {
 
   tmux send-keys -t "$editor_pane" -l "nvim ."
   tmux send-keys -t "$editor_pane" C-m
-  if command -v hunk >/dev/null 2>&1; then
-    tmux send-keys -t "$diff_pane" -l "hunk diff --watch"
-  else
-    tmux send-keys -t "$diff_pane" -l "watch -n 2 --color git -c color.ui=always diff"
-  fi
+  tmux send-keys -t "$diff_pane" -l "watch -n 2 --color git -c color.ui=always diff"
   tmux send-keys -t "$diff_pane" C-m
   tmux send-keys -t "$git_pane" -l "lazygit"
   tmux send-keys -t "$git_pane" C-m

@@ -5,6 +5,9 @@
 
 # Hyprland reports `mirrorOf` as the mirrored monitor's id, so name it here
 # for everything below and for the panel.
+
+set -uo pipefail
+
 monitors_json=$(hyprctl monitors all -j | jq '
   (map({key: (.id | tostring), value: .name}) | from_entries) as $names
   | map(.mirrorOf = (if (.mirrorOf // "none") == "none" then "none" else ($names[.mirrorOf | tostring] // .mirrorOf) end))
@@ -46,7 +49,7 @@ printf '%s\n' "$monitors_json" | jq -c --argjson brightness "$brightness_json" \
   '[.[] | {name, make, model, enabled:(.disabled != true), focused:(.focused == true), width, height, physicalWidth, physicalHeight, refreshRate, scale, x, y, transform, mirrorOf, availableModes:(.availableModes // []), brightness:($brightness[.name] // null)}]'
 
 # Whether the mirror is Quattro's own, which the panel can turn back off.
-if quattro-hyprland-toggle-enabled internal-monitor-mirror; then
+if quattro-hyprland-toggle --enabled internal-monitor-mirror; then
   echo on
 else
   echo

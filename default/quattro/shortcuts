@@ -16,14 +16,12 @@ menu system
 menu background
 menu theme
 menu share
-menu reminder-set
 panel quattro.clipboard
 panel quattro.emojis
 panel quattro.audio
 panel quattro.bluetooth
 panel quattro.monitor
 panel quattro.clock
-panel quattro.elsewhen
 panel quattro.network
 panel quattro.power
 audio raise

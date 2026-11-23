@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# quattro:summary=Detect whether the computer has an NVIDIA GPU.
+# quattro:summary=Detect NVIDIA GPU presence, GSP firmware generation, and display routing in a single sysfs pass
+# quattro:args=[--mode|--display|--gsp|--without-gsp]
+
+set -euo pipefail
 
 # Read the cached sysfs IDs rather than lspci, which reads PCI config space and
 # resumes runtime-suspended GPUs.
@@ -8,9 +11,65 @@ pci_devices_path="${QUATTRO_PCI_DEVICES_PATH:-/sys/bus/pci/devices}"
 
 shopt -s nullglob
 
+has_nvidia=0
+has_gsp=0
+has_without_gsp=0
+nvidia_boot=0
+other_boot=0
+
 for device in "$pci_devices_path"/*; do
-  [[ $(< "$device/vendor") == "0x10de" ]] || continue
-  [[ $(< "$device/class") == 0x03* ]] && exit 0
+  [[ -r $device/class && -r $device/vendor ]] || continue
+  [[ $(<"$device/class") == 0x03* ]] || continue
+  boot_vga=0
+  [[ -r $device/boot_vga ]] && boot_vga=$(<"$device/boot_vga")
+
+  if [[ $(<"$device/vendor") == "0x10de" ]]; then
+    has_nvidia=1
+    (( boot_vga == 1 )) && nvidia_boot=1
+    if [[ -r $device/device ]]; then
+      device_id=$(<"$device/device")
+      if (( device_id >= 0x1e00 )); then
+        has_gsp=1
+      elif (( device_id >= 0x1340 && device_id < 0x1e00 )); then
+        has_without_gsp=1
+      fi
+    fi
+  else
+    (( boot_vga == 1 )) && other_boot=1
+  fi
 done
 
-exit 1
+is_display=1
+if (( other_boot == 1 && nvidia_boot == 0 )); then
+  is_display=0
+fi
+
+case "${1:-}" in
+  "")
+    (( has_nvidia == 1 ))
+    ;;
+  --display)
+    (( is_display == 1 ))
+    ;;
+  --gsp)
+    (( has_gsp == 1 ))
+    ;;
+  --without-gsp)
+    (( has_without_gsp == 1 ))
+    ;;
+  --mode)
+    if (( has_nvidia == 0 )); then
+      echo "none"
+    elif (( has_gsp == 1 )); then
+      (( is_display == 1 )) && echo "gsp-display" || echo "gsp-hybrid"
+    elif (( has_without_gsp == 1 )); then
+      (( is_display == 1 )) && echo "legacy-display" || echo "legacy-hybrid"
+    else
+      echo "other"
+    fi
+    ;;
+  *)
+    echo "Usage: quattro-hw-nvidia [--mode|--display|--gsp|--without-gsp]" >&2
+    exit 1
+    ;;
+esac

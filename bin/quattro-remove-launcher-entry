@@ -5,7 +5,7 @@
 # quattro:hidden=true
 # quattro:requires-sudo=true
 
-set -e
+set -euo pipefail
 
 desktop_id="${1-}"
 entry_name="${2-}"
@@ -65,21 +65,6 @@ is_user_desktop_file() {
 
 desktop_name="${desktop_file##*/}"
 desktop_name="${desktop_name%.desktop}"
-exec_line="$(sed -n 's/^Exec=//p' "$desktop_file" | head -1)"
-
-if [[ $exec_line =~ quattro-launch-webapp|quattro-webapp-handler ]]; then
-  QUATTRO_REMOVE_NOTIFY=false quattro-webapp-remove "$desktop_name"
-  exit 0
-fi
-
-if [[ $exec_line =~ (^|[[:space:]])(\$TERMINAL|xdg-terminal-exec)[[:space:]].*-e([[:space:]]|$) ]]; then
-  QUATTRO_REMOVE_NOTIFY=false quattro-tui-remove "$desktop_name"
-  exit 0
-fi
-
-if [[ $desktop_file_name == "slack.desktop" && $exec_line =~ ^quattro-launch-slack($|[[:space:]]) ]]; then
-  exec quattro-launch-floating-terminal-with-presentation quattro-remove-service-slack
-fi
 
 if is_user_desktop_file; then
   display_name="${entry_name:-$desktop_name}"
@@ -95,7 +80,7 @@ if package_name="$(pacman -Qqo "$desktop_file" 2>/dev/null | head -1)" && [[ -n 
   exec quattro-launch-floating-terminal-with-presentation "echo Uninstalling $quoted_display...; sudo pacman -Rns $quoted_package"
 fi
 
-if quattro-cmd-present flatpak && flatpak info "${desktop_file_name%.desktop}" >/dev/null 2>&1; then
+if quattro-cmd present flatpak && flatpak info "${desktop_file_name%.desktop}" >/dev/null 2>&1; then
   flatpak_id="${desktop_file_name%.desktop}"
   quoted_flatpak="$(printf '%q' "$flatpak_id")"
   exec quattro-launch-floating-terminal-with-presentation "flatpak uninstall $quoted_flatpak"

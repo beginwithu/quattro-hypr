@@ -14,6 +14,9 @@
 # lid that is still shut suspends at once: logind rechecks a closed lid after
 # every event.
 
+
+set -uo pipefail
+
 UNIT="quattro-lid-inhibit.service"
 drm_path="${QUATTRO_DRM_PATH:-/sys/class/drm}"
 cgroup_path="${QUATTRO_CGROUP_PATH:-/proc/self/cgroup}"
@@ -67,7 +70,7 @@ fi
 # Only where logind would ignore a docked lid is there anything to stand in for.
 # An unanswered query changes nothing, for the same reason as above.
 wanted=0
-if (( in_use )) && quattro-hw-laptop; then
+if (( in_use )) && quattro-hw laptop; then
   docked_action=$(busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
     org.freedesktop.login1.Manager HandleLidSwitchDocked 2>/dev/null) || exit 0
   [[ -n $docked_action ]] || exit 0

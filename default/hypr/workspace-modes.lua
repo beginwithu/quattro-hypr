@@ -1,4 +1,4 @@
--- Workspace modes for quattro-hyprland-workspace-layout-toggle.
+-- Workspace modes for quattro-hyprland-workspace-layout toggle.
 --
 -- Hyprland has dwindle and scrolling as tiled layouts, but nothing that floats a
 -- whole workspace: it reports a workspace's `tiledLayout` and takes an unknown
@@ -508,7 +508,7 @@ local function titlebars()
     { icon = "×", action = "hyprctl dispatch 'hl.dsp.window.close({ " .. window .. " })'" },
     { icon = "□", action = "hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\", " .. window .. " })'" },
     -- Minimized windows wait in the dock, which brings them back.
-    { icon = "−", action = "quattro-hyprland-window-minimize %WINDOW%" },
+    { icon = "−", action = "quattro-hyprland-window minimize %WINDOW%" },
   }) do
     hl.plugin.hyprbars.add_button({
       bg_color = colors.titlebar,

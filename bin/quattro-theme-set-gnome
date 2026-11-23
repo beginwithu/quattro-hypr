@@ -3,6 +3,9 @@
 # quattro:summary=Apply the current theme to GNOME color mode, icons, and GTK4/GTK3 CSS
 # quattro:hidden=true
 
+
+set -uo pipefail
+
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 THEME_DIR="$STATE_HOME/quattro/current/theme"

@@ -5,6 +5,9 @@
 # quattro:examples=quattro debug --print --no-sudo
 # quattro:requires-sudo=true
 
+
+set -uo pipefail
+
 NO_SUDO=false
 PRINT_ONLY=false
 

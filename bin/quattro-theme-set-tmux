@@ -3,6 +3,11 @@
 # quattro:summary=Sync current Quattro theme environment into tmux
 # quattro:hidden=true
 
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+source "$QUATTRO_PATH/default/bash/lib-common.sh"
+
 CURRENT_THEME_PATH="$HOME/.local/state/quattro/current/theme"
 GUM_ENV="$CURRENT_THEME_PATH/gum_env.lua"
 COLORS_TOML="$CURRENT_THEME_PATH/colors.toml"
@@ -84,7 +89,7 @@ sync_colorfgbg() {
 
   # quattro-theme-color resolves mode from colors.toml, a legacy light.mode
   # file, or background luminance, so a bare light check covers all theme styles.
-  if [[ ${THEME_COLORS[mode]} == "light" ]]; then
+  if [[ ${THEME_COLORS[mode]:-} == "light" ]]; then
     colorfgbg="0;15"
   fi
 
@@ -92,13 +97,13 @@ sync_colorfgbg() {
 }
 
 theme_osc_sequences() {
-  quattro-theme-osc "$COLORS_TOML"
+  quattro_theme_osc "$COLORS_TOML"
 }
 
 sync_tmux_window_style() {
-  local foreground="${THEME_COLORS[foreground]}"
-  local background="${THEME_COLORS[background]}"
-  local cursor="${THEME_COLORS[cursor]}"
+  local foreground="${THEME_COLORS[foreground]:-}"
+  local background="${THEME_COLORS[background]:-}"
+  local cursor="${THEME_COLORS[cursor]:-}"
 
   [[ -f $COLORS_TOML && -n $foreground && -n $background ]] || return
 

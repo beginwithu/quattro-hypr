@@ -4,6 +4,9 @@
 # quattro:group=system
 # quattro:args=[--bar-widget]
 
+
+set -uo pipefail
+
 bar_widget_stats() {
   awk '
     NR == 1 {

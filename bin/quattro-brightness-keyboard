@@ -3,6 +3,9 @@
 # quattro:summary=Adjust keyboard backlight brightness using available steps.
 # quattro:args=[--no-osd] <up|down|cycle|off|restore>
 
+
+set -uo pipefail
+
 no_osd=0
 if [[ ${1:-} == "--no-osd" ]]; then
   no_osd=1

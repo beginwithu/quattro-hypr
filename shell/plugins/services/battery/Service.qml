@@ -16,7 +16,7 @@ Item {
   // Follows power-profiles-daemon's change signals, so nothing polls it.
   // Quickshell never attaches that listener if the daemon failed when the
   // shell started, so a one-off read on startup, on a power source change and
-  // after quattro-powerprofiles-set (which asks for it over IPC) recovers.
+  // after quattro-powerprofiles set (which asks for it over IPC) recovers.
   property string activePowerProfile: ""
   property bool powerProfileReadPending: false
   property int powerProfileSignals: 0
@@ -57,7 +57,7 @@ Item {
   }
 
   function runPendingPowerProfile() {
-    powerProfileProcess.command = ["quattro-powerprofiles-set", pendingPowerSource]
+    powerProfileProcess.command = ["quattro-powerprofiles", "set", pendingPowerSource]
     pendingPowerSource = ""
     powerProfileProcess.running = true
   }
@@ -126,7 +126,8 @@ Item {
 
   Timer {
     interval: 30000
-    running: true
+    // Only poll while discharging; onOnBatteryChanged covers the transition.
+    running: UPower.onBattery
     repeat: true
     triggeredOnStart: true
     onTriggered: root.checkBattery()

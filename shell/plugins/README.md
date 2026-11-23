@@ -19,23 +19,18 @@ User-installed plugins live alongside these conceptually but on disk under
 | Screensaver   | `quattro.screensaver`     | `overlay`               | `screensaver/Screensaver.qml`         |
 | Emojis        | `quattro.emojis`          | `overlay`               | `emojis/Emojis.qml`                   |
 | Clipboard mgr | `quattro.clipboard`       | `overlay`               | `clipboard/Clipboard.qml`             |
-| Reminders     | `quattro.reminders`       | `overlay`               | `reminders/ReminderFlow.qml`          |
 | Quattro menu  | `quattro.menu`            | `menu`, `bar-widget`    | `menu/Menu.qml`, `menu/BarWidget.qml` |
 | Notifications | `quattro.notifications`   | `service`               | `notifications/Service.qml`           |
 | Audio         | `quattro.audio`           | `bar-widget`            | `panels/audio/Panel.qml`              |
 | Bluetooth     | `quattro.bluetooth`       | `bar-widget`            | `panels/bluetooth/Panel.qml`          |
 | Clock         | `quattro.clock`           | `bar-widget`            | `panels/clock/BarWidget.qml`          |
-| Elsewhen      | `quattro.elsewhen`        | `bar-widget`            | `panels/elsewhen/Panel.qml`           |
 | Monitor       | `quattro.monitor`         | `bar-widget`            | `panels/monitor/Panel.qml`            |
 | Network       | `quattro.network`         | `bar-widget`            | `panels/network/Panel.qml`            |
 | Power         | `quattro.power`           | `bar-widget`            | `panels/power/Panel.qml`              |
-| Tailscale     | `quattro.tailscale`       | `bar-widget`            | `panels/tailscale/Panel.qml`          |
-| Weather       | `quattro.weather`         | `bar-widget`            | `panels/weather/BarWidget.qml`        |
 | Media         | `quattro.media`           | `service`, `bar-widget` | `services/media/Service.qml`, `services/media/BarWidget.qml` |
 | Battery       | `quattro.battery`         | `service`               | `services/battery/Service.qml`        |
 | Idle          | `quattro.idle`            | `service`               | `services/idle/Service.qml`           |
 | Night light   | `quattro.nightlight`      | `service`               | `services/nightlight/Service.qml`     |
-| Remote session | `quattro.remote-session` | `service`               | `services/remote-session/Service.qml` |
 | Lock screen   | `quattro.lock`            | `service`               | `lock/Service.qml`                    |
 | OSD           | `quattro.osd`             | `panel`                 | `osd/Osd.qml`                         |
 | Polkit agent  | `quattro.polkit`          | `service`               | `polkit/PolkitAgent.qml`              |
@@ -102,7 +97,7 @@ runs inside the long-lived `quattro-shell` process, replacing the old
 
 ## Dock
 
-App dock shown on floating workspaces, and hidden on tiled ones and behind a fullscreen window. Floating is not a Hyprland layout, so the dock reads each workspace's mode through `quattro-hyprland-workspace-layout-current`, caches it, and is told to read again over `quattro-shell quattro.dock refresh` by the layout commands. `quattro-shell quattro.dock apps` toggles its grid of every app.
+App dock shown on floating workspaces, and hidden on tiled ones and behind a fullscreen window. Floating is not a Hyprland layout, so the dock reads each workspace's mode through `quattro-hyprland-workspace-layout current`, caches it, and is told to read again over `quattro-shell quattro.dock refresh` by the layout commands. `quattro-shell quattro.dock apps` toggles its grid of every app.
 
 Its settings live in the `dock:` subtree of `shell.json`: `position` (`top`, `bottom`, `left` or `right`) and `pinned` (desktop ids). A `shell.json` without pins uses the defaults. `quattro dock` sets both.
 

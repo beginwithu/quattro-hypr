@@ -1,6 +1,15 @@
 #!/bin/bash
 
-# quattro:summary=Launch Files
+# quattro:summary=Launch Files (optionally in the active terminal's current working directory)
+# quattro:args=[--cwd] [path...]
+
+set -euo pipefail
+
+if [[ ${1:-} == "--cwd" ]]; then
+  shift
+  cwd=$(quattro-cmd terminal-cwd 2>/dev/null || echo "$HOME")
+  set -- "$cwd" "$@"
+fi
 
 for fm in nautilus dolphin thunar pcmanfm nemo; do
   if command -v "$fm" >/dev/null 2>&1; then

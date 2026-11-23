@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# quattro:summary=Control Bluetooth adapter power and devices
+# quattro:group=bluetooth
+# quattro:args=<power <on|off|toggle|is-on>|device <pair|connect|disconnect|forget> <address>>
+# quattro:examples=quattro bluetooth power toggle | quattro bluetooth device connect 00:11:22:33:44:55
+
+set -euo pipefail
+
+POWER_WAIT_SECONDS=${QUATTRO_BLUETOOTH_POWER_WAIT_SECONDS:-2}
+
+controllers() {
+  timeout 2s bluetoothctl list 2>/dev/null | awk '{print $2}' || true
+}
+
+powered() {
+  local controller
+  for controller in $(controllers); do
+    [[ $(timeout 2s bluetoothctl show "$controller" 2>/dev/null || true) == *"Powered: yes"* ]] && return 0
+  done
+  return 1
+}
+
+wait_powered() {
+  local deadline=$((SECONDS + POWER_WAIT_SECONDS))
+  while :; do
+    powered && return 0
+    ((SECONDS < deadline)) || return 1
+    sleep 0.2
+  done
+}
+
+power_on() {
+  rfkill unblock bluetooth
+  wait_powered && return 0
+  timeout 5s bluetoothctl power on >/dev/null 2>&1 || true
+  wait_powered && return 0
+  echo "quattro-bluetooth: adapter did not come up" >&2
+  return 1
+}
+
+bt_power() {
+  case "${1:-}" in
+    on) power_on ;;
+    off) rfkill block bluetooth ;;
+    toggle)
+      if powered; then
+        rfkill block bluetooth
+      else
+        power_on
+      fi
+      ;;
+    is-on) powered ;;
+    *)
+      echo "Usage: quattro-bluetooth power <on|off|toggle|is-on>" >&2
+      exit 1
+      ;;
+  esac
+}
+
+bt_device() {
+  local action=${1:-}
+  local address=${2:-}
+
+  if [[ ! $action =~ ^(pair|connect|disconnect|forget)$ || ! $address =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]; then
+    echo "Usage: quattro-bluetooth device <pair|connect|disconnect|forget> <address>" >&2
+    exit 1
+  fi
+
+  ensure_power() {
+    [[ $(timeout 2s bluetoothctl show 2>/dev/null || true) == *"Powered: yes"* ]] && return 0
+    power_on || true
+  }
+
+  case "$action" in
+    pair)
+      ensure_power
+      timeout 20s bluetoothctl pair "$address" >/dev/null 2>&1 || true
+      bluetoothctl trust "$address" >/dev/null 2>&1 || true
+      timeout 20s bluetoothctl connect "$address" >/dev/null 2>&1 || true
+      ;;
+    connect)
+      ensure_power
+      bluetoothctl trust "$address" >/dev/null 2>&1 || true
+      timeout 20s bluetoothctl connect "$address" >/dev/null 2>&1 || true
+      ;;
+    disconnect)
+      timeout 10s bluetoothctl disconnect "$address" >/dev/null 2>&1 || true
+      ;;
+    forget)
+      ensure_power
+      timeout 10s bluetoothctl disconnect "$address" >/dev/null 2>&1 || true
+      timeout 10s bluetoothctl remove "$address" >/dev/null 2>&1 || true
+      ;;
+  esac
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  power) bt_power "$@" ;;
+  device) bt_device "$@" ;;
+  *)
+    echo "Usage: quattro-bluetooth <power|device> [args...]" >&2
+    exit 1
+    ;;
+esac

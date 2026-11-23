@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# quattro:summary=Show or adjust brightness on the focused display.
+# quattro:summary=Show or adjust brightness on the focused display (backlight or DDC/CI).
 # quattro:args=[--no-osd] [--monitor name] [+N%|N%-|N%|off|on]
 # quattro:examples=quattro brightness display | quattro brightness display +5% | quattro brightness display --monitor DP-1 50% | quattro brightness display off | quattro brightness display on
+
+set -euo pipefail
 
 no_osd=0
 monitor=""
@@ -24,54 +26,177 @@ while (( $# > 0 )); do
   esac
 done
 
-# Get the brightness of the passed display
 backlight_brightness() {
   brightnessctl -d "$1" -m 2>/dev/null | awk -F, '{ gsub("%", "", $4); print $4; found=1 } END{ exit !found }'
 }
 
-[[ -n $monitor ]] || monitor="$(quattro-hyprland-monitor-focused 2>/dev/null || true)"
+ddc_brightness() {
+  local mon="${1:-}"
+  local ddc_step="${2:-}"
+  [[ -n $mon ]] || return 1
+
+  local cache_dir="${XDG_RUNTIME_DIR:-/tmp}/quattro-ddc-brightness"
+  local cache_name="${mon//[^[:alnum:]_.-]/_}"
+  local cache_file="$cache_dir/$cache_name.bus"
+  local unavailable_cache_seconds=60
+  local range_cache_seconds=10
+
+  cache_unavailable() {
+    mkdir -p "$cache_dir" 2>/dev/null || true
+    printf 'unavailable %s\n' "$(date +%s)" >"$cache_file" 2>/dev/null || true
+  }
+
+  detect_bus() {
+    ddcutil --skip-ddc-checks detect --brief 2>/dev/null | awk -v monitor="$mon" '
+      /I2C bus:/ {
+        bus = $NF
+        sub(/^.*\/i2c-/, "", bus)
+      }
+      /DRM connector:/ {
+        connector = $NF
+        sub(/^card[0-9]+-/, "", connector)
+        if (connector == monitor && bus != "") {
+          print bus
+          exit
+        }
+        bus = ""
+      }
+    '
+  }
+
+  find_bus() {
+    local bus="" cached_value="" now=0
+    if [[ -r $cache_file ]]; then
+      read -r bus cached_value <"$cache_file" || true
+    fi
+    if [[ $bus == "unavailable" ]]; then
+      now=$(date +%s)
+      if [[ $cached_value =~ ^[0-9]+$ ]] && (( now - cached_value < unavailable_cache_seconds )); then
+        return 1
+      fi
+      bus=""
+      rm -f "$cache_file"
+    fi
+    if [[ -z $bus ]]; then
+      bus="$(detect_bus)" || return 1
+      if [[ ! $bus =~ ^[0-9]+$ ]]; then
+        cache_unavailable
+        return 1
+      fi
+      mkdir -p "$cache_dir" 2>/dev/null || true
+      printf '%s\n' "$bus" >"$cache_file" 2>/dev/null || true
+    fi
+    printf '%s\n' "$bus"
+  }
+
+  read_vcp() {
+    ddcutil --bus "$1" --skip-ddc-checks getvcp 10 --brief 2>/dev/null | awk '
+      $1 == "VCP" && toupper($2) == "10" && $3 == "C" && $4 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ && $5 > 0 {
+        print $4, $5
+        found = 1
+        exit
+      }
+      END { exit !found }
+    '
+  }
+
+  read_ddc() {
+    local bus="" cached_bus="" cached_maximum="" now=0 values=""
+    if [[ -r $cache_file ]]; then
+      read -r cached_bus cached_maximum _ <"$cache_file" || true
+    fi
+    bus="$(find_bus)" || return 1
+    values="$(read_vcp "$bus")" || {
+      if [[ $cached_bus =~ ^[0-9]+$ && $cached_maximum =~ ^[0-9]+$ ]]; then
+        rm -f "$cache_file"
+      else
+        cache_unavailable
+      fi
+      return 1
+    }
+    now=$(date +%s)
+    mkdir -p "$cache_dir" 2>/dev/null || true
+    printf '%s %s %s\n' "$bus" "${values##* }" "$now" >"$cache_file" 2>/dev/null || true
+    printf '%s %s\n' "$bus" "$values"
+  }
+
+  local bus="" current="" maximum="" percent=0 range_cached_at="" target=0 amount=0 raw_target=0 now=0
+  if [[ -z $ddc_step ]]; then
+    read -r bus current maximum < <(read_ddc) || return 1
+    [[ -n $bus && -n $current && -n $maximum ]] || return 1
+    (( percent = (current * 100 + maximum / 2) / maximum ))
+    printf '%s\n' "$percent"
+    return 0
+  fi
+
+  if [[ $ddc_step =~ ^([0-9]+)%$ ]]; then
+    target="${BASH_REMATCH[1]}"
+    local range_cache_fresh=0
+    if [[ -r $cache_file ]]; then
+      read -r bus maximum range_cached_at <"$cache_file" || true
+    fi
+    if [[ $bus =~ ^[0-9]+$ && $maximum =~ ^[0-9]+$ && $range_cached_at =~ ^[0-9]+$ ]] && (( maximum > 0 )); then
+      now=$(date +%s)
+      if (( range_cached_at <= now && now - range_cached_at < range_cache_seconds )); then
+        range_cache_fresh=1
+      fi
+    fi
+    if (( ! range_cache_fresh )); then
+      read -r bus current maximum < <(read_ddc) || return 1
+    fi
+  elif [[ $ddc_step =~ ^\+([0-9]+)%$ ]]; then
+    read -r bus current maximum < <(read_ddc) || return 1
+    [[ -n $bus && -n $current && -n $maximum ]] || return 1
+    (( percent = (current * 100 + maximum / 2) / maximum ))
+    amount="${BASH_REMATCH[1]}"
+    if (( amount == 5 && percent < 5 )); then
+      (( target = percent + 1 ))
+    else
+      (( target = percent + amount ))
+    fi
+  elif [[ $ddc_step =~ ^([0-9]+)%-$ ]]; then
+    read -r bus current maximum < <(read_ddc) || return 1
+    [[ -n $bus && -n $current && -n $maximum ]] || return 1
+    (( percent = (current * 100 + maximum / 2) / maximum ))
+    amount="${BASH_REMATCH[1]}"
+    if (( amount == 5 && percent <= 5 )); then
+      (( target = percent - 1 ))
+    else
+      (( target = percent - amount ))
+    fi
+  else
+    return 1
+  fi
+
+  (( target < 1 )) && target=1
+  (( target > 100 )) && target=100
+  (( raw_target = (target * maximum + 50) / 100 ))
+
+  if ! ddcutil --bus "$bus" --skip-ddc-checks --noverify setvcp 10 "$raw_target" >/dev/null 2>&1; then
+    rm -f "$cache_file"
+    return 1
+  fi
+
+  printf '%s\n' "$target"
+}
+
+[[ -n $monitor ]] || monitor="$(quattro-hyprland-monitor focused 2>/dev/null || true)"
 
 monitor_is_internal() {
   [[ $monitor =~ ^(eDP|LVDS|DSI)- ]]
 }
 
-use_apple_display() {
-  quattro-hyprland-monitor-focused-apple "$monitor"
-}
-
 use_ddc_display() {
-  [[ -n $monitor ]] && ! monitor_is_internal && monitor_may_have_ddc
+  [[ -n $monitor ]] && ! monitor_is_internal
 }
 
-# A platform whose display driver registers no DDC channel says so in its
-# displays.conf (see docs/file-layout.md): there a probe finds only unrelated
-# I2C buses, slowly, so only a connector with a ddc node is probed. Everywhere
-# else every external monitor is.
-monitor_may_have_ddc() {
-  local displays_conf=/usr/share/quattro-platform/displays.conf directive argument
-  [[ -r $displays_conf ]] || return 0
-
-  while IFS=$' \t\r' read -r directive argument || [[ -n $directive ]]; do
-    if [[ $directive == "ddc-require-connector-ddc" && -z $argument ]]; then
-      compgen -G "/sys/class/drm/card*-$monitor/ddc" >/dev/null
-      return
-    fi
-  done <"$displays_conf"
-  return 0
-}
-
-# The kernel backlight is the built-in panel's, so an external monitor without
-# DDC fails rather than dimming the panel.
 use_backlight_display() {
   [[ -z $monitor ]] || monitor_is_internal
 }
 
 if (( $# == 0 )); then
-  if use_apple_display; then
-    quattro-brightness-display-apple
-    exit
-  elif use_ddc_display; then
-    quattro-brightness-display-ddc "$monitor"
+  if use_ddc_display; then
+    ddc_brightness "$monitor"
     exit
   elif ! use_backlight_display; then
     exit 1
@@ -88,46 +213,29 @@ if [[ $step == "off" ]]; then
   hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' >/dev/null 2>&1
   exit 0
 elif [[ $step == "on" ]]; then
-  # Skip the dispatch when every active display is already lit: a redundant
-  # DPMS enable right after system resume forces another modeset, which blanks
-  # the panel for a beat (visible flash at the unlock screen).
   hyprctl monitors -j 2>/dev/null | jq -e '[.[] | select(.disabled == false)] | length > 0 and all(.dpmsStatus)' >/dev/null 2>&1 && exit 0
   hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1
   exit 0
 fi
 
-# Drop overlapping brightness key events so concurrent invocations do not race.
-# Hardware key repeat present on some devices can otherwise glitch OSD rendering.
 exec {lock_fd}>"${XDG_RUNTIME_DIR:-/tmp}/quattro-brightness-display.lock"
 flock -n "$lock_fd" || exit 0
 
-if use_apple_display; then
-  if (( no_osd )); then
-    quattro-brightness-display-apple --no-osd "$step"
-  else
-    quattro-brightness-display-apple "$step"
-  fi
-elif use_ddc_display; then
-  brightness="$(quattro-brightness-display-ddc "$monitor" "$step")" || exit 1
+if use_ddc_display; then
+  brightness="$(ddc_brightness "$monitor" "$step")" || exit 1
   (( no_osd )) || quattro-osd -i brightness -p "$brightness"
 elif ! use_backlight_display; then
   exit 1
 else
-  # Current device highlighted
   device="$(quattro-hw-display)" || exit 1
-
-  # Current brightness percentage
   current=$(backlight_brightness "$device") || exit 1
 
-  # Apply non-uniform step size: 1% steps if at or below 5%, otherwise set an
-  # absolute target percentage to avoid raw backlight rounding causing uneven OSD steps.
   if [[ $step == "+5%" ]]; then
     if (( current < 5 )); then
       (( target = current + 1 ))
     else
       (( target = current + 5 ))
     fi
-
     (( target > 100 )) && target=100
     step="$target%"
   elif [[ $step == "5%-" ]]; then
@@ -136,14 +244,10 @@ else
     else
       (( target = current - 5 ))
     fi
-
     (( target < 1 )) && target=1
     step="$target%"
   fi
 
-  # Set brightness of the display device.
   brightnessctl -d "$device" set "$step" >/dev/null
-
-  # Show the new brightness in OSD
   (( no_osd )) || quattro-osd -i brightness -p "$(backlight_brightness "$device")"
 fi

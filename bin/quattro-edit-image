@@ -4,6 +4,9 @@
 # quattro:args=<image-path>
 # quattro:hidden=true
 
+
+set -uo pipefail
+
 file="${1:-}"
 [[ -n $file && -e $file ]] || exit 1
 

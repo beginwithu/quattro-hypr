@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# quattro:summary=Reset user configs in ~/.config to Quattro shipped defaults (with backup)
+# quattro:group=refresh
+# quattro:args=<config <path>|hyprland|hyprsunset|shell|tmux>
+# quattro:examples=quattro refresh hyprland | quattro refresh shell | quattro refresh config hypr/hyprland.lua
+
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+
+refresh_config_file() {
+  local config_file=${1:-}
+  if [[ -z $config_file ]]; then
+    echo "Usage: quattro-refresh config <config-path>" >&2
+    exit 1
+  fi
+
+  local user_config_file="${HOME}/.config/$config_file"
+  local default_config_file="$QUATTRO_PATH/config/$config_file"
+  local backup_config_file="$user_config_file.bak.$(date +%s)"
+
+  if [[ ! -e $default_config_file ]]; then
+    echo "Not a shipped user config: $config_file" >&2
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$user_config_file")"
+
+  if [[ -f $user_config_file ]]; then
+    cp -f "$user_config_file" "$backup_config_file"
+    cp -f "$default_config_file" "$user_config_file"
+
+    if cmp -s "$user_config_file" "$backup_config_file"; then
+      rm "$backup_config_file"
+    else
+      echo -e "\e[31mReplaced $user_config_file with new Quattro default.\nSaved backup as ${backup_config_file}.\n\n\e[32mChanges:\e[0m"
+      diff "$user_config_file" "$backup_config_file" || true
+    fi
+  else
+    cp -f "$default_config_file" "$user_config_file"
+  fi
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  config)
+    refresh_config_file "${1:-}"
+    ;;
+  hyprland)
+    for f in .luarc.json autostart.lua bindings.lua input.lua looknfeel.lua hyprland.lua monitors.lua; do
+      refresh_config_file "hypr/$f"
+    done
+    mkdir -p ~/.local/state/quattro/toggles/hypr
+    cp "$QUATTRO_PATH/default/hypr/toggles/flags.lua" ~/.local/state/quattro/toggles/hypr/
+    ;;
+  hyprsunset)
+    refresh_config_file hypr/hyprsunset.conf
+    quattro-restart hyprsunset
+    ;;
+  shell)
+    refresh_config_file quattro/shell.json
+    quattro-bar defaults
+    quattro-restart-shell
+    ;;
+  tmux)
+    refresh_config_file tmux/tmux.conf
+    if tmux has-session 2>/dev/null; then
+      tmux source-file ~/.config/tmux/tmux.conf
+    fi
+    ;;
+  */*)
+    refresh_config_file "$cmd"
+    ;;
+  *)
+    echo "Usage: quattro-refresh <config <path>|hyprland|hyprsunset|shell|tmux>" >&2
+    exit 1
+    ;;
+esac

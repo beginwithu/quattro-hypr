@@ -106,7 +106,7 @@ Panel {
   // Switching to Mirror reloads Hyprland, and a read can come back from
   // before it lands, so the map shows the stack as soon as Mirror is clicked:
   // every external display mirroring the built-in one, as
-  // quattro-hyprland-monitor-internal-mirror sets it up. "on" or "off" while
+  // quattro-hyprland-monitor internal-mirror sets it up. "on" or "off" while
   // a switch is on its way; Extend keeps the stack until the real layout,
   // with the external back in its own place, comes in.
   property string pendingMirror: ""
@@ -172,7 +172,7 @@ Panel {
     return false
   }
   readonly property bool mirrorEnabled: pendingMirror !== "" ? pendingMirror === "on" : mirroredNow
-  // quattro-hyprland-monitor-internal-mirror puts the built-in display's
+  // quattro-hyprland-monitor internal-mirror puts the built-in display's
   // picture on every external one, so it needs the built-in display on, not
   // shut in clamshell, and an external one. A mirror set up in
   // the user's own monitors.lua is theirs to undo, so Extend isn't offered.
@@ -517,18 +517,18 @@ Panel {
   }
 
   function setResolution(name, resolution) {
-    runAction(["quattro-hyprland-monitor-resolution", "--monitor", name, resolution])
+    runAction(["quattro-hyprland-monitor", "resolution", "--monitor", name, resolution])
   }
 
   function setMirror(enabled) {
     if (enabled === mirrorEnabled) return
     pendingMirror = enabled ? "on" : "off"
     mirrorSettle.restart()
-    runAction(["quattro-hyprland-monitor-internal-mirror", enabled ? "on" : "off"])
+    runAction(["quattro-hyprland-monitor", "internal-mirror", enabled ? "on" : "off"])
   }
 
   function setRotation(name, degrees) {
-    runAction(["quattro-hyprland-monitor-rotate", "--monitor", name, String(degrees)])
+    runAction(["quattro-hyprland-monitor", "rotate", "--monitor", name, String(degrees)])
   }
 
   // The layout map's right-click menu: the display it's for, where it opened

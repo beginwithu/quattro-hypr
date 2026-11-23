@@ -19,7 +19,7 @@ export HYPRLAND_NO_RT=1
 
 # Bitwarden keeps its key in memfd_secret memory, which turns hibernation off while it runs.
 # When every swap a hibernation image can go to is encrypted, let it use locked memory instead.
-if quattro-hibernation-encrypted; then
+if quattro-hibernation encrypted; then
   export SECURE_KEY_CONTAINER_BACKEND=${SECURE_KEY_CONTAINER_BACKEND:-mlock}
 fi
 

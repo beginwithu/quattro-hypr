@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# quattro:summary=Launch a terminal in the active terminal's current directory
-# quattro:args=[--pid=<terminal-pid>] [command...]
+# quattro:summary=Launch a terminal in the active terminal's current directory (or attach to tmux with --tmux)
+# quattro:args=[--pid=<terminal-pid>] [--tmux] [command...]
+
+set -euo pipefail
 
 pid=""
 if [[ ${1:-} == --pid=* ]]; then
@@ -9,4 +11,9 @@ if [[ ${1:-} == --pid=* ]]; then
   shift
 fi
 
-exec setsid uwsm-app -- xdg-terminal-exec --dir="$(quattro-cmd-terminal-cwd "$pid")" "$@"
+if [[ ${1:-} == "--tmux" ]]; then
+  shift
+  set -- bash -c "tmux attach || tmux new -s Work"
+fi
+
+exec setsid uwsm-app -- xdg-terminal-exec --dir="$(quattro-cmd terminal-cwd "$pid")" "$@"

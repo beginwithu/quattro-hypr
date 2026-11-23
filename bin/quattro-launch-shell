@@ -3,6 +3,9 @@
 # quattro:summary=Launch the Quattro shell with its log kept in the journal
 # quattro:hidden=true
 
+
+set -uo pipefail
+
 QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 export QUATTRO_PATH
 

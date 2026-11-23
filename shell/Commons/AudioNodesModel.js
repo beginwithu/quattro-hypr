@@ -18,9 +18,7 @@ function wholeNamePattern(pattern) {
   }
 }
 
-// A platform's audio hints, which its own package ships in the platform root
-// (/usr/share/quattro-platform/audio.json, read by AudioNodes.qml; Quattro
-// ships none): nodes of its audio processing that are neither devices nor apps.
+// Audio hints for nodes of audio processing that are neither devices nor apps:
 //
 //   { "hidden": ["<pattern>", ...],
 //     "replaced": [{ "node": "<pattern>", "by": "<pattern>" }, ...] }

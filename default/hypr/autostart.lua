@@ -5,7 +5,7 @@ hl.on("hyprland.start", function()
 
   hl.exec_cmd("quattro-launch-shell")
   hl.exec_cmd("quattro-session-init")
-  hl.exec_cmd("quattro-powerprofiles-init")
+  hl.exec_cmd("quattro-powerprofiles init")
   hl.exec_cmd("quattro-hyprland-software-rendering")
   hl.exec_cmd(o.launch("quattro-hyprland-monitor-watch"))
   hl.exec_cmd(o.launch("udiskie --automount --no-notify --no-tray"))

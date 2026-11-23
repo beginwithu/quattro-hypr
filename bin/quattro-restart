@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# quattro:summary=Restart or reload Quattro desktop services and components
+# quattro:group=restart
+# quattro:args=<audio|bluetooth|btop|hyprctl|hyprsunset|shell|tmux|trackpad|wifi|xcompose|app <name> [args...]>
+# quattro:examples=quattro restart shell | quattro restart hyprctl | quattro restart wifi | quattro restart bluetooth
+
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage: quattro-restart <component> [args...]
+
+  audio         Restart PipeWire/WirePlumber audio stack
+  bluetooth     Unblock and list Bluetooth adapters
+  btop          Reload running btop instances (SIGUSR2)
+  hyprctl       Reload Hyprland configuration
+  hyprsunset    Restart hyprsunset nightlight service
+  shell         Restart Quickshell desktop shell
+  tmux          Reload ~/.config/tmux/tmux.conf in active sessions
+  trackpad      Reset I2C HID trackpad driver
+  wifi          Unblock and rescan Wi-Fi via NetworkManager
+  xcompose      Notify that XCompose bindings apply to new windows
+  app <cmd...>  Kill and relaunch an application via uwsm-app
+USAGE
+}
+
+restart_app() {
+  (( $# >= 1 )) || { usage >&2; exit 1; }
+  pkill -x -- "$1" 2>/dev/null || true
+  setsid uwsm-app -- "$@" >/dev/null 2>&1 &
+}
+
+restart_hyprctl() {
+  local -a instance=()
+  if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+    instance=(--instance 0)
+  fi
+  hyprctl "${instance[@]}" reload >/dev/null 2>&1 || true
+}
+
+restart_trackpad() {
+  is_touchpad() {
+    local input
+    for input in "$1"/*/input/input*; do
+      if udevadm info --query=property "$input" 2>/dev/null | grep -qx "ID_INPUT_TOUCHPAD=1"; then
+        return 0
+      fi
+    done
+    return 1
+  }
+
+  echo "Releasing the trackpad in Hyprland..."
+  quattro-toggle input-device touchpad cycle || true
+
+  local driver="${QUATTRO_I2C_HID_DRIVER_PATH:-/sys/bus/i2c/drivers/i2c_hid_acpi}"
+  local dev I2C_DEVICE
+  for dev in "$driver"/i2c-*; do
+    [[ -e $dev ]] || continue
+    is_touchpad "$dev" || continue
+    I2C_DEVICE=$(basename "$dev")
+    echo "Resetting $I2C_DEVICE via i2c_hid_acpi unbind/rebind..."
+    echo "$I2C_DEVICE" | sudo tee "$driver/unbind" >/dev/null
+    sleep 1
+    echo "$I2C_DEVICE" | sudo tee "$driver/bind" >/dev/null
+    echo "Done"
+  done
+
+  if lsmod | grep -q intel_quicki2c; then
+    echo "Reloading intel_quicki2c..."
+    sudo modprobe -r intel_quicki2c && sudo modprobe intel_quicki2c
+  fi
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  app)
+    restart_app "$@"
+    ;;
+  audio)
+    exec quattro-restart-audio "$@"
+    ;;
+  bluetooth)
+    echo -e "Unblocking bluetooth...\n"
+    rfkill unblock bluetooth
+    rfkill list bluetooth
+    ;;
+  btop)
+    pkill -SIGUSR2 -x btop 2>/dev/null || (( $? <= 1 ))
+    ;;
+  hyprctl)
+    restart_hyprctl
+    ;;
+  hyprsunset)
+    restart_app hyprsunset
+    ;;
+  shell)
+    exec quattro-restart-shell "$@"
+    ;;
+  tmux)
+    if tmux has-session 2>/dev/null; then
+      tmux source-file ~/.config/tmux/tmux.conf
+    fi
+    ;;
+  trackpad)
+    restart_trackpad
+    ;;
+  wifi)
+    echo -e "Unblocking wifi...\n"
+    rfkill unblock wifi
+    nmcli networking on
+    nmcli radio wifi on
+    nmcli device wifi rescan 2>/dev/null || true
+    rfkill list wifi
+    ;;
+  xcompose)
+    quattro-notification-send -u low "XCompose updated" "New XCompose bindings apply to newly opened windows." || true
+    ;;
+  -h | --help | help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

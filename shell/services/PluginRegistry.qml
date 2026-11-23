@@ -284,7 +284,7 @@ QtObject {
 
     // A section without an anchor (the tray's drawer, for one) takes a widget
     // put there at its end.
-    var anchors = { left: "quattro.workspaces", centerEnd: "quattro.weather", right: "quattro.tray" }
+    var anchors = { left: "quattro.workspaces", centerEnd: "quattro.system-update", right: "quattro.tray" }
     if (!anchors[section]) return { section: section, index: config.bar.layout[section].length }
     var anchor = findRelativeBarLocation(config, anchors[section], section)
     return {
@@ -685,80 +685,9 @@ QtObject {
     }
   }
 
-  property Process initProcess: Process {
-    onExited: {
-      registry.reapOrphanedPluginWatchers()
-    }
-  }
-
-  // Quickshell does not take its Process children with it when it stops, so
-  // every shell restart leaves this watcher running, reparented to init
-  // (63 of them on one long-lived machine). Before starting our own, stop
-  // any plugin watcher whose parent is no longer a shell; a live shell's
-  // watcher — parented to it — is left alone. The [i] keeps this script's
-  // own command line from matching its search.
-  property Process watcherReaper: Process {
-    onExited: {
-      localPluginWatcher.running = true
-      registry.rescan()
-    }
-  }
-
-  function reapOrphanedPluginWatchers() {
-    watcherReaper.command = ["bash", "-c",
-      "for p in $(pgrep -f '[i]notifywait -m -r -q -e close_write,create,delete,move' || true); do "
-        + "tr '\\0' '\\n' < \"/proc/$p/cmdline\" 2>/dev/null | grep -Fxq \"$1\" || continue; "
-        + "parent=$(ps -o ppid= -p \"$p\" 2>/dev/null | tr -d ' '); "
-        + "[[ $parent =~ ^[0-9]+$ ]] || continue; "
-        + "case \"$(ps -o comm= -p \"$parent\" 2>/dev/null)\" in quickshell|qs) ;; *) kill \"$p\" 2>/dev/null || true ;; esac; "
-        + "done; true",
-      "watcher-reaper", registry.pluginsDir]
-    watcherReaper.running = true
-  }
-
-  // A graceful stop takes the watcher with it; the reaper above covers the
-  // stops that never run this (a killed or crashed shell).
-  Component.onDestruction: {
-    localPluginWatcherRestart.stop()
-    localPluginWatcher.running = false
-  }
-
-  property Process localPluginWatcher: Process {
-    command: [
-      "inotifywait",
-      "-m",
-      "-r",
-      "-q",
-      "-e",
-      "close_write,create,delete,move",
-      "--format",
-      "%w%f",
-      registry.pluginsDir
-    ]
-    stdout: SplitParser {
-      onRead: function(path) {
-        var pluginId = registry.localPluginIdForPath(path)
-        if (pluginId) registry.localPluginChanged(pluginId)
-      }
-    }
-    onExited: localPluginWatcherRestart.restart()
-  }
-
-  property Timer localPluginWatcherRestart: Timer {
-    interval: 1000
-    onTriggered: localPluginWatcher.running = true
-  }
-
   function rescan() {
     if (scanning) return
     scanning = true
-    // $0 = first-party dir, $1 = third-party dir. Some bash versions need the explicit -- separator.
-    // First-party plugins may be grouped one level deeper, e.g. panels/audio
-    // or services/battery.
-    // First-party bar widgets can also carry sibling manifests such as
-    // widgets/Clock.manifest.json so multiple widgets can live in one source
-    // directory without wrapper folders.
-    // Third-party plugins stay at the top level of ~/.config/quattro/plugins.
     var script = ""
       + "emit_manifest() { local kind=\"$1\"; local manifest=\"$2\"; local sub; "
       + "  if [[ ${manifest##*/} == \"manifest.json\" ]]; then sub=\"${manifest%/manifest.json}\"; else sub=\"${manifest%/*}\"; fi; "
@@ -770,39 +699,8 @@ QtObject {
       + "  [[ -d \"$dir\" ]] || return 0; "
       + "  while IFS= read -r manifest; do emit_manifest firstparty \"$manifest\"; done < <(find \"$dir\" -mindepth 2 -maxdepth 3 -type f \\( -name manifest.json -o -name '*.manifest.json' \\) | sort); "
       + "}; "
-      + "scan_thirdparty() { local dir=\"$1\"; "
-      + "  [[ -d \"$dir\" ]] || return 0; "
-      + "  for sub in \"$dir\"/*/; do "
-      + "    [[ -f \"$sub/manifest.json\" ]] || continue; "
-      + "    emit_manifest thirdparty \"$sub/manifest.json\"; "
-      + "  done; "
-      + "}; "
-      + "scan_firstparty \"$0\"; "
-      + "scan_thirdparty \"$1\""
-    scanProcess.command = ["bash", "-c", script, registry.firstPartyDir, registry.pluginsDir]
+      + "scan_firstparty \"$0\""
+    scanProcess.command = ["bash", "-c", script, registry.firstPartyDir]
     scanProcess.running = true
   }
-
-  function ensureUserDir() {
-    initProcess.command = ["bash", "-c", "mkdir -p \"$0\"", registry.pluginsDir]
-    initProcess.running = true
-  }
-
-  function localPluginIdForPath(filePath) {
-    var base = pluginsDir.replace(/\/$/, "") + "/"
-    var path = String(filePath || "").trim()
-    if (path.indexOf(base) !== 0) return ""
-
-    var relative = path.slice(base.length)
-    // Hidden entries are not plugins: clone staging dirs, remove backups.
-    if (relative.indexOf(".") === 0) return ""
-    if (relative.indexOf("/.git/") !== -1 || relative.endsWith("/.git")) return ""
-    // Bytecode a plugin's Python helper writes on import would otherwise reload it, restart the helper, and loop.
-    if (/\/__pycache__(\/|$)/.test(relative)) return ""
-
-    var slash = relative.indexOf("/")
-    return slash === -1 ? relative : relative.slice(0, slash)
-  }
-
-  Component.onCompleted: ensureUserDir()
 }

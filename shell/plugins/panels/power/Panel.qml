@@ -172,7 +172,7 @@ Panel {
 
   function setProfile(profile) {
     if (!profile || actionProc.running) return
-    actionProc.command = ["quattro-powerprofiles-set", root.discharging ? "battery" : "ac", profile]
+    actionProc.command = ["quattro-powerprofiles", "set", root.discharging ? "battery" : "ac", profile]
     actionProc.running = true
   }
 
@@ -223,7 +223,7 @@ Panel {
 
   Process {
     id: profilesProc
-    command: ["quattro-powerprofiles-list", "--active-state"]
+    command: ["quattro-powerprofiles", "list", "--active-state"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateProfiles(text) }
   }
 

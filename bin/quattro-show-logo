@@ -1,9 +1,0 @@
-#!/bin/bash
-
-# quattro:summary=Display the Quattro logo in the terminal using green color.
-
-clear
-echo -e "\033[32m"
-cat <$QUATTRO_PATH/logo.txt
-echo -e "\033[0m"
-echo

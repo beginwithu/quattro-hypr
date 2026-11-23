@@ -5,7 +5,7 @@ ConditionPathExists=%h/.local/state/quattro/toggles/hypr/internal-monitor-disabl
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/env quattro-hw-recover-internal-monitor
+ExecStart=/usr/bin/env quattro-hw recover-internal-monitor
 
 [Install]
 WantedBy=graphical-session-pre.target

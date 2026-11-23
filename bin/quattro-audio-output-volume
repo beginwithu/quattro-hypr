@@ -4,6 +4,9 @@
 # quattro:args=<raise|lower|mute-toggle|+N|-N>
 # quattro:examples=quattro audio output volume raise | quattro audio output volume lower | quattro audio output volume mute-toggle | quattro audio output volume +1
 
+
+set -uo pipefail
+
 action="${1:-}"
 
 if [[ -z $action ]]; then
@@ -14,7 +17,7 @@ fi
 # Resolve through any DSP sink to the physical one, so the keys always move real
 # loudness and the processing always sees full-scale input. Shared with the audio
 # panel and the output switcher.
-sink="$(quattro-audio-output-sink)"
+sink="$(quattro-audio output-sink)"
 if [[ -z $sink ]]; then
   echo "Could not resolve an audio sink to control." >&2
   exit 1

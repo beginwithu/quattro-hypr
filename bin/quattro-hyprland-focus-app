@@ -4,6 +4,9 @@
 # quattro:args=<app-name>
 # quattro:examples=quattro hyprland focus app Slack
 
+
+set -uo pipefail
+
 usage() {
   echo "Usage: quattro-hyprland-focus-app <app-name>" >&2
   exit 1

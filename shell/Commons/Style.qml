@@ -265,7 +265,7 @@ QtObject {
   // ---------------------------------------------------------- typography
   //
   // `fontFamily` defaults to "monospace" so the bar and every qs.Ui
-  // component follows the fontconfig alias `quattro-font-set` writes.
+  // component follows the fontconfig alias `quattro-font set` writes.
   // Themes can override per-token via [font] in shell.toml, but the
   // family stays system-wide.
   property string fontFamily: "monospace"
@@ -372,8 +372,6 @@ QtObject {
 
   function refresh() {
     hyprctlProc.running = true
-    gapsOutProc.running = true
-    animationsProc.running = true
   }
 
   function scheduleRefresh() {
@@ -393,12 +391,29 @@ QtObject {
   function applyGapsOutJson(raw) {
     try {
       var json = JSON.parse(raw || "{}")
-      var css = String(json.css || "")
+      var css = String(json.custom || json.css || "")
       var parts = css.match(/-?\d+(?:\.\d+)?/g) || []
       var n = parts.length > 0 ? Number(parts[0]) : Number(json.int)
       if (isFinite(n) && n >= 0) gapsOut = Math.max(0, Math.round(n / 2))
     } catch (e) {
       // hyprctl missing / Hyprland not running — leave the previous value.
+    }
+  }
+
+  function applyHyprctlBatchJson(raw) {
+    var matches = String(raw || "").match(/\{[^{}]*\}/g) || []
+    for (var i = 0; i < matches.length; i++) {
+      try {
+        var json = JSON.parse(matches[i])
+        if (json.option === "decoration:rounding") {
+          applyRoundingJson(matches[i])
+        } else if (json.option === "animations:enabled") {
+          reduceMotion = json.bool === false || json.int === 0
+        } else if (json.option === "general:gaps_out") {
+          applyGapsOutJson(matches[i])
+        }
+      } catch (e) {
+      }
     }
   }
 
@@ -467,25 +482,10 @@ QtObject {
 
   property Process hyprctlProc: Process {
     id: hyprctlProc
-    command: ["hyprctl", "-j", "getoption", "decoration:rounding"]
+    command: ["hyprctl", "-j", "--batch", "getoption decoration:rounding ; getoption animations:enabled ; getoption general:gaps_out"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.applyRoundingJson(text)
-    }
-  }
-
-  property Process animationsProc: Process {
-    id: animationsProc
-    command: ["hyprctl", "-j", "getoption", "animations:enabled"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        try {
-          root.reduceMotion = JSON.parse(text || "{}").bool === false
-        } catch (e) {
-          // hyprctl missing / Hyprland not running — leave the previous value.
-        }
-      }
+      onStreamFinished: root.applyHyprctlBatchJson(text)
     }
   }
 
@@ -495,15 +495,6 @@ QtObject {
     target: Hyprland
     function onRawEvent(event) {
       if (event && String(event.name) === "configreloaded") root.refresh()
-    }
-  }
-
-  property Process gapsOutProc: Process {
-    id: gapsOutProc
-    command: ["hyprctl", "-j", "getoption", "general:gaps_out"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.applyGapsOutJson(text)
     }
   }
 

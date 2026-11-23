@@ -4,6 +4,9 @@
 # quattro:group=network
 # quattro:args=[down|up]
 
+
+set -uo pipefail
+
 if (( $# != 1 )) || [[ $1 != "down" && $1 != "up" ]]; then
   echo "Usage: quattro-network-speedtest [down|up]" >&2
   exit 2

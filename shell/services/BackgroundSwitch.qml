@@ -51,7 +51,7 @@ Item {
     return path && !Util.isVideoPath(path) ? path : ""
   }
 
-  // quattro-theme-bg-set's selection.
+  // quattro-theme-bg set's selection.
   function switchTo(path, _clipPath) {
     path = String(path || "").trim()
     if (!path || !intro || !backgroundService) return "unavailable"
@@ -137,7 +137,7 @@ Item {
     }
     ownedCovers = kept
     if (queuedPath) {
-      Quickshell.execDetached(["quattro-theme-bg-set", queuedPath])
+      Quickshell.execDetached(["quattro-theme-bg", "set", queuedPath])
       queuedPath = ""
     }
   }
@@ -157,7 +157,7 @@ Item {
 
   Process {
     id: reloadLock
-    command: ["flock", root.themeSetLock, "bash", "-c", 'echo locked; read -r go; [[ $go != reload ]] || exec quattro-restart-hyprctl']
+    command: ["flock", root.themeSetLock, "bash", "-c", 'echo locked; read -r go; [[ $go != reload ]] || exec quattro-restart hyprctl']
     stdinEnabled: true
     stdout: SplitParser {
       onRead: {

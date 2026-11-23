@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# quattro:summary=List or set system power profiles for AC and battery use
+# quattro:group=powerprofiles
+# quattro:args=<init|list [--active-state]|set [autodetect|ac|battery] [profile]>
+# quattro:examples=quattro powerprofiles list | quattro powerprofiles set ac performance
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: quattro-powerprofiles <init|list [--active-state]|set [autodetect|ac|battery] [power-saver|balanced|performance]>" >&2
+  exit 1
+}
+
+pp_list() {
+  if [[ ${1:-} != "" && ${1:-} != "--active-state" ]]; then
+    usage
+  fi
+
+  powerprofilesctl list 2>/dev/null |
+    awk -v with_state="${1:+1}" '/^\s*[* ]\s*[a-zA-Z0-9-]+:$/ {
+      active = ($1 == "*") ? 1 : 0
+      gsub(/^[*[:space:]]+|:$/, "")
+      print $0 (with_state ? "\t" active : "")
+    }' |
+    tac
+}
+
+pp_set() {
+  local action="${1:-autodetect}"
+  local requested_profile="${2:-}"
+  (( $# <= 2 )) || usage
+
+  case "$action" in
+    autodetect)
+      if [[ $(busctl get-property org.freedesktop.UPower /org/freedesktop/UPower org.freedesktop.UPower OnBattery 2>/dev/null || true) == "b true" ]]; then
+        action=battery
+      else
+        action=ac
+      fi
+      ;;
+    ac | battery) ;;
+    *) usage ;;
+  esac
+
+  local -a profiles=()
+  mapfile -t profiles < <(pp_list)
+
+  profile_available() {
+    [[ " ${profiles[*]} " == *" $1 "* ]]
+  }
+
+  local state_dir="${QUATTRO_POWERPROFILES_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/quattro/powerprofiles}"
+  local state_file="$state_dir/$action"
+  local profile=""
+
+  if [[ -n $requested_profile ]]; then
+    profile_available "$requested_profile" || {
+      echo "Power profile is not available: $requested_profile" >&2
+      exit 1
+    }
+    profile="$requested_profile"
+  elif [[ -r $state_file ]]; then
+    profile=$(<"$state_file")
+  fi
+
+  if [[ -z $profile ]] || ! profile_available "$profile"; then
+    if [[ $action == "ac" ]] && profile_available performance; then
+      profile=performance
+    else
+      profile=balanced
+    fi
+  fi
+
+  powerprofilesctl set "$profile"
+  quattro-shell -q battery refreshPowerProfile >/dev/null 2>&1 || true
+
+  if [[ -n $requested_profile ]]; then
+    mkdir -p "$state_dir"
+    printf '%s\n' "$requested_profile" >"$state_file"
+  fi
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  init) pp_set autodetect ;;
+  list) pp_list "$@" ;;
+  set) pp_set "$@" ;;
+  autodetect | ac | battery) pp_set "$cmd" "$@" ;;
+  *) usage ;;
+esac

@@ -3,6 +3,9 @@
 # quattro:summary=Restart the Quattro shell
 # quattro:examples=quattro restart shell
 
+
+set -uo pipefail
+
 QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 
 # A caller opened after dev link/unlink may disagree with the still-running
@@ -87,7 +90,7 @@ fi
 # Another checkout's shell goes too: a worktree's, left after a visual check.
 # quattro-shell cannot reach it, and until it is gone it keeps the
 # notification server and polkit agent from the fresh shell. Only a config
-# inside an Quattro tree counts, so someone's own Quickshell config stays.
+# inside a Quattro tree counts, so someone's own Quickshell config stays.
 quattro_shell_dirs() {
   local dir
 

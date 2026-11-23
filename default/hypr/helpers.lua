@@ -120,12 +120,6 @@ local function command_from(value, description)
     return o.launch_sole(value.focus, value.launch)
   elseif value.launch then
     return o.launch(value.launch)
-  elseif value.webapp then
-    if value.focus then
-      return o.launch_webapp_sole(description, value.webapp)
-    else
-      return o.launch_webapp(value.webapp)
-    end
   elseif value.tui then
     if value.focus then
       return "quattro-launch-or-focus-tui " .. shell_quote(value.tui)
@@ -204,20 +198,12 @@ function o.launch_on_start(command)
   o.exec_on_start(o.launch(command))
 end
 
-function o.launch_webapp(url)
-  return "quattro-launch-webapp " .. shell_quote(url)
-end
-
-function o.launch_webapp_sole(name, url)
-  return "quattro-launch-or-focus-webapp " .. shell_quote(name) .. " " .. shell_quote(url)
-end
-
 function o.launch_sole(match, command)
   return "quattro-launch-or-focus " .. shell_quote(match) .. " " .. shell_quote(o.launch(command))
 end
 
 function o.bind_toggle(keys, description, toggle, options)
-  o.bind(keys, description, "quattro-toggle-" .. toggle, options)
+  o.bind(keys, description, "quattro-toggle " .. toggle, options)
 end
 
 -- Bind one action to a key's press and another to its release, as for
@@ -284,7 +270,7 @@ end
 -- Whether this session gets default/hypr/software-rendering.lua's lighter look:
 -- it renders on the CPU (llvmpipe or softpipe), as
 -- quattro-hyprland-software-rendering marks it once Hyprland is up, and the user
--- hasn't turned animations back on there with quattro-toggle-animations.
+-- hasn't turned animations back on there with quattro-toggle animations.
 function o.software_rendering_defaults()
   local runtime = os.getenv("XDG_RUNTIME_DIR")
   local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")

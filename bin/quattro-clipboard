@@ -1,0 +1,153 @@
+#!/bin/bash
+
+# quattro:summary=Open, copy, or paste clipboard history entries
+# quattro:group=clipboard
+# quattro:args=<open|paste-file|paste-text> [args...]
+# quattro:hidden=true
+
+set -euo pipefail
+
+clipboard_open() {
+  local history_index=""
+  local history_path="$HOME/.local/state/quattro/clipboard-history.json"
+
+  while (( $# > 0 )); do
+    case "$1" in
+      --history-index)
+        (( $# >= 2 )) || exit 1
+        history_index="$2"
+        shift 2
+        ;;
+      *)
+        echo "Usage: quattro-clipboard open --history-index <index>" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  [[ $history_index =~ ^[0-9]+$ ]] || exit 1
+  [[ -r $history_path ]] || exit 1
+
+  local entry_type
+  entry_type=$(jq -er --argjson index "$history_index" '.[$index].type' "$history_path") || exit 1
+
+  case "$entry_type" in
+    image)
+      local path
+      path=$(jq -er --argjson index "$history_index" '.[$index].path' "$history_path") || exit 1
+      [[ -r $path ]] || exit 1
+      if command -v imv >/dev/null 2>&1; then
+        exec setsid uwsm-app -- imv "$path"
+      elif command -v satty >/dev/null 2>&1; then
+        exec setsid uwsm-app -- satty -f "$path"
+      else
+        exec xdg-open "$path"
+      fi
+      ;;
+    text)
+      local text url="" open_dir open_file
+      text=$(jq -er --argjson index "$history_index" '.[$index].text' "$history_path") || exit 1
+      url=$(grep -Eom1 'https?://[^[:space:]"'\''<>]+' <<<"$text" || true)
+      if [[ -z $url && $text =~ ^[[:space:]]*([[:alnum:]][[:alnum:].-]+\.[[:alpha:]]{2,})(/[^[:space:]]*)?[[:space:]]*$ ]]; then
+        url="https://${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+      fi
+      if [[ -n $url ]]; then
+        exec quattro-launch-browser "$url"
+      fi
+      open_dir="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/clipboard-open"
+      mkdir -p "$open_dir"
+      open_file=$(mktemp --tmpdir="$open_dir" clipboard.XXXXXX.txt) || exit 1
+      printf '%s' "$text" >"$open_file"
+      exec quattro-launch-editor "$open_file"
+      ;;
+    *)
+      exit 1
+      ;;
+  esac
+}
+
+clipboard_paste_file() {
+  local copy_only=false
+  if [[ ${1:-} == "--copy-only" ]]; then
+    copy_only=true
+    shift
+  fi
+
+  local mime=${1:-}
+  local path=${2:-}
+  if [[ -z $mime || -z $path ]]; then
+    echo "Usage: quattro-clipboard paste-file [--copy-only] <mime-type> <path>" >&2
+    exit 1
+  fi
+  [[ -r $path ]] || exit 1
+
+  wl-copy --type "$mime" <"$path"
+  [[ $copy_only == "true" ]] && return 0
+
+  sleep 0.15
+  wtype -M shift -k Insert -m shift 2>/dev/null || true
+}
+
+clipboard_paste_text() {
+  local use_shift_insert=false use_universal=false copy_only=false
+  local history_index="" text=""
+
+  while (( $# > 0 )); do
+    case "$1" in
+      --shift-insert) use_shift_insert=true; shift ;;
+      --universal) use_universal=true; shift ;;
+      --copy-only) copy_only=true; shift ;;
+      --history-index)
+        (( $# >= 2 )) || exit 1
+        history_index="$2"
+        shift 2
+        ;;
+      *) break ;;
+    esac
+  done
+
+  if [[ -n $history_index ]]; then
+    local history_path="$HOME/.local/state/quattro/clipboard-history.json"
+    [[ $history_index =~ ^[0-9]+$ ]] || return 0
+    jq -e --argjson index "$history_index" '.[$index].type == "text" and (.[$index].text | type == "string")' "$history_path" >/dev/null || return 0
+    jq -j --argjson index "$history_index" '.[$index].text' "$history_path" | wl-copy
+    [[ $copy_only != "true" ]] && use_shift_insert=true
+  else
+    text=${1:-}
+    [[ -n $text ]] || return 0
+    printf '%s' "$text" | wl-copy
+  fi
+
+  [[ $copy_only == "true" ]] && return 0
+
+  sleep 0.15
+  if [[ $use_universal == "true" ]]; then
+    hyprctl dispatch 'o.universal_paste' >/dev/null 2>&1 || true
+  elif [[ $use_shift_insert == "true" ]]; then
+    wtype -M shift -k Insert -m shift 2>/dev/null || true
+  else
+    wtype -- "$text" 2>/dev/null || true
+  fi
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  open) clipboard_open "$@" ;;
+  paste-file) clipboard_paste_file "$@" ;;
+  paste-text) clipboard_paste_text "$@" ;;
+  paste)
+    sub="${1:-}"
+    (( $# > 0 )) && shift || true
+    case "$sub" in
+      file) clipboard_paste_file "$@" ;;
+      text) clipboard_paste_text "$@" ;;
+      *) echo "Usage: quattro-clipboard <open|paste-file|paste-text> [args...]" >&2; exit 1 ;;
+    esac
+    ;;
+  *)
+    echo "Usage: quattro-clipboard <open|paste-file|paste-text> [args...]" >&2
+    exit 1
+    ;;
+esac

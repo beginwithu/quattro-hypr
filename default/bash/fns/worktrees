@@ -11,9 +11,6 @@ ga() {
   local wt_path="../${base}--${safe_branch}"
 
   git worktree add -b "$branch" "$wt_path" || return 1
-  if command -v mise >/dev/null 2>&1; then
-    mise trust "$wt_path"
-  fi
   cd "$wt_path" || return 1
 }
 

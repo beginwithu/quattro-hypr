@@ -263,11 +263,11 @@ Item {
       Util.execArgv(["quattro-shell", "shell", "summon", "quattro.image-picker", payload])
   }
 
-  // quattro-theme-bg-set tells this service of the new background itself. A
+  // quattro-theme-bg set tells this service of the new background itself. A
   // refresh here would start an ordinary transition under an intro's cover.
   Process {
     id: bgSwitchProc
-    command: ["bash", "-c", "background=$(quattro-theme-bg-switcher); [[ -n $background ]] && quattro-theme-bg-set \"$background\""]
+    command: ["bash", "-c", "background=$(quattro-theme-bg switcher); [[ -n $background ]] && quattro-theme-bg set \"$background\""]
   }
 
   Process {

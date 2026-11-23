@@ -20,6 +20,9 @@
 #   --match-monitor print "monitor:NAME" instead when the picked geometry
 #                   exactly matches a monitor
 
+
+set -uo pipefail
+
 FULLSCREEN_MARKER="${XDG_RUNTIME_DIR:-/tmp}/quattro-capture-region-fullscreen"
 WINDOW_MARKER="${XDG_RUNTIME_DIR:-/tmp}/quattro-capture-region-window"
 

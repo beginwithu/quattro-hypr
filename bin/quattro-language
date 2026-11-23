@@ -78,9 +78,7 @@ generator=/usr/bin/quattro-locale-generate
 # True when sudo would run the helper for this code without a password. `sudo
 # -l` alone only says a command is permitted, which the blanket %wheel rule
 # answers yes to; the long listing prints the matched entry's tags, so
-# !authenticate is the grant and nothing else. Under -n it prompts for
-# nothing, so a machine whose quattro-settings predates the grant falls
-# through to a prompt instead of failing.
+# !authenticate is the grant and nothing else.
 generator_is_passwordless() {
   sudo -n -l -l "$generator" "$1" 2>/dev/null | grep -q '!authenticate'
 }
@@ -118,20 +116,6 @@ apply_session_locale() {
   fi
 }
 
-# A Chinese, Japanese or Korean language brings its input method and glyph
-# forms, unless the user already has an input method or chose the forms.
-seed_typing() {
-  local method
-  case $1 in
-  ja) method=mozc ;;
-  ko) method=hangul ;;
-  zh-CN) method=pinyin ;;
-  zh-TW) method=chewing ;;
-  *) return 0 ;;
-  esac
-  /usr/bin/python3 "$QUATTRO_PATH/default/input-methods/typing_setup.py" seed-language "$method" || true
-}
-
 set_language() {
   local code=$1
   if ! known_language "$code"; then
@@ -151,7 +135,6 @@ set_language() {
   # password prompt cannot leave the interface switched with LANG behind it.
   mkdir -p "$(dirname "$language_file")"
   echo "$code" >"$language_file"
-  seed_typing "$code"
   apply_session_locale "$locale"
 
   quattro-notification-send -g  "$(quattro-i18n language.changed "$name")" "$(quattro-i18n language.newApps)"

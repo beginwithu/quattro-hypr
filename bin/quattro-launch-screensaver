@@ -3,6 +3,9 @@
 # quattro:summary=Launch the Quattro screensaver on every display.
 # quattro:args=[force|stop] [options]
 
+
+set -uo pipefail
+
 if [[ ${1:-} == "stop" || ${1:-} == "--stop" ]]; then
   quattro-shell -q shell hide quattro.screensaver >/dev/null 2>&1 || true
   pkill -f 'quickshell -p .*/shell/screensaver\.qml' >/dev/null 2>&1 || true
@@ -16,7 +19,7 @@ if [[ ${1:-} == "force" ]]; then
 fi
 
 if (( !force )); then
-  if command -v quattro-toggle-enabled >/dev/null 2>&1 && quattro-toggle-enabled screensaver-off; then
+  if command -v quattro-toggle >/dev/null 2>&1 && quattro-toggle --enabled screensaver-off; then
     exit 0
   fi
   if [[ $(quattro-shell -q lock isLocked 2>/dev/null || true) == "true" ]]; then

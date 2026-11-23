@@ -296,7 +296,7 @@ Item {
     if (modeProc.running || root.pendingModes.length === 0) return
     root.modeProcWorkspace = root.pendingModes.shift()
     root.modeProcGeneration = root.modeGeneration
-    modeProc.command = ["quattro-hyprland-workspace-layout-current", String(root.modeProcWorkspace)]
+    modeProc.command = ["quattro-hyprland-workspace-layout", "current", String(root.modeProcWorkspace)]
     modeProc.running = true
   }
 

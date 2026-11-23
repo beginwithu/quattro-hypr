@@ -162,15 +162,6 @@ install_runtime() {
     fi
   done
 
-  # Resolve file:///usr/share/quattro in bundled Chromium CRX manifests for standalone installs
-  for crx_file in \
-    "$INSTALL_DIR/default/chromium/crx/updates.xml" \
-    "$INSTALL_DIR/default/chromium/policies/chrome-extensions.json"; do
-    if [[ -f $crx_file ]]; then
-      sed -i "s|file:///usr/share/quattro|file://$INSTALL_DIR|g" "$crx_file"
-    fi
-  done
-
   echo "==> Linking quattro-* commands into $BIN_LINK_DIR..."
   mkdir -p "$BIN_LINK_DIR"
   for link in "$BIN_LINK_DIR"/quattro-*; do
@@ -195,25 +186,9 @@ install_user_configs() {
 
     if [[ -d $entry ]]; then
       mkdir -p "$target"
-      # Copy sub-items individually so existing user files outside Quattro defaults are preserved
-      while IFS= read -r -d '' src_file; do
-        local rel="${src_file#$entry/}"
-        local dst_file="$target/$rel"
-        mkdir -p "$(dirname "$dst_file")"
-        cp -a "$src_file" "$dst_file"
-      done < <(find "$entry" \( -type f -o -type l \) -print0)
+      cp -a "$entry/." "$target/"
     else
       cp -a "$entry" "$target"
-    fi
-  done
-
-  # Resolve __QUATTRO_PATH__ in Chromium-family browser flags
-  for flags_file in \
-    "$HOME/.config/brave-origin-flags.conf" \
-    "$HOME/.config/chrome-flags.conf" \
-    "$HOME/.config/chromium-flags.conf"; do
-    if [[ -f $flags_file ]]; then
-      sed -i "s|__QUATTRO_PATH__|$INSTALL_DIR|g" "$flags_file"
     fi
   done
 
@@ -223,7 +198,7 @@ install_user_configs() {
   # Seed ~/.XCompose if missing
   if [[ ! -f $HOME/.XCompose ]]; then
     cat >"$HOME/.XCompose" <<EOF
-# Run quattro-restart-xcompose to apply changes
+# Run quattro-restart xcompose to apply changes
 
 # Include fast emoji access
 include "$INSTALL_DIR/default/xcompose"
@@ -238,13 +213,6 @@ EOF
   # Seed Hyprland toggles directory (only flags.lua; individual toggles opt in when activated)
   mkdir -p "$HOME/.local/state/quattro/toggles/hypr"
   [[ -e $HOME/.local/state/quattro/toggles/hypr/flags.lua ]] || cp -a "$PROJECT_DIR/default/hypr/toggles/flags.lua" "$HOME/.local/state/quattro/toggles/hypr/flags.lua"
-  # One-time cleanup of shipped toggle files copied by earlier installer versions
-  if [[ ! -e $HOME/.local/state/quattro/.toggles-cleaned ]]; then
-    for stale_toggle in bar-glassy.lua corners-rounded.lua corners-sharp.lua no-animations.lua single-window-aspect-ratio.lua window-glassy.lua window-no-gaps.lua window-opaque.lua; do
-      rm -f "$HOME/.local/state/quattro/toggles/hypr/$stale_toggle"
-    done
-    : >"$HOME/.local/state/quattro/.toggles-cleaned"
-  fi
 
   # Seed user systemd environment drop-ins (UWSM 10-quattro is installed system-wide in /usr/share/uwsm/env.d
   # so user overrides in ~/.config/uwsm/env are not clobbered; only seed under ~/.config in sandbox mode)
@@ -255,7 +223,6 @@ EOF
   else
     rm -f "$HOME/.config/uwsm/env.d/10-quattro" "$HOME/.config/xdg-terminal-exec/hyprland-xdg-terminals.list"
   fi
-  cp -a "$PROJECT_DIR/default/environment.d/10-quattro-fcitx.conf" "$HOME/.config/environment.d/10-quattro-fcitx.conf"
 
   cat >"$HOME/.config/environment.d/20-quattro-path.conf" <<EOF
 QUATTRO_PATH=$INSTALL_DIR
@@ -265,9 +232,6 @@ EOF
   # Install desktop entries, icons, and fonts to ~/.local/share
   mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/fonts/quattro" "$HOME/.config/fontconfig/conf.d"
   cp -a "$PROJECT_DIR"/applications/*.desktop "$HOME/.local/share/applications/"
-  if command -v alacritty >/dev/null 2>&1 && [[ -f $PROJECT_DIR/default/alacritty/Alacritty.desktop ]]; then
-    cp -a "$PROJECT_DIR/default/alacritty/Alacritty.desktop" "$HOME/.local/share/applications/"
-  fi
   if command -v foot >/dev/null 2>&1 && [[ -f $PROJECT_DIR/default/foot/foot.desktop ]]; then
     cp -a "$PROJECT_DIR/default/foot/foot.desktop" "$HOME/.local/share/applications/"
   fi
@@ -280,24 +244,6 @@ EOF
   if [[ -d $PROJECT_DIR/applications/icons ]]; then
     cp -a "$PROJECT_DIR/applications/icons/." "$HOME/.local/share/icons/hicolor/256x256/apps/"
   fi
-
-  # Remove orphaned web-app entries whose icon file is missing
-  local app_file exec_line icon_line
-  while IFS= read -r -d '' app_file; do
-    exec_line=$(grep -m1 '^Exec=' "$app_file" 2>/dev/null || true)
-    [[ $exec_line == Exec=*launch-webapp* || $exec_line == Exec=*webapp-handler* ]] || continue
-    icon_line=$(sed -n 's/^Icon=//p' "$app_file" 2>/dev/null | head -n1)
-    if [[ -z $icon_line ]]; then
-      rm -f "$app_file"
-    elif [[ $icon_line == /* && ! -e $icon_line ]]; then
-      rm -f "$app_file"
-    elif [[ $icon_line != /* ]]; then
-      local icon_base="${icon_line%.*}"
-      if ! find -L "$HOME/.local/share/icons" /usr/share/icons /usr/share/pixmaps -type f \( -name "$icon_line" -o -name "$icon_base.png" -o -name "$icon_base.svg" \) -print -quit 2>/dev/null | grep -q .; then
-        rm -f "$app_file"
-      fi
-    fi
-  done < <(find "$HOME/.local/share/applications" -maxdepth 1 -type f -name '*.desktop' -print0 2>/dev/null)
 
   # User-level XKB option (Shift + CapsLock Compose), fastfetch, and mpv defaults
   mkdir -p "$HOME/.config/xkb/rules" "$HOME/.config/xkb/symbols"
@@ -318,10 +264,8 @@ EOF
   # Install user systemd units
   mkdir -p "$HOME/.config/systemd/user"
   for unit in "$PROJECT_DIR"/default/systemd/user/*.service; do
-    cp -a "$unit" "$HOME/.config/systemd/user/"
+    [[ -f $unit ]] && cp -a "$unit" "$HOME/.config/systemd/user/"
   done
-  rm -f "$HOME/.config/systemd/user/wireplumber.service.d/10-quattro-camera-access.conf" \
-        "$HOME/.config/systemd/user/quattro-speaker-tuning.service"
 
   # Install default mimeapps if user doesn't have one yet
   if [[ ! -f $HOME/.config/mimeapps.list ]]; then
@@ -398,7 +342,6 @@ install_system_configs() {
     /usr/share/uwsm/env.d \
     /etc/fastfetch \
     /etc/mpv \
-    /etc/xdg/kitty \
     /etc/xkb/rules \
     /etc/xkb/symbols \
     /etc/fonts/conf.d \
@@ -436,7 +379,6 @@ EOF
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/uwsm/env.d/10-quattro" /usr/share/uwsm/env.d/10-quattro
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/fastfetch/config.jsonc" /etc/fastfetch/config.jsonc
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/mpv/mpv.conf" /etc/mpv/mpv.conf
-  sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/xdg/kitty/kitty.conf" /etc/xdg/kitty/kitty.conf
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/xkb/rules/evdev" /etc/xkb/rules/evdev
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/xkb/symbols/quattro" /etc/xkb/symbols/quattro
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf" /etc/fonts/conf.d/50-quattro.conf
@@ -465,9 +407,7 @@ EOF
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-locale-generate" /usr/bin/quattro-locale-generate
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-apply-lock" /usr/bin/quattro-apply-lock
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-hw-laptop-closed" /usr/bin/quattro-hw-laptop-closed
-  sudo install -Dm644 -o root -g root "$PROJECT_DIR/bin/quattro-security-functions" /usr/bin/quattro-security-functions
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/tmpfiles.d/quattro-nopasswd-sudo.conf" /etc/tmpfiles.d/quattro-nopasswd-sudo.conf
-  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/05-quattro-passwordless-revoke.hook" /usr/share/libalpm/hooks/05-quattro-passwordless-revoke.hook
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/90-quattro-titlebars-rebuild.hook" /usr/share/libalpm/hooks/90-quattro-titlebars-rebuild.hook
 
   # Install Hyprland floating titlebars plugin source, licenses, and build native plugin
@@ -481,7 +421,7 @@ EOF
   if sudo /usr/bin/quattro-build-titlebars --system; then
     rm -f "$HOME/.local/state/quattro/titlebars/titlebars.so"
   fi
-  for sudoers_rule in quattro-dns quattro-theme-browser quattro-locale-generate quattro-tzupdate; do
+  for sudoers_rule in quattro-dns quattro-theme-browser quattro-locale-generate; do
     if [[ -f $PROJECT_DIR/etc/sudoers.d/$sudoers_rule ]] && { ! command -v visudo >/dev/null 2>&1 || visudo -cf "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" >/dev/null 2>&1; }; then
       sudo install -Dm440 -o root -g root "$PROJECT_DIR/etc/sudoers.d/$sudoers_rule" "/etc/sudoers.d/$sudoers_rule"
     fi
@@ -535,9 +475,10 @@ Next steps:
      uwsm start hyprland.desktop
 EOF
 
-if ! $SANDBOX && [[ ${QUATTRO_NO_REBOOT:-0} != "1" ]]; then
+if ! $SANDBOX && [[ ${QUATTRO_NO_REBOOT:-0} != "1" ]] && [[ -t 0 ]]; then
   echo ""
-  echo "==> Installation complete. Rebooting in 5 seconds (Ctrl+C to cancel)..."
-  sleep 5
-  sudo reboot
+  read -r -p "Reboot now to start your Quattro session? [y/N] " reply
+  if [[ $reply =~ ^[Yy]$ ]]; then
+    sudo reboot
+  fi
 fi

@@ -2,6 +2,9 @@
 
 # quattro:summary=Open the Quattro theme switcher
 
+
+set -uo pipefail
+
 print_rows=false
 
 # The shell's picker opens from rows it already holds and runs this to refresh
@@ -24,7 +27,7 @@ find_preview() {
   local theme_path="$1"
   local preview preview_name
 
-  for preview_name in preview.png preview.jpg preview.jpeg preview.webp preview.gif preview.bmp preview.mp4 preview.m4v preview.mov preview.webm preview.mkv preview.avi; do
+  for preview_name in preview.webp preview.png preview.jpg preview.jpeg preview.gif preview.bmp preview.mp4 preview.m4v preview.mov preview.webm preview.mkv preview.avi; do
     preview=$(find -L "$theme_path" -maxdepth 1 -type f -iname "$preview_name" -print -quit 2>/dev/null)
 
     if [[ -n $preview ]]; then
@@ -109,7 +112,7 @@ fi
 
 current_theme=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null)
 selected_preview=""
-for extension in png jpg jpeg webp gif bmp mp4 m4v mov webm mkv avi; do
+for extension in webp png jpg jpeg gif bmp mp4 m4v mov webm mkv avi; do
   if [[ -e $preview_dir/$current_theme.$extension ]]; then
     selected_preview="$preview_dir/$current_theme.$extension"
     break

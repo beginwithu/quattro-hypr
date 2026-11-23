@@ -3,6 +3,11 @@
 # quattro:summary=Apply current Quattro theme colors and background alpha to running Foot terminals
 # quattro:hidden=true
 
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+source "$QUATTRO_PATH/default/bash/lib-common.sh"
+
 colors_toml=$HOME/.local/state/quattro/current/theme/colors.toml
 foot_ini=$HOME/.local/state/quattro/current/theme/foot.ini
 
@@ -12,7 +17,7 @@ foot_ini=$HOME/.local/state/quattro/current/theme/foot.ini
 # once; each terminal's shells come from the kernel's list of its children.
 foot_pids=$(pgrep -x foot) || exit 0
 
-foot_osc=$(quattro-theme-osc "$colors_toml")
+foot_osc=$(quattro_theme_osc "$colors_toml")
 [[ -n $foot_osc ]] || exit 0
 
 # foot takes a background alpha as an urxvt-style [percent] prefix, so a theme

@@ -1,25 +1,64 @@
 #!/bin/bash
 
-# quattro:summary=Toggle permanent Hyprland flags by copying them into a directory that's sourced entirely.
-# quattro:args=<flag-name> [on|off|toggle]
+# quattro:summary=Toggle permanent Hyprland flags or query their state
+# quattro:group=hyprland
+# quattro:name=toggle
+# quattro:args=<--enabled <flag>|--disabled <flag>|--animations-off|<flag-name> [on|off|toggle]>
+
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+TOGGLES_DIR="$HOME/.local/state/quattro/toggles/hypr"
 
 usage() {
-  echo "Usage: quattro-hyprland-toggle <flag-name> [on|off|toggle]" >&2
+  echo "Usage: quattro-hyprland-toggle <--enabled <flag>|--disabled <flag>|--animations-off|<flag-name> [on|off|toggle]>" >&2
+  exit 1
 }
 
-if (($# < 1)); then
-  usage
-  exit 1
-fi
+is_enabled() {
+  [[ -f "$TOGGLES_DIR/${1:-}.lua" ]]
+}
+
+is_disabled() {
+  [[ ! -f "$TOGGLES_DIR/${1:-}.lua" ]]
+}
+
+animations_off() {
+  is_enabled no-animations ||
+    {
+      [[ -e ${XDG_RUNTIME_DIR:-}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/quattro-software-rendering ]] &&
+        ! quattro-toggle --enabled animations-without-gpu &&
+        [[ $(hyprctl -j getoption animations:enabled 2>/dev/null | jq -r '.bool' 2>/dev/null || true) != "true" ]]
+    }
+}
+
+(( $# >= 1 )) || usage
+
+case "$1" in
+  --enabled | enabled)
+    (( $# >= 2 )) || usage
+    is_enabled "$2"
+    exit $?
+    ;;
+  --disabled | disabled)
+    (( $# >= 2 )) || usage
+    is_disabled "$2"
+    exit $?
+    ;;
+  --animations-off | animations-off)
+    animations_off
+    exit $?
+    ;;
+esac
 
 FLAG_NAME="$1"
 ACTION="${2:-toggle}"
-FLAG_FILE="$HOME/.local/state/quattro/toggles/hypr/$FLAG_NAME.lua"
+FLAG_FILE="$TOGGLES_DIR/$FLAG_NAME.lua"
 FLAG_SOURCE="$QUATTRO_PATH/default/hypr/toggles/$FLAG_NAME.lua"
 
 on() {
   if [[ -f $FLAG_SOURCE ]]; then
-    mkdir -p "$(dirname "$FLAG_FILE")"
+    mkdir -p "$TOGGLES_DIR"
     cp "$FLAG_SOURCE" "$FLAG_FILE"
   else
     echo "Flag not found: $FLAG_NAME" >&2
@@ -41,14 +80,11 @@ toggle() {
   fi
 }
 
-case $ACTION in
+case "$ACTION" in
   on) on ;;
   off) off ;;
   toggle) toggle ;;
-  *)
-    usage
-    exit 1
-    ;;
+  *) usage ;;
 esac
 
-quattro-restart-hyprctl
+quattro-restart hyprctl

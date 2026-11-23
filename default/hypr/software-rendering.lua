@@ -3,7 +3,7 @@
 -- quattro-hyprland-software-rendering marks the session once Hyprland is up
 -- and has picked its renderer, then reloads. This loads after the theme and
 -- before ~/.config/hypr, so the user's own looknfeel.lua still has the last
--- word. Turning animations on in Appearance (quattro-toggle-animations) lifts
+-- word. Turning animations on in Appearance (quattro-toggle animations) lifts
 -- all of it, and keeps doing so in later sessions. The Glassy toggles load after
 -- that and check o.software_rendering_defaults() themselves
 -- (default/hypr/glass.lua).

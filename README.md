@@ -1,23 +1,21 @@
 # quattro-hypr
 
-Minimal [Hyprland](https://hypr.land/) desktop configuration and Quickshell environment for Arch Linux. 
->(it's an omarchy shell but  without the bloated)
+Minimal [Hyprland](https://hypr.land/) desktop configuration and Quickshell environment for Arch Linux.
 
-![showcase.png](showcase.png)
+![showcase.webp](showcase.webp)
 
 ## Directory layout
 
-- `config/` - user dotfiles (`hypr`, `foot`, `alacritty`, `kitty`, `ghostty`, `btop`, `tmux`, `starship.toml`, etc.)
-- `default/` - runtime defaults (bash setup, Hyprland Lua modules, theme templates, systemd user units, fonts)
+- `config/` - user dotfiles (`hypr`, `foot`, `btop`, `tmux`, `starship.toml`, `satty`, `brave-origin-flags.conf`)
+- `default/` - runtime defaults (bash setup, Hyprland Lua modules, theme templates, systemd user units, SDDM theme, fonts)
 - `bin/` - `quattro-*` helper scripts
 - `shell/` - Quickshell configuration (bar, dock, launcher, panels, notifications, lockscreen)
-- `themes/` - 23 color schemes (`Tokyo Night`, `Catppuccin`, `Gruvbox`, `Kanagawa`, `Nord`, `Rose Pine`, etc.)
+- `themes/` - 8 curated color schemes (`Tokyo Night`, `Catppuccin`, `Catppuccin Latte`, `Gruvbox`, `Kanagawa`, `Nord`, `Rose Pine`, `Matte Black`)
 - `applications/` - core `.desktop` entries and icons
 - `etc/` - system config files (`fastfetch`, `mpv`, `xkb`, `profile.d`, `sddm.conf.d`, `sudoers.d`)
-- `packages/` - core Arch package list ([arch-core.packages](packages/arch-core.packages)) and optional lists
-- `AGENTS.md` - developer guide for `quattro-shell` (Quickshell architecture, IPC, theming, QML conventions)
+- `packages/` - core Arch package list ([arch-core.packages](packages/arch-core.packages))
 - `install.sh` - single-command installer (deploys packages, runtime, configs, theme, and system integration)
-- `verify.sh` - checks script syntax, Lua compilation, JSON/XML configs, pacman package names, and sandbox install
+- `verify.sh` - checks script syntax, Lua compilation, JSON/XML configs, CLI routes, hygiene, pacman package names, and sandbox install
 
 ## Install
 
@@ -47,4 +45,4 @@ uwsm start hyprland.desktop
 
 - `QUATTRO_PATH` resolves `~/.local/share/quattro` before `/usr/share/quattro`, so user-only installs work cleanly.
 - Standard Arch components are used throughout (`nautilus` for files, `foot` for terminal, `grim` + `slurp` + `satty` for screenshots, `qt6ct` for Qt6 theming, `quattro.screensaver` for screensaver, and `quattro-share-picker` for screen sharing).
-- Existing terminal configs and browser flag files (`brave-origin-flags.conf`, `chrome-flags.conf`, `chromium-flags.conf`) are self-contained under `$HOME`.
+- Existing terminal configs and browser flag files (`brave-origin-flags.conf`) are self-contained under `$HOME`.

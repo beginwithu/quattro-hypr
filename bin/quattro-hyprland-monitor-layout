@@ -9,6 +9,9 @@
 # monitor's scale. Every position is applied in one eval, so the monitors never
 # pass through a half-moved arrangement, and then saved for each monitor.
 
+
+set -uo pipefail
+
 usage() {
   echo "Usage: quattro-hyprland-monitor-layout NAME=XxY [NAME=XxY...]"
   echo "       quattro-hyprland-monitor-layout --resized NAME OLD_SIZE OLD_SCALE NEW_SIZE NEW_SCALE [MODE [TRANSFORM]]"
@@ -131,5 +134,5 @@ for i in "${!names[@]}"; do
   else
     scale=$(jq -r --arg name "${names[i]}" '.[] | select(.name == $name) | .scale' <<<"$monitors_json")
   fi
-  quattro-hyprland-monitor-persist "${names[i]}" "$scale" "" "${positions[i]}"
+  quattro-hyprland-monitor persist "${names[i]}" "$scale" "" "${positions[i]}"
 done

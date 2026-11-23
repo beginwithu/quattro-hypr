@@ -4,6 +4,9 @@
 # quattro:group=network
 # quattro:args=[--verbose]
 
+
+set -uo pipefail
+
 verbose=false
 internet_probe=1.1.1.1
 
@@ -59,7 +62,7 @@ print_ping_samples() {
   local tmpdir router_file internet_file
   local router_pid="" internet_pid=""
 
-  quattro-cmd-present ping || return
+  quattro-cmd present ping || return
   tmpdir=$(mktemp -d) || return
   router_file="$tmpdir/router"
   internet_file="$tmpdir/internet"
@@ -111,7 +114,7 @@ print_verbose() {
   if [[ -d /sys/class/net/$iface/wireless ]]; then
     printf 'type\twifi\n'
 
-    if quattro-cmd-present iw; then
+    if quattro-cmd present iw; then
       link=$(iw dev "$iface" link 2>/dev/null)
 
       if [[ -n $link ]]; then

@@ -399,7 +399,7 @@ Item {
     pendingDeleteTheme = ""
   }
 
-  // Removal itself is quattro-theme-remove's job (including its guards and
+  // Removal itself is quattro-theme remove's job (including its guards and
   // notification); the picker only refreshes its rows once it finishes.
   function confirmDeleteTheme() {
     var name = pendingDeleteTheme
@@ -408,7 +408,7 @@ Item {
     if (!name || deleteThemeProc.running) return
     // Keep the user's place in the list once the deleted theme is gone.
     if (name === selectedThemeName()) deleteSelectionPath = ImagePickerModel.replacementSelectionPath(imageArray, selectedIndex, filterText)
-    deleteThemeProc.command = ["quattro-theme-remove", name]
+    deleteThemeProc.command = ["quattro-theme", "remove", name]
     deleteThemeProc.running = true
   }
 
@@ -453,7 +453,7 @@ Item {
     }
   }
 
-  // The same listing quattro-theme-remove offers interactively: real
+  // The same listing quattro-theme remove offers interactively: real
   // directories under the user themes path, never symlinked working copies.
   Process {
     id: extraThemesProc

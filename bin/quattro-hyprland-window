@@ -1,0 +1,280 @@
+#!/bin/bash
+
+# quattro:summary=Manage Hyprland windows (close-all, gaps-toggle, minimize, pop, single-square-aspect-toggle, tiled-fullscreen-toggle, transparency, transparency-toggle, width)
+# quattro:group=hyprland
+# quattro:name=window
+# quattro:args=<close-all [--wait]|gaps-toggle|minimize [addr]|pop [w h x y]|single-square-aspect-toggle|tiled-fullscreen-toggle|transparency [opaque|transparent|glassy]|transparency-toggle|width <save|restore>>
+# quattro:examples=quattro hyprland window transparency glassy | quattro hyprland window gaps-toggle | quattro hyprland window width save
+
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+
+hypr_dispatch() {
+  local lua="$1"
+  shift
+  hyprctl dispatch "$lua" >/dev/null 2>&1 || hyprctl dispatch "$@" >/dev/null
+}
+
+window_close_all() {
+  local clients pids="" waiter="" addr
+  clients=$(hyprctl clients -j) || exit 1
+
+  if [[ ${1:-} == "--wait" ]]; then
+    pids=$(jq -r '[.[].pid | select(. > 0)] | unique | join(",")' <<<"$clients")
+    if [[ -n $pids ]]; then
+      pidwait --euid "$UID" --pid "$pids" &
+      waiter=$!
+    fi
+  fi
+
+  while read -r addr; do
+    [[ -n $addr ]] || continue
+    hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })" >/dev/null 2>&1 ||
+      hyprctl dispatch closewindow "address:$addr" >/dev/null 2>&1 || true
+  done < <(jq -r ".[].address" <<<"$clients")
+
+  hyprctl dispatch 'o.workspaces.focus(1)' >/dev/null 2>&1 || hyprctl dispatch workspace 1 >/dev/null 2>&1 || true
+
+  if [[ -n $waiter ]]; then
+    wait "$waiter" || (( $? == 1 ))
+  fi
+}
+
+window_minimize() {
+  local address="" workspace=""
+  if [[ -n ${1:-} ]]; then
+    address="$1"
+    workspace=$(hyprctl clients -j | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .workspace.id) // empty')
+  else
+    read -r address workspace < <(hyprctl activewindow -j | jq -r '"\(.address // "") \(.workspace.id // "")"') || true
+  fi
+
+  [[ -n $address && $workspace =~ ^[0-9]+$ ]] || exit 1
+  [[ $(quattro-hyprland-workspace-layout current "$workspace") == "floating" ]] || exit 0
+
+  local clients tag
+  if clients=$(hyprctl clients -j); then
+    while read -r tag; do
+      [[ $tag =~ ^quattro-minimized-from-[0-9]+$ && $tag != "quattro-minimized-from-$workspace" ]] || continue
+      hyprctl dispatch "hl.dsp.window.tag({ tag = \"-$tag\", window = \"address:$address\" })" >/dev/null
+    done < <(jq -r --arg address "$address" '.[] | select(.address == $address) | (.tags // [])[]' <<<"$clients")
+  fi
+  hyprctl dispatch "hl.dsp.window.tag({ tag = \"+quattro-minimized-from-$workspace\", window = \"address:$address\" })" >/dev/null
+  hyprctl dispatch "hl.dsp.window.move({ workspace = \"special:minimized\", follow = false, window = \"address:$address\" })" >/dev/null
+  hyprctl dispatch "hl.dsp.focus({ workspace = \"$workspace\" })" >/dev/null
+}
+
+window_pop() {
+  local width=${1:-1300}
+  local height=${2:-900}
+  local x=${3:-}
+  local y=${4:-}
+
+  local active pinned addr window
+  active=$(hyprctl activewindow -j)
+  pinned=$(jq -r ".pinned" <<<"$active")
+  addr=$(jq -r ".address // empty" <<<"$active")
+  window="address:$addr"
+
+  if [[ $pinned == "true" ]]; then
+    hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
+    hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
+    hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"-pop\" })" tagwindow -pop "$window"
+  elif [[ -n $addr ]]; then
+    hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
+    hypr_dispatch "hl.dsp.window.resize({ window = \"$window\", x = $width, y = $height })" resizeactive exact "$width" "$height" "$window"
+    if [[ -n $x && -n $y ]]; then
+      hypr_dispatch "hl.dsp.window.move({ window = \"$window\", x = $x, y = $y })" moveactive "$x" "$y" "$window"
+    else
+      hypr_dispatch "hl.dsp.window.center({ window = \"$window\" })" centerwindow "$window"
+    fi
+    hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
+    hypr_dispatch "hl.dsp.window.alter_zorder({ window = \"$window\", mode = \"top\" })" alterzorder top "$window"
+    hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"+pop\" })" tagwindow +pop "$window"
+  fi
+}
+
+window_tiled_fullscreen_toggle() {
+  local active fullscreen_client
+  active=$(hyprctl activewindow -j)
+  fullscreen_client=$(jq -r '.fullscreenClient // 0' <<<"$active")
+
+  if [[ $fullscreen_client == "2" ]]; then
+    hyprctl dispatch 'hl.dsp.window.fullscreen_state({ internal = 0, client = 0 })' >/dev/null 2>&1 ||
+      hyprctl dispatch fullscreenstate 0 0 >/dev/null
+  else
+    hyprctl dispatch 'hl.dsp.window.fullscreen_state({ internal = 0, client = 2 })' >/dev/null 2>&1 ||
+      hyprctl dispatch fullscreenstate 0 2 >/dev/null
+  fi
+}
+
+window_transparency() {
+  local toggles_dir="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/toggles/hypr"
+
+  current_mode() {
+    if [[ -f $toggles_dir/window-opaque.lua ]]; then
+      echo "opaque"
+    elif [[ -f $toggles_dir/window-glassy.lua ]]; then
+      echo "glassy"
+    else
+      echo "transparent"
+    fi
+  }
+
+  save_mode() {
+    if [[ $1 != "transparent" ]]; then
+      mkdir -p "$toggles_dir" && cp "$QUATTRO_PATH/default/hypr/toggles/window-$1.lua" "$toggles_dir/window-$1.lua" || return 1
+    fi
+    local mode
+    for mode in opaque glassy; do
+      [[ $mode == "$1" ]] || rm -f "$toggles_dir/window-$mode.lua" || return 1
+    done
+  }
+
+  if (( $# == 0 )); then
+    current_mode
+    return 0
+  fi
+
+  if [[ ! $1 =~ ^(opaque|transparent|glassy)$ ]]; then
+    echo "Usage: quattro-hyprland-window transparency [opaque|transparent|glassy]" >&2
+    exit 1
+  fi
+
+  exec 9>"${XDG_RUNTIME_DIR:-/tmp}/quattro-theme-set.lock"
+  flock 9
+
+  local previous
+  previous=$(current_mode)
+  save_mode "$1" || exit 1
+  if ! quattro-theme-set-glass; then
+    save_mode "$previous"
+    quattro-theme-set-glass || true
+    exit 1
+  fi
+  flock -u 9
+
+  quattro-restart hyprctl
+  quattro-theme-set-foot
+  quattro-restart btop
+}
+
+window_transparency_toggle() {
+  local addr window opacity inactive_opacity
+  addr=$(hyprctl activewindow -j | jq -r '.address // empty')
+  [[ -n $addr ]] || return 0
+
+  window="address:$addr"
+  opacity=$(hyprctl getprop "$window" opacity)
+  inactive_opacity=$(hyprctl getprop "$window" opacity_inactive)
+
+  if [[ $opacity == "1" && $inactive_opacity == "1" ]]; then
+    hyprctl dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"+transparent\" })" >/dev/null
+    hyprctl dispatch "hl.dsp.window.set_prop({ window = \"$window\", prop = \"opaque\", value = \"false\" })" >/dev/null
+  else
+    hyprctl dispatch "hl.dsp.window.set_prop({ window = \"$window\", prop = \"opaque\", value = \"toggle\" })" >/dev/null
+  fi
+}
+
+window_width_cmd() {
+  local state_dir="$HOME/.local/state/quattro/windows"
+  local action="${1:-}"
+  [[ $action == "save" || $action == "restore" ]] || {
+    echo "Usage: quattro-hyprland-window width <save|restore>" >&2
+    exit 1
+  }
+
+  local active key workspace filename state_file
+  active=$(hyprctl activewindow -j 2>/dev/null)
+  key=$(jq -r '[.class, .initialClass, .title] | map(select(. != null and . != "")) | first // empty' <<<"$active")
+  [[ -n $key ]] || exit 1
+  workspace=$(jq -r '.workspace.id // .workspace.name // empty' <<<"$active")
+  [[ -n $workspace ]] || exit 1
+
+  filename="workspace-${workspace}-${key}"
+  filename="${filename//\//_}"
+  filename="${filename//$'\n'/_}"
+  state_file="$state_dir/$filename.width"
+
+  get_width() {
+    hyprctl clients -j | jq -er --arg address "$1" '.[] | select(.address == $address) | .size[0]'
+  }
+
+  resize_by() {
+    hypr_dispatch "hl.dsp.window.resize({ window = \"$1\", x = $2, y = 0, relative = true })" resizeactive "$2" 0 "$1"
+  }
+
+  if [[ $action == "save" ]]; then
+    local width tmp
+    width=$(jq -er '.size[0]' <<<"$active")
+    mkdir -p "$state_dir"
+    tmp=$(mktemp "$state_dir/.width.XXXXXX")
+    printf '%s\n' "$width" >"$tmp"
+    mv "$tmp" "$state_file"
+    quattro-notification-send -g  "$(quattro-i18n window.savedWidth "$key" "$workspace")" "$(quattro-i18n window.restoreWidthHint)"
+    echo "Saved width for $key on workspace $workspace"
+  else
+    if [[ ! -f $state_file ]]; then
+      quattro-notification-send -g  "$(quattro-i18n window.noSavedWidth "$key" "$workspace")" "$(quattro-i18n window.saveWidthHint)"
+      exit 1
+    fi
+    local width address window current_width next_width probe direction="" delta probe_delta _
+    width=$(<"$state_file")
+    [[ $width =~ ^[0-9]+$ ]] || exit 1
+    address=$(jq -r '.address // empty' <<<"$active")
+    [[ -n $address ]] || exit 1
+    window="address:$address"
+    current_width=$(get_width "$address")
+    (( current_width == width )) && return 0
+
+    for probe in 10 -10; do
+      resize_by "$window" "$probe"
+      next_width=$(get_width "$address")
+      if (( next_width != current_width )); then
+        if (( (next_width - current_width) * probe > 0 )); then
+          direction=1
+        else
+          direction=-1
+        fi
+        current_width=$next_width
+        break
+      fi
+    done
+
+    [[ -n $direction ]] || exit 1
+    for _ in {1..6}; do
+      delta=$((width - current_width))
+      (( delta == 0 )) && break
+      probe_delta=$((delta * direction))
+      resize_by "$window" "$probe_delta"
+      next_width=$(get_width "$address")
+      (( next_width == current_width )) && break
+      current_width=$next_width
+    done
+  fi
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  close-all) window_close_all "$@" ;;
+  gaps-toggle) quattro-hyprland-toggle window-no-gaps ;;
+  minimize) window_minimize "$@" ;;
+  pop) window_pop "$@" ;;
+  single-square-aspect-toggle)
+    case $(quattro-hyprland-toggle single-window-aspect-ratio) in
+      on) quattro-notification-send -g  "$(quattro-i18n window.squareOn)" ;;
+      off) quattro-notification-send -g  "$(quattro-i18n window.squareOff)" ;;
+    esac
+    ;;
+  tiled-fullscreen-toggle) window_tiled_fullscreen_toggle ;;
+  transparency) window_transparency "$@" ;;
+  transparency-toggle) window_transparency_toggle ;;
+  width) window_width_cmd "$@" ;;
+  *)
+    echo "Usage: quattro-hyprland-window <close-all|gaps-toggle|minimize|pop|single-square-aspect-toggle|tiled-fullscreen-toggle|transparency|transparency-toggle|width>" >&2
+    exit 1
+    ;;
+esac

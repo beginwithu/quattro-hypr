@@ -10,6 +10,9 @@
 # backdrop-filter. Those lines go in each theme file between markers, so
 # leaving glassy takes them out again.
 
+
+set -uo pipefail
+
 QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 THEME_DIR="${1:-$HOME/.local/state/quattro/current/theme}"
 TOGGLES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/toggles/hypr"
@@ -92,18 +95,7 @@ glass() {
 
 glass foot.ini '[colors-dark]' \
   '^[[:space:]]*blur[[:space:]]*=' 'blur=yes' || status=1
-# GTK only asks Hyprland for blur under a CSS backdrop-filter, which Ghostty
-# takes as custom CSS and reloads live; its background-blur speaks only KDE's
-# blur protocol.
-glass ghostty.conf '' \
-  '' "gtk-custom-css = $QUATTRO_PATH/default/gtk/glass.css" || status=1
-
-# Glassy used to give these a see-through background of their own as well,
-# which doubled up with the window fade. Glassing them with no settings takes
-# out a block an earlier glassy left in the current theme.
-for file in alacritty.toml kitty.conf btop.theme; do
-  glass "$file" '' || status=1
-done
+glass btop.theme '' || status=1
 
 # Other GTK apps, such as Nautilus, read the user's gtk.css at launch, so the
 # same backdrop blur is imported there. It follows the mode alone, so a theme

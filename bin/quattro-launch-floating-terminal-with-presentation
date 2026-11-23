@@ -3,15 +3,20 @@
 # quattro:summary=Launch a floating terminal with the Quattro presentation wrapper
 # quattro:args=<command>
 
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+source "$QUATTRO_PATH/default/bash/lib-common.sh"
+
 # Export the current theme's gum styling so gum widgets match the active theme
 # even after a theme switch (the inherited environment is captured at login).
-source quattro-restart-gum
+quattro_restart_gum
 
 # 130 is the user bailing with Ctrl-C; anything else gets the Done/Failed prompt.
 if (( $# > 1 )); then
   exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.quattro.terminal --title=Quattro -e \
-    bash -c 'quattro-show-logo; "$@"; code=$?; if (( code != 130 )); then quattro-show-done "$code"; fi' _ "$@"
+    bash -c 'source "$QUATTRO_PATH/default/bash/lib-common.sh"; quattro_show_logo; code=0; "$@" || code=$?; if (( code != 130 )); then quattro_show_done "$code"; fi' _ "$@"
 else
   exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.quattro.terminal --title=Quattro -e \
-    bash -c 'quattro-show-logo; bash -c "$1"; code=$?; if (( code != 130 )); then quattro-show-done "$code"; fi' _ "${1:-}"
+    bash -c 'source "$QUATTRO_PATH/default/bash/lib-common.sh"; quattro_show_logo; code=0; bash -c "$1" || code=$?; if (( code != 130 )); then quattro_show_done "$code"; fi' _ "${1:-}"
 fi

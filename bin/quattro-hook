@@ -3,7 +3,7 @@
 # quattro:summary=Run a named hook from ~/.config/quattro/hooks/<name> and ~/.config/quattro/hooks/<name>.d/.
 # quattro:args=[name] [args...]
 
-set -e
+set -euo pipefail
 
 if (( $# < 1 )); then
   echo "Usage: quattro-hook [name] [args...]"

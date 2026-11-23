@@ -17,7 +17,7 @@ iso2sd() {
       return 1
     fi
 
-    drive=$(quattro-drive-select "$available_sds")
+    drive=$(printf '%s\n' "$available_sds" | gum choose --header "$(quattro-i18n drive.select)") || return 1
 
     if [[ -z $drive ]]; then
       echo "No drive selected"

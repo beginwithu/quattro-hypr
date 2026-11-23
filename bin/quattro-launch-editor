@@ -1,27 +1,44 @@
 #!/bin/bash
 
 # quattro:summary=Launch the default editor selected via Quattro defaults.
-# quattro:args=[--inline] <path>
+# quattro:args=[--inline] [--notify] <path>
+
+set -euo pipefail
 
 default_editor="$HOME/.local/state/quattro/defaults/editor"
+inline=false
+notify=false
 
-if [[ ${1:-} == "--inline" ]]; then
-  inline=true
-  shift
-else
-  inline=false
+while (( $# > 0 )); do
+  case "$1" in
+    --inline)
+      inline=true
+      shift
+      ;;
+    --notify)
+      notify=true
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ $notify == "true" && -n ${1:-} ]]; then
+  quattro-notification-send -u low "$(quattro-i18n config.editing)" "$1" || true
 fi
 
+editor=""
 if [[ -f $default_editor ]]; then
-  read -r editor <"$default_editor"
-else
-  editor="nvim"
+  read -r editor <"$default_editor" || true
 fi
+[[ -n $editor ]] || editor="nvim"
 
 # sublime-text-4 ships `subl` on PATH, not `sublime_text`.
 [[ $editor == sublime_text ]] && editor=subl
 
-quattro-cmd-present "$editor" || editor="nvim"
+quattro-cmd present "$editor" || editor="nvim"
 
 case "${editor##*/}" in
 nvim | vim | vi | nano | micro | hx | helix | fresh)

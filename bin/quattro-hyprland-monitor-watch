@@ -1,10 +1,28 @@
 #!/bin/bash
 
 # quattro:summary=Watch Hyprland monitor events and recover monitor toggles when a monitor is removed
+# quattro:hidden=true
 
-SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+set -uo pipefail
+
+SOCKET="${XDG_RUNTIME_DIR:-}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.socket2.sock"
 LOCK="${XDG_RUNTIME_DIR:-/tmp}/quattro-monitor-clamshell.lock"
 MODELESS_LOCK="${XDG_RUNTIME_DIR:-/tmp}/quattro-monitor-modeless.lock"
+RELOAD_GUARD_STATE_DIR="${QUATTRO_HYPRLAND_RELOAD_GUARD_STATE_DIR:-/run/quattro/hyprland-reload-guard}"
+
+monitor_modeless() {
+  local monitors state
+  monitors=$(hyprctl monitors all -j 2>/dev/null) || return 2
+  state=$(jq 'if any(.[]; .disabled != true and (.width == 0 or .height == 0)) then 0 else 1 end' <<<"$monitors" 2>/dev/null || echo 2)
+  case "$state" in
+    0 | 1) return "$state" ;;
+    *) return 2 ;;
+  esac
+}
+
+reload_guard_paused() {
+  compgen -G "$RELOAD_GUARD_STATE_DIR/*" >/dev/null
+}
 
 sync_clamshell() {
   (
@@ -25,11 +43,6 @@ sync_clamshell_after_monitor_change() {
   ) &
 }
 
-# Powering the monitor on fires no DRM hotplug, and forcing a re-probe needs
-# root, so only a reload re-reads the EDID and only a reload reveals whether it
-# worked. Back off: the machine can sit like this all night. The lock keeps one
-# loop running across the events that call this; the wait is for an event landing
-# in the moment one is exiting, which would otherwise be the last one to come.
 recover_modeless() {
   (
     flock -w 1 9 || exit 0
@@ -37,21 +50,16 @@ recover_modeless() {
     local delay=3 state reloaded unanswered=0
 
     while true; do
-      quattro-hyprland-monitor-modeless
+      monitor_modeless
       state=$?
 
-      # A monitor reporting a mode is recovered. One the compositor cannot speak
-      # for is not an answer, and nothing else will ask again -- but a compositor
-      # that stays silent has gone, taking the session and this loop's reason
-      # with it.
       (( state == 1 )) && break
       (( state == 2 )) && (( ++unanswered > 20 )) && break
       (( state == 0 )) && unanswered=0
 
       reloaded=0
-      # Reloading into half-replaced package config is what the guard prevents.
-      if (( state == 0 )) && ! quattro-hyprland-reload-guard paused; then
-        quattro-restart-hyprctl
+      if (( state == 0 )) && ! reload_guard_paused; then
+        quattro-restart hyprctl
         reloaded=1
       fi
 
@@ -68,21 +76,15 @@ poll_clamshell_state() {
   done
 }
 
-# The internal panel is only ever disabled while a laptop is docked (lid shut
-# with an external monitor active), so the reconciliation poll only has anything
-# to reconcile in that window. Run it while docked, stop it when undocked, and
-# never on a machine without a lid. Lid open/close itself is handled by the
-# Hyprland "switch:*:Lid Switch" binds; this poll is the recovery backstop for
-# drift those binds can miss (e.g. across suspend/resume).
 poll_pid=""
 sync_poll_state() {
-  if quattro-hw-laptop && quattro-hyprland-monitor-external-active; then
+  if quattro-hw laptop && quattro-hyprland-monitor external-active; then
     if [[ -z $poll_pid ]] || ! kill -0 "$poll_pid" 2>/dev/null; then
       poll_clamshell_state &
       poll_pid=$!
     fi
   elif [[ -n $poll_pid ]]; then
-    kill "$poll_pid" 2>/dev/null
+    kill "$poll_pid" 2>/dev/null || true
     poll_pid=""
   fi
 }
@@ -91,8 +93,6 @@ sync_clamshell_after_monitor_change
 sync_poll_state
 recover_modeless
 
-# Process substitution (not a pipe) keeps this loop in the main shell, so
-# sync_poll_state can start and stop the background poll as monitors come and go.
 while read -r event; do
   case "$event" in
     monitoradded\>\>*|monitoraddedv2\>\>*)
@@ -105,9 +105,6 @@ while read -r event; do
       sync_poll_state
       recover_modeless
       ;;
-    # A reload while the monitor is unpowered leaves it at 0x0 with no hotplug
-    # to notice, same as at boot. Our own recovery reload lands here too, and is
-    # a no-op while its loop still holds the pid.
     configreloaded\>\>*)
       recover_modeless
       ;;

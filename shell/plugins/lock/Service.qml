@@ -741,7 +741,7 @@ Item {
   Process {
     id: strandedLockCheckProc
     // $PPID is this shell: a crash re-execs in place, so its pid is the one to skip.
-    command: ["bash", "-c", "quattro-hyprland-session-lock-stranded \"$PPID\""]
+    command: ["bash", "-c", "quattro-hyprland-session-locked --stranded \"$PPID\""]
     onExited: function(exitCode) {
       // No output to read the lock off yet.
       if (exitCode === 2) return

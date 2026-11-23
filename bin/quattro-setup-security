@@ -1,0 +1,291 @@
+#!/bin/bash
+
+# quattro:summary=Set up security authentication or services (fido2, fingerprint, ssh-agent, sshd)
+# quattro:group=setup
+# quattro:name=security
+# quattro:args=<fido2|fingerprint|ssh-agent|sshd [options]>
+# quattro:examples=quattro setup security fido2 | quattro setup security ssh-agent | quattro setup security sshd
+# quattro:requires-sudo=true
+
+set -euo pipefail
+
+setup_fido2() {
+  check_fido2_hardware() {
+    local tokens
+    tokens=$(fido2-token -L 2>/dev/null || true)
+    if [[ -z $tokens ]]; then
+      echo -e "\e[31m\nNo FIDO2 device detected. Please plug it in (you may need to unlock it as well).\e[0m"
+      return 1
+    fi
+    return 0
+  }
+
+  setup_pam_config() {
+    if ! grep -q pam_u2f.so /etc/pam.d/sudo; then
+      echo "Configuring sudo for FIDO2 authentication..."
+      sudo sed -i '1i auth    sufficient pam_u2f.so cue authfile=/etc/fido2/fido2' /etc/pam.d/sudo
+    fi
+    if [[ -f /etc/pam.d/polkit-1 ]] && ! grep -q 'pam_u2f.so' /etc/pam.d/polkit-1; then
+      echo "Configuring polkit for FIDO2 authentication..."
+      sudo sed -i '1i auth      sufficient pam_u2f.so cue authfile=/etc/fido2/fido2' /etc/pam.d/polkit-1
+    elif [[ ! -f /etc/pam.d/polkit-1 ]]; then
+      echo "Creating polkit configuration with FIDO2 authentication..."
+      sudo tee /etc/pam.d/polkit-1 >/dev/null <<'EOF'
+auth      sufficient pam_u2f.so cue authfile=/etc/fido2/fido2
+auth      include system-auth
+
+account   include system-auth
+password  include system-auth
+session   include system-auth
+EOF
+    fi
+  }
+
+  echo -e "\e[32mSetting up FIDO2 device for authentication.\n\e[0m"
+  echo "Installing required packages..."
+  quattro-pkg add libfido2 pam-u2f
+
+  check_fido2_hardware || exit 1
+
+  local authdir=/etc/fido2
+  local authfile=/etc/fido2/fido2
+
+  if [[ -L $authdir || ( -e $authdir && ! -d $authdir ) ]]; then
+    echo -e "\e[31m\n$authdir is not a FIDO2 configuration directory.\e[0m"
+    echo "Run 'quattro remove security fido2' first, then set FIDO2 up again."
+    exit 1
+  fi
+
+  if [[ -L $authfile || ( -e $authfile && ! -f $authfile ) ]]; then
+    echo -e "\e[31m\n$authfile is not a FIDO2 registration file.\e[0m"
+    echo "Run 'quattro remove security fido2' first, then set FIDO2 up again."
+    exit 1
+  fi
+
+  if [[ ! -f $authfile ]]; then
+    sudo install -d -m 755 -o root -g root "$authdir"
+    echo -e "\e[32m\nLet's setup your device by confirming on the device now.\e[0m"
+    echo -e "Touch your FIDO2 key when it lights up...\n"
+
+    local stage=""
+    safe_stage_path() {
+      local candidate=${1:-}
+      local prefix="$authfile.new."
+      [[ $candidate == "$prefix"* ]] || return 1
+      local suffix=${candidate#"$prefix"}
+      [[ $suffix =~ ^[[:alnum:]]{6}$ ]]
+    }
+    cleanup_stage() {
+      local status=$?
+      if safe_stage_path "$stage"; then
+        sudo rm -f -- "$stage" || true
+      fi
+      return "$status"
+    }
+
+    trap cleanup_stage EXIT
+    stage=$(sudo mktemp "$authfile.new.XXXXXX")
+    if ! safe_stage_path "$stage" || [[ ! -f $stage || -L $stage ]]; then
+      echo -e "\e[31m\nCould not create a safe staging file beside $authfile.\e[0m"
+      exit 1
+    fi
+
+    if pamu2fcfg | sudo tee "$stage" >/dev/null && [[ -s $stage ]]; then
+      sudo chmod 644 "$stage"
+      sudo mv -Tf "$stage" "$authfile"
+      stage=""
+      trap - EXIT
+      echo -e "\e[32mFIDO2 device registered successfully!\e[0m"
+    else
+      echo -e "\e[31m\nFIDO2 registration failed. Please try again.\e[0m"
+      exit 1
+    fi
+  else
+    echo "FIDO2 device already registered."
+  fi
+
+  setup_pam_config
+  echo -e "\nTesting FIDO2 authentication with sudo..."
+  echo -e "Touch your FIDO2 key when prompted.\n"
+  if sudo echo "FIDO2 authentication test successful"; then
+    echo -e "\e[32m\nPerfect! FIDO2 authentication is now configured.\e[0m"
+    echo "You can use your FIDO2 key for sudo and polkit authentication."
+  else
+    echo -e "\e[31m\nVerification failed. You may want to check your configuration.\e[0m"
+  fi
+}
+
+setup_ssh_agent() {
+  local ENV_FILE="$HOME/.config/environment.d/90-gcr-ssh-agent.conf"
+  systemctl --user enable --now gcr-ssh-agent.socket
+  mkdir -p "$(dirname "$ENV_FILE")"
+  echo 'SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/gcr/ssh' >"$ENV_FILE"
+  echo ""
+  echo "SSH agent has been enabled. Log out and back in to make it available everywhere."
+  echo "The first use of a passphrase-protected key opens a dialog, with the option to"
+  echo "remember the passphrase in the keyring."
+}
+
+setup_sshd() {
+  local AUTHORIZED_KEYS="$HOME/.ssh/authorized_keys"
+  local KEY="" GITHUB_USER=""
+
+  require_github_user() {
+    if [[ -z ${1:-} || $1 == -* ]]; then
+      echo "quattro-setup-security sshd: --gh-keys needs a GitHub username." >&2
+      exit 2
+    fi
+  }
+
+  while (( $# > 0 )); do
+    case "$1" in
+      --key=*) KEY="${1#--key=}" ;;
+      --gh-keys=*)
+        GITHUB_USER="${1#--gh-keys=}"
+        require_github_user "$GITHUB_USER"
+        ;;
+      --gh-keys)
+        shift
+        GITHUB_USER="${1:-}"
+        require_github_user "$GITHUB_USER"
+        ;;
+      -h | --help)
+        echo "Usage: quattro-setup-security sshd [--key=<public-key>] [--gh-keys <github-username>]"
+        exit 0
+        ;;
+      *)
+        echo "quattro-setup-security sshd: unknown option '$1'. Try --help." >&2
+        exit 2
+        ;;
+    esac
+    shift
+  done
+
+  if [[ -n $KEY && -n $GITHUB_USER ]]; then
+    echo "quattro-setup-security sshd: pass either --key or --gh-keys, not both." >&2
+    exit 2
+  fi
+
+  valid_key() {
+    ssh-keygen -lf /dev/stdin <<<"$1" >/dev/null 2>&1
+  }
+
+  authorize_key() {
+    local key="$1"
+    if ! valid_key "$key"; then
+      echo -e "\e[31mNot a valid SSH public key: $key\e[0m" >&2
+      return 1
+    fi
+    mkdir -p "$HOME/.ssh"
+    chmod 700 "$HOME/.ssh"
+    touch "$AUTHORIZED_KEYS"
+    chmod 600 "$AUTHORIZED_KEYS"
+    if grep -qxF "$key" "$AUTHORIZED_KEYS"; then
+      echo "Key already authorized: $(ssh-keygen -lf /dev/stdin <<<"$key")"
+    else
+      echo "$key" >>"$AUTHORIZED_KEYS"
+      echo "Authorized key: $(ssh-keygen -lf /dev/stdin <<<"$key")"
+    fi
+  }
+
+  authorize_keys_from_github() {
+    local username="$1" keys added=0 key
+    echo "Fetching keys from https://github.com/$username.keys..."
+    if ! keys=$(curl -fsSL "https://github.com/$username.keys") || [[ -z $keys ]]; then
+      echo -e "\e[31mCould not fetch any SSH keys for GitHub user '$username'.\e[0m" >&2
+      exit 1
+    fi
+    while IFS= read -r key; do
+      [[ -z $key ]] && continue
+      authorize_key "$key" && added=$((added + 1)) || true
+    done <<<"$keys"
+    if (( added == 0 )); then
+      echo -e "\e[31mNo valid SSH keys found for GitHub user '$username'.\e[0m" >&2
+      exit 1
+    fi
+  }
+
+  echo -e "\e[32mSetting up SSH server access with key-based authentication.\n\e[0m"
+  echo "Installing the OpenSSH server..."
+  quattro-pkg add openssh
+  sudo ssh-keygen -A >/dev/null
+
+  echo
+  if [[ -n $KEY ]]; then
+    authorize_key "$KEY" || exit 1
+  elif [[ -n $GITHUB_USER ]]; then
+    authorize_keys_from_github "$GITHUB_USER"
+  else
+    local from_github paste_key username pasted
+    from_github=$(quattro-i18n sshd.keyFromGithub)
+    paste_key=$(quattro-i18n sshd.keyPaste)
+    case $(gum choose "$from_github" "$paste_key" --header "$(quattro-i18n sshd.howToAddKey)") in
+      "$from_github")
+        username=$(gum input --prompt "$(quattro-i18n sshd.githubUserPrompt)" --placeholder "username") || exit 1
+        [[ -n $username ]] || { echo -e "\e[31mNo GitHub username given.\e[0m" >&2; exit 1; }
+        authorize_keys_from_github "$username"
+        ;;
+      "$paste_key")
+        pasted=$(gum input --prompt "$(quattro-i18n sshd.publicKeyPrompt)" --placeholder "ssh-ed25519 AAAA... user@host") || exit 1
+        [[ -n $pasted ]] || { echo -e "\e[31mNo SSH key given.\e[0m" >&2; exit 1; }
+        authorize_key "$pasted" || exit 1
+        ;;
+      *) exit 1 ;;
+    esac
+  fi
+
+  local config=/etc/ssh/sshd_config.d/10-quattro-hardening.conf effective_config
+  if [[ ! -s $AUTHORIZED_KEYS ]]; then
+    echo -e "\e[31mCannot disable SSH password authentication without an authorized key.\e[0m" >&2
+    exit 1
+  fi
+  echo "Disabling SSH password authentication, now that a key is authorized..."
+  sudo install -Dm644 /dev/stdin "$config" <<'CONF'
+# Written by quattro-setup-security once an SSH key was authorized.
+# Delete this file and reload sshd to allow password logins again.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+CONF
+  if ! sudo sshd -t; then
+    echo -e "\e[31msshd rejected the hardening config; removing it and leaving passwords on.\e[0m" >&2
+    sudo rm -f "$config"
+    exit 1
+  fi
+  if ! effective_config=$(sudo sshd -T) ||
+    ! grep -qixF "passwordauthentication no" <<<"$effective_config" ||
+    ! grep -qixF "kbdinteractiveauthentication no" <<<"$effective_config"; then
+    echo -e "\e[31msshd did not apply the password-authentication restrictions; removing the ineffective config.\e[0m" >&2
+    sudo rm -f "$config"
+    exit 1
+  fi
+
+  echo "Starting the OpenSSH server..."
+  sudo systemctl enable sshd.service
+  sudo systemctl reload-or-restart sshd.service
+
+  if quattro-cmd present ufw; then
+    echo "Opening the SSH port in the firewall (rate limited against brute force)..."
+    sudo ufw limit 22/tcp comment "quattro-sshd" >/dev/null
+    sudo ufw reload >/dev/null
+  else
+    echo "UFW is not installed; skipping firewall rule."
+  fi
+
+  echo -e "\e[32m\nPerfect! The SSH server is running and your key is authorized.\e[0m"
+  echo "Password logins are off; this machine now accepts authorized keys only."
+  echo "You can now connect with: ssh $USER@$(uname -n)"
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  fido2) setup_fido2 ;;
+  fingerprint) exec quattro-setup-security-fingerprint "$@" ;;
+  ssh-agent) setup_ssh_agent ;;
+  sshd) setup_sshd "$@" ;;
+  *)
+    echo "Usage: quattro-setup-security <fido2|fingerprint|ssh-agent|sshd> [args...]" >&2
+    exit 1
+    ;;
+esac

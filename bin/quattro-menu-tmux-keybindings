@@ -3,6 +3,8 @@
 # quattro:summary=Display annotated Tmux keybindings using an interactive search menu.
 # quattro:args=[--print|-p] [--config <path>]
 
+set -uo pipefail
+
 print_only=false
 config_file="${TMUX_CONF:-$HOME/.config/tmux/tmux.conf}"
 
@@ -13,7 +15,7 @@ while (($#)); do
       ;;
     --config)
       shift
-      config_file="$1"
+      config_file="${1:-$config_file}"
       ;;
     *)
       config_file="$1"
@@ -24,7 +26,7 @@ while (($#)); do
 done
 
 if [[ ! -f $config_file ]]; then
-  default_config="$QUATTRO_PATH/config/tmux/tmux.conf"
+  default_config="${QUATTRO_PATH:-$HOME/.local/share/quattro}/config/tmux/tmux.conf"
 
   if [[ -f $default_config ]]; then
     config_file="$default_config"

@@ -3,7 +3,7 @@
 # quattro:summary=Set up fingerprint authentication for sudo, polkit, and lock screen
 # quattro:requires-sudo=true
 
-set -e
+set -euo pipefail
 
 
 setup_pam_config() {
@@ -66,7 +66,7 @@ fingerprint_reader() {
   device=${device#o \"}
   device=${device%\"}
   busctl --system get-property net.reactivated.Fprint "$device" net.reactivated.Fprint.Device "$1" 2>/dev/null |
-    sed -n 's/^s "\(.*\)"$/\1/p'
+    sed -n 's/^s "\(.*\)"$/\1/p' || true
 }
 
 # fprintd's own lines that carry nothing for the owner; anything else it
@@ -146,11 +146,8 @@ if ! quattro-hw-fingerprint; then
   exit 1
 fi
 
-# libfprint-git tracks upstream ahead of the Arch release, so a new reader only
-# needs a pin bump in quattro-pkgs. It conflicts with stock libfprint, and
-# --noconfirm answers that prompt with N; --ask 4 accepts the replacement in
-# one transaction, so a failed install leaves the existing driver in place.
-if quattro-pkg-missing libfprint fprintd usbutils; then
+# Install required fingerprint packages if missing.
+if quattro-pkg missing libfprint fprintd usbutils; then
   echo "Installing required packages..."
   sudo pacman -S --needed --noconfirm -- libfprint fprintd usbutils
 fi
@@ -188,26 +185,16 @@ case $(fingerprint_reader scan-type) in
     ;;
 esac
 
-# fprintd runs a duplicate check before enrolling on a reader that identifies,
-# which D-Bus doesn't say. Touch ID does, and its check needs no touch while
-# nothing is enrolled; any other reader's first stage counts, touched or not.
-# The name is the driver's full_name in libfprint/drivers/aurora/aurora.c, which
-# quattro-pkgs adds to libfprint-git in pkgbuilds/libfprint-git/aurora-apple-sep.patch.
-# If it changes there, Touch ID shows one step early.
-duplicate_check=0
-if [[ $(fingerprint_reader name) == "Apple secure enclave fingerprint sensor" ]]; then
-  duplicate_check=1
-fi
 # The filters only print; the exit status is fprintd's.
-sudo fprintd-enroll "$USER" | enroll_progress "$again" "$duplicate_check"
-enroll_status=${PIPESTATUS[0]}
+enroll_status=0
+sudo fprintd-enroll "${USER:-$(id -un)}" | enroll_progress "$again" 0 || enroll_status=${PIPESTATUS[0]}
 if (( enroll_status == 0 )); then
   echo -e "\e[32m\nFingerprint enrolled successfully!\e[0m"
 
   # Verify
   echo -e "\nNow let's verify that it's working correctly. $start\n"
-  fprintd-verify | verify_progress "$again"
-  verify_status=${PIPESTATUS[0]}
+  verify_status=0
+  fprintd-verify | verify_progress "$again" || verify_status=${PIPESTATUS[0]}
   if (( verify_status == 0 )); then
     # PAM comes last, once a print is enrolled and verified. Detection only
     # proves a reader is there, not that libfprint can drive it — an Elan MOC
@@ -215,7 +202,7 @@ if (( enroll_status == 0 )); then
     # Editing the stacks up front would leave those machines pointing at
     # pam_fprintd with nothing to match.
     setup_pam_config
-    "$QUATTRO_PATH/bin/quattro-apply-lock"
+    "${QUATTRO_PATH:-$HOME/.local/share/quattro}/bin/quattro-apply-lock"
     if [[ ! -f /etc/pam.d/quattro-lock-fingerprint ]]; then
       echo "Fingerprint enrollment succeeded, but lock-screen configuration could not be confirmed. Run quattro-apply-lock and try again." >&2
       exit 1

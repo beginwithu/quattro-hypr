@@ -1,0 +1,203 @@
+#!/bin/bash
+
+# quattro:summary=Manage Arch and AUR packages (add, aur-add, install, aur-install, drop, remove, present, missing)
+# quattro:group=pkg
+# quattro:args=<add|aur-add|install|aur-install|drop|remove|present|missing> [packages...]
+# quattro:examples=quattro pkg add jq ripgrep | quattro pkg install | quattro pkg aur-install | quattro pkg remove
+# quattro:requires-sudo=true
+
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+source "$QUATTRO_PATH/default/bash/lib-common.sh"
+
+usage() {
+  cat <<USAGE
+Usage: quattro-pkg <command> [packages...]
+
+  add <packages...>        Install Arch packages if missing
+  aur-add <packages...>    Install AUR packages if missing
+  install                  Fuzzy-finder TUI to pick Arch packages to install
+  aur-install              Fuzzy-finder TUI to pick AUR packages to install
+  drop <packages...>       Remove installed packages (ignores missing)
+  remove                   Fuzzy-finder TUI to pick installed packages to remove
+  present <packages...>    Exit 0 if all named packages are installed
+  missing <packages...>    Exit 0 if any named package is missing
+USAGE
+}
+
+pkg_present() {
+  local pkg
+  for pkg in "$@"; do
+    pacman -Q -- "$pkg" &>/dev/null || return 1
+  done
+  return 0
+}
+
+pkg_missing() {
+  local pkg
+  for pkg in "$@"; do
+    if ! pacman -Q -- "$pkg" &>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+pkg_add() {
+  (( $# > 0 )) || { usage >&2; exit 1; }
+  if pkg_missing "$@"; then
+    if (( EUID == 0 )); then
+      pacman -S --noconfirm --needed -- "$@"
+    else
+      sudo pacman -S --noconfirm --needed -- "$@"
+    fi
+  fi
+  local pkg
+  for pkg in "$@"; do
+    if ! pacman -Q -- "$pkg" &>/dev/null; then
+      echo -e "\033[31mError: Package '$pkg' did not install\033[0m" >&2
+      exit 1
+    fi
+  done
+}
+
+pkg_aur_add() {
+  (( $# > 0 )) || { usage >&2; exit 1; }
+  if pkg_missing "$@"; then
+    yay -S --noconfirm --needed -- "$@"
+  fi
+  local pkg
+  for pkg in "$@"; do
+    if ! pacman -Q -- "$pkg" &>/dev/null; then
+      echo -e "\033[31mError: Package '$pkg' did not install\033[0m" >&2
+      exit 1
+    fi
+  done
+}
+
+pkg_drop() {
+  (( $# > 0 )) || return 0
+  local installed=()
+  local -A installed_exact=() selected=()
+  local installed_packages package_name pkg
+
+  if ! installed_packages=$(pacman -Qq); then
+    echo "Unable to query installed packages; no packages were removed." >&2
+    exit 1
+  fi
+
+  while IFS= read -r package_name; do
+    [[ -n $package_name ]] && installed_exact[$package_name]=1
+  done <<<"$installed_packages"
+
+  for pkg in "$@"; do
+    if [[ -n ${installed_exact[$pkg]:-} && -z ${selected[$pkg]:-} ]]; then
+      installed+=("$pkg")
+      selected[$pkg]=1
+    fi
+  done
+
+  if (( ${#installed[@]} > 0 )); then
+    if (( EUID == 0 )); then
+      pacman -Rns --noconfirm "${installed[@]}"
+    else
+      sudo pacman -Rns --noconfirm "${installed[@]}"
+    fi
+  fi
+}
+
+pkg_install_tui() {
+  local -a fzf_args=(
+    --multi
+    --preview 'pacman -Sii {1}'
+    --preview-label='alt-p: toggle description, alt-j/k: scroll, tab: multi-select'
+    --preview-label-pos='bottom'
+    --preview-window 'down:65%:wrap'
+    --bind 'alt-p:toggle-preview'
+    --bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up'
+    --bind 'alt-k:preview-up,alt-j:preview-down'
+    --color 'pointer:green,marker:green'
+  )
+
+  local pkg_names=""
+  pkg_names=$(pacman -Slq | fzf "${fzf_args[@]}") || true
+  if [[ -n $pkg_names ]]; then
+    quattro_sudo_keepalive
+    local code=0
+    echo "$pkg_names" | tr '\n' ' ' | xargs sudo pacman -S --noconfirm || code=$?
+    quattro_show_done "$code"
+  fi
+}
+
+pkg_aur_install_tui() {
+  local -a fzf_args=(
+    --multi
+    --preview 'yay -Siia {1}'
+    --preview-label='alt-p: toggle description, alt-b/B: toggle PKGBUILD, alt-j/k: scroll, tab: multi-select'
+    --preview-label-pos='bottom'
+    --preview-window 'down:65%:wrap'
+    --bind 'alt-p:toggle-preview'
+    --bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up'
+    --bind 'alt-k:preview-up,alt-j:preview-down'
+    --bind 'alt-b:change-preview:yay -Gpa {1} | tail -n +5'
+    --bind 'alt-B:change-preview:yay -Siia {1}'
+    --color 'pointer:green,marker:green'
+  )
+
+  local pkg_names=""
+  pkg_names=$(yay -Slqa | fzf "${fzf_args[@]}") || true
+  if [[ -n $pkg_names ]]; then
+    quattro_sudo_keepalive
+    local code=0
+    echo "$pkg_names" | sed 's/^/aur\//' | tr '\n' ' ' | xargs yay -S --noconfirm || code=$?
+    if command -v updatedb >/dev/null 2>&1; then
+      sudo updatedb --prune-bind-mounts=no --add-prunepaths=/.snapshots || true
+    fi
+    quattro_show_done "$code"
+  fi
+}
+
+pkg_remove_tui() {
+  local -a fzf_args=(
+    --multi
+    --preview 'yay -Qi {1}'
+    --preview-label='alt-p: toggle description, alt-j/k: scroll, tab: multi-select'
+    --preview-label-pos='bottom'
+    --preview-window 'down:65%:wrap'
+    --bind 'alt-p:toggle-preview'
+    --bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up'
+    --bind 'alt-k:preview-up,alt-j:preview-down'
+    --color 'pointer:red,marker:red'
+  )
+
+  local pkg_names=""
+  pkg_names=$(yay -Qqe | fzf "${fzf_args[@]}") || true
+  if [[ -n $pkg_names ]]; then
+    local code=0
+    echo "$pkg_names" | tr '\n' ' ' | xargs sudo pacman -Rns --noconfirm || code=$?
+    quattro_show_done "$code"
+  fi
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  add) pkg_add "$@" ;;
+  aur-add) pkg_aur_add "$@" ;;
+  install) pkg_install_tui ;;
+  aur-install) pkg_aur_install_tui ;;
+  drop) pkg_drop "$@" ;;
+  remove) pkg_remove_tui ;;
+  present) pkg_present "$@" ;;
+  missing) pkg_missing "$@" ;;
+  -h | --help | help | "")
+    usage
+    [[ -n $cmd ]] || exit 1
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

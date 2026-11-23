@@ -1,0 +1,200 @@
+#!/bin/bash
+
+# quattro:summary=Query, set default, or cycle Hyprland workspace layouts (dwindle, scrolling, floating)
+# quattro:group=hyprland
+# quattro:name=workspace layout
+# quattro:args=<current [id]|default [dwindle|scrolling|floating]|toggle [back]>
+# quattro:examples=quattro hyprland workspace layout current | quattro hyprland workspace layout default scrolling | quattro hyprland workspace layout toggle
+
+set -euo pipefail
+
+MODES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/workspace-layouts"
+DEFAULT_FILE="$MODES_DIR/default.lua"
+
+notify_layout() {
+  local state="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/workspace-layout-notification"
+  local last="" id=""
+  [[ -r $state ]] && read -r last <"$state" || true
+  if id=$(quattro-notification-send -p -r "${last:-0}" -g 󱂬 "$1" || true) && [[ $id =~ ^[0-9]+$ ]]; then
+    mkdir -p "$(dirname "$state")" && printf '%s\n' "$id" >"$state"
+  fi
+}
+
+layout_default_get() {
+  local mode=""
+  mode=$(sed -n 's/.*default = "\([a-z]*\)".*/\1/p' "$DEFAULT_FILE" 2>/dev/null || true)
+  [[ -n $mode ]] || mode=$(hyprctl getoption general.layout -j 2>/dev/null | jq -r '.str // empty' || true)
+  echo "${mode:-dwindle}"
+}
+
+layout_current() {
+  local workspace_id="" tiled_layout="" mode=""
+  if [[ -n ${1:-} ]]; then
+    workspace_id="$1"
+    tiled_layout=$(hyprctl workspaces -j 2>/dev/null | jq -r --arg id "$workspace_id" 'first(.[] | select((.id | tostring) == $id) | .tiledLayout) // empty' || true)
+  else
+    read -r workspace_id tiled_layout < <(hyprctl activeworkspace -j 2>/dev/null | jq -r '"\(.id) \(.tiledLayout // "")"' || true) || true
+  fi
+
+  if [[ $workspace_id =~ ^[0-9]+$ ]] && (( workspace_id >= 1 )); then
+    mode=$(sed -n 's/.*mode = "\([a-z]*\)".*/\1/p' "$MODES_DIR/$workspace_id.lua" 2>/dev/null || true)
+    if [[ -z $mode && -f $DEFAULT_FILE ]]; then
+      mode=$(layout_default_get)
+    fi
+  fi
+
+  mode=${mode:-$tiled_layout}
+  echo "${mode:-dwindle}"
+}
+
+layout_default() {
+  if (( $# == 0 )); then
+    layout_default_get
+    return 0
+  fi
+
+  local message
+  case "$1" in
+    dwindle) message=$(quattro-i18n layout.defaultTiling) ;;
+    scrolling) message=$(quattro-i18n layout.defaultScrolling) ;;
+    floating) message=$(quattro-i18n layout.defaultFloating) ;;
+    *)
+      echo "Usage: quattro-hyprland-workspace-layout default [dwindle|scrolling|floating]" >&2
+      exit 1
+      ;;
+  esac
+
+  mkdir -p "$MODES_DIR"
+
+  busy_workspace_ids() {
+    local workspaces clients
+    workspaces=$(hyprctl workspaces -j) || return 1
+    clients=$(hyprctl clients -j) || return 1
+    printf '%s\n%s\n' "$workspaces" "$clients" | jq -rs '
+      .[0] as $workspaces | .[1] as $clients |
+      if ($workspaces | type == "array") and ($clients | type == "array") then
+        (
+          [$workspaces[] | select(.id >= 1 and (.windows // 0) > 0) | .id] +
+          [$clients[]
+            | select(.workspace.name == "special:minimized")
+            | (.tags // [])[]
+            | select(test("^quattro-minimized-from-[1-9][0-9]*$"))
+            | sub("^quattro-minimized-from-"; "")
+            | tonumber]
+        ) | unique | .[]
+      else
+        error("not a workspace list")
+      end
+    '
+  }
+
+  local busy workspace current mode_file
+  if ! busy=$(busy_workspace_ids); then
+    echo "quattro-hyprland-workspace-layout: could not read workspaces or minimized windows" >&2
+    exit 1
+  fi
+
+  while read -r workspace; do
+    [[ -n $workspace && ! -f $MODES_DIR/$workspace.lua ]] || continue
+    current=$(layout_current "$workspace")
+    if [[ $current != "$1" ]]; then
+      printf 'o.workspace_mode({ workspace = "%s", mode = "%s" })\n' "$workspace" "$current" >"$MODES_DIR/$workspace.lua"
+    fi
+  done <<<"$busy"
+
+  for mode_file in "$MODES_DIR"/[0-9]*.lua; do
+    [[ -f $mode_file ]] || continue
+    workspace=$(basename "$mode_file" .lua)
+    grep -qx -- "$workspace" <<<"$busy" || rm -f "$mode_file"
+  done
+
+  printf 'o.workspace_mode({ default = "%s" })\n' "$1" >"$DEFAULT_FILE"
+
+  quattro-restart hyprctl
+  quattro-shell -q quattro.workspaces refresh || true
+  quattro-shell -q quattro.dock refresh || true
+  notify_layout "$message"
+}
+
+layout_toggle() {
+  local direction="${1:-next}"
+  if [[ $direction != "next" && $direction != "back" ]]; then
+    echo "Usage: quattro-hyprland-workspace-layout toggle [back]" >&2
+    exit 1
+  fi
+
+  local active_workspace
+  active_workspace=$(hyprctl activeworkspace -j | jq -r '.id')
+  [[ $active_workspace =~ ^[0-9]+$ ]] || exit 1
+  local mode_file="$MODES_DIR/$active_workspace.lua"
+  local current_mode new_mode
+  current_mode=$(layout_current)
+
+  if [[ $direction == "back" ]]; then
+    case "$current_mode" in
+      dwindle) new_mode=floating ;;
+      floating) new_mode=scrolling ;;
+      *) new_mode=dwindle ;;
+    esac
+  else
+    case "$current_mode" in
+      dwindle) new_mode=scrolling ;;
+      scrolling) new_mode=floating ;;
+      *) new_mode=dwindle ;;
+    esac
+  fi
+
+  local apply="o.workspace_mode({ workspace = \"$active_workspace\", mode = \"$new_mode\" })"
+  local set_message unsaved_message
+  case "$new_mode" in
+    dwindle)
+      set_message=$(quattro-i18n layout.workspaceTiling)
+      unsaved_message=$(quattro-i18n layout.workspaceTilingUnsaved)
+      ;;
+    scrolling)
+      set_message=$(quattro-i18n layout.workspaceScrolling)
+      unsaved_message=$(quattro-i18n layout.workspaceScrollingUnsaved)
+      ;;
+    *)
+      set_message=$(quattro-i18n layout.workspaceFloating)
+      unsaved_message=$(quattro-i18n layout.workspaceFloatingUnsaved)
+      ;;
+  esac
+
+  local applied=0
+  if hyprctl eval "$apply" >/dev/null 2>&1; then
+    applied=1
+  fi
+
+  if (( ! applied )); then
+    notify_layout "$(quattro-i18n layout.needsReload)"
+  elif [[ $new_mode == "$(layout_default_get)" ]] && rm -f "$mode_file"; then
+    notify_layout "$set_message"
+  elif mkdir -p "$MODES_DIR" && printf '%s\n' "$apply" >"$mode_file"; then
+    notify_layout "$set_message"
+  else
+    notify_layout "$unsaved_message"
+  fi
+
+  if (( applied )); then
+    quattro-shell -q quattro.workspaces refresh || true
+    quattro-shell -q quattro.dock refresh || true
+  fi
+
+  if (( applied )) && [[ $new_mode == "floating" ]] && ! hyprctl plugin list -j 2>/dev/null | jq -e 'any(.[]?; .name == "hyprbars")' >/dev/null 2>&1; then
+    quattro-restart hyprctl
+  fi
+}
+
+cmd="${1:-current}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  current) layout_current "$@" ;;
+  default) layout_default "$@" ;;
+  toggle) layout_toggle "$@" ;;
+  *)
+    echo "Usage: quattro-hyprland-workspace-layout <current [id]|default [mode]|toggle [back]>" >&2
+    exit 1
+    ;;
+esac

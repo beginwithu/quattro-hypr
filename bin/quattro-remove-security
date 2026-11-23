@@ -1,0 +1,147 @@
+#!/bin/bash
+
+# quattro:summary=Remove security authentication or services (fido2, fingerprint, sshd, ssh-agent)
+# quattro:group=remove
+# quattro:name=security
+# quattro:args=<fido2|fingerprint|sshd|ssh-agent>
+# quattro:examples=quattro remove security fido2 | quattro remove security fingerprint | quattro remove security sshd
+# quattro:requires-sudo=true
+
+set -euo pipefail
+
+remove_fido2() {
+  echo -e "\e[32mRemoving FIDO2 device from authentication.\n\e[0m"
+  if grep -q pam_u2f.so /etc/pam.d/sudo 2>/dev/null; then
+    echo "Removing FIDO2 authentication from sudo..."
+    sudo sed -i '/pam_u2f\.so/d' /etc/pam.d/sudo
+  fi
+  if [[ -f /etc/pam.d/polkit-1 ]] && grep -Fq 'pam_u2f.so' /etc/pam.d/polkit-1; then
+    echo "Removing FIDO2 authentication from polkit..."
+    sudo sed -i '/pam_u2f\.so/d' /etc/pam.d/polkit-1
+  fi
+  local authdir=/etc/fido2
+  if [[ -e $authdir || -L $authdir ]]; then
+    echo "Removing FIDO2 configuration..."
+    sudo rm -rf "$authdir"
+  fi
+  echo "Removing FIDO2 packages..."
+  quattro-pkg drop libfido2 pam-u2f
+  echo -e "\e[32mFIDO2 authentication has been completely removed.\e[0m"
+}
+
+remove_fingerprint() {
+  local fingerprint_user
+  if (( EUID == 0 )) && [[ -v SUDO_UID ]]; then
+    if [[ ! $SUDO_UID =~ ^[0-9]+$ ]]; then
+      echo "Cannot identify the invoking fingerprint user" >&2
+      exit 1
+    fi
+    fingerprint_user=$(/usr/bin/id -nu "+$SUDO_UID") || exit 1
+  else
+    fingerprint_user=$(/usr/bin/id -un) || exit 1
+  fi
+
+  if [[ -z $fingerprint_user || $fingerprint_user == "." || $fingerprint_user == ".." || $fingerprint_user == */* ]]; then
+    echo "Unsafe fingerprint user name" >&2
+    exit 1
+  fi
+
+  echo -e "\e[32mRemoving fingerprint scanner from authentication.\n\e[0m"
+  if ! sudo -n true 2>/dev/null && ! sudo -v; then
+    echo -e "\e[31mRemoving fingerprint authentication needs administrator rights.\e[0m"
+    exit 1
+  fi
+
+  local delete_output=""
+  if quattro-cmd present fprintd-delete && ! delete_output=$(sudo fprintd-delete "$fingerprint_user" 2>&1); then
+    if [[ $delete_output == *"No devices available"* ]]; then
+      echo -e "\e[33mNo fingerprint reader is available now, so any fingerprints stored on the reader itself stay there.\e[0m"
+    else
+      echo -e "\e[33mThe reader's own copy of $fingerprint_user's fingerprints may not have been deleted: $(tail -n 1 <<<"$delete_output")\e[0m"
+    fi
+  fi
+
+  if grep -Eq 'pam_fprintd\.so|quattro-hw-laptop-closed' /etc/pam.d/sudo 2>/dev/null; then
+    echo "Removing fingerprint authentication from sudo..."
+    sudo sed -i -e '/pam_fprintd\.so/d' -e '/quattro-hw-laptop-closed/d' /etc/pam.d/sudo
+  fi
+  if [[ -f /etc/pam.d/polkit-1 ]] && grep -Eq 'pam_fprintd\.so|quattro-hw-laptop-closed' /etc/pam.d/polkit-1; then
+    echo "Removing fingerprint authentication from polkit..."
+    sudo sed -i -e '/pam_fprintd\.so/d' -e '/quattro-hw-laptop-closed/d' /etc/pam.d/polkit-1
+  fi
+  if [[ -f /etc/pam.d/quattro-lock-fingerprint ]]; then
+    echo "Removing lock screen fingerprint authentication..."
+    sudo rm -f /etc/pam.d/quattro-lock-fingerprint
+  fi
+  if [[ -f /usr/lib/systemd/system-sleep/fprintd-resume ]]; then
+    echo "Removing fingerprint resume hook..."
+    sudo rm -f /usr/lib/systemd/system-sleep/fprintd-resume
+  fi
+  if [[ -f /etc/systemd/system/fprintd.service.d/10-stop-timeout.conf ]]; then
+    echo "Removing fprintd stop timeout bound..."
+    sudo rm -f /etc/systemd/system/fprintd.service.d/10-stop-timeout.conf
+    sudo rmdir --ignore-fail-on-non-empty /etc/systemd/system/fprintd.service.d
+    sudo systemctl daemon-reload
+  fi
+
+  sudo rm -rf -- "/var/lib/fprint/$fingerprint_user"
+  echo "Removing fingerprint packages..."
+  quattro-pkg drop fprintd libfprint libfprint-git
+  echo -e "\e[32mFingerprint authentication and $fingerprint_user's local saved fingerprints have been removed.\e[0m"
+}
+
+remove_sshd() {
+  local AUTHORIZED_KEYS="$HOME/.ssh/authorized_keys"
+  echo -e "\e[32mRemoving SSH server access.\n\e[0m"
+  echo "Stopping and disabling the OpenSSH server..."
+  sudo systemctl disable --now sshd.service 2>/dev/null || true
+
+  if quattro-cmd present ufw; then
+    echo "Removing standard SSH firewall rules..."
+    sudo ufw --force delete limit 22/tcp >/dev/null || true
+    sudo ufw --force delete allow 22/tcp >/dev/null || true
+    sudo ufw --force delete allow ssh >/dev/null || true
+    sudo ufw --force delete limit ssh >/dev/null || true
+    sudo ufw --force delete allow to any app SSH >/dev/null || true
+    sudo ufw --force delete limit to any app SSH >/dev/null || true
+    sudo ufw reload >/dev/null || true
+    echo "Standard SSH firewall rules removed. Review custom firewall rules separately."
+  fi
+
+  if [[ -s $AUTHORIZED_KEYS ]]; then
+    echo
+    if gum confirm --affirmative "$(quattro-i18n common.yes)" --negative "$(quattro-i18n common.no)" "$(quattro-i18n sshd.removeAuthorizedKeys "$AUTHORIZED_KEYS")"; then
+      rm -f "$AUTHORIZED_KEYS"
+      echo "Authorized keys removed."
+    else
+      echo "Keeping authorized keys."
+    fi
+  fi
+
+  echo -e "\e[32m\nThe SSH server has been disabled.\e[0m"
+  echo "The openssh package remains installed since it also provides the ssh client."
+}
+
+remove_ssh_agent() {
+  rm -f "$HOME/.config/environment.d/90-gcr-ssh-agent.conf"
+  systemctl --user disable --now gcr-ssh-agent.socket 2>/dev/null || true
+  systemctl --user stop gcr-ssh-agent.service 2>/dev/null || true
+
+  if systemctl --user show-environment | grep -Fqx "SSH_AUTH_SOCK=${XDG_RUNTIME_DIR:-}/gcr/ssh"; then
+    systemctl --user unset-environment SSH_AUTH_SOCK || true
+  fi
+
+  echo ""
+  echo "SSH agent has been disabled. Log out and back in for it to take full effect."
+}
+
+case "${1:-}" in
+  fido2) remove_fido2 ;;
+  fingerprint) remove_fingerprint ;;
+  sshd) remove_sshd ;;
+  ssh-agent) remove_ssh_agent ;;
+  *)
+    echo "Usage: quattro-remove-security <fido2|fingerprint|sshd|ssh-agent>" >&2
+    exit 1
+    ;;
+esac

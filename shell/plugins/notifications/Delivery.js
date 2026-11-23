@@ -15,7 +15,7 @@ function bypassesQuiet(row) {
 }
 
 // The buttons a card offers, in the order it draws them and the number keys
-// count them: copying each code it found, then an Quattro sender's --action
+// count them: copying each code it found, then a Quattro sender's --action
 // buttons, then the sender's own actions. A code's label is left to the card,
 // which translates it.
 function deeds(row, senderActions) {

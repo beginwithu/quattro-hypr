@@ -3,30 +3,62 @@
 # quattro:summary=Launch the default browser as determined by xdg-settings.
 # quattro:args=[url]
 
-default_browser=$(quattro-cmd-default-browser)
+set -euo pipefail
 
-# Read Exec= from the same data dirs quattro-cmd-default-browser searched, in
-# the same order, so the command always comes from the entry that was checked.
+browser_handoff() {
+  local config="${XDG_CONFIG_HOME:-$HOME/.config}"
+  local profile flags socket reply arg
+
+  case $(type -P "$1" 2>/dev/null || true) in
+    /usr/bin/chromium) profile=chromium flags=chromium-flags.conf ;;
+    /usr/bin/google-chrome-stable) profile=google-chrome flags=chrome-flags.conf ;;
+    /usr/bin/brave) profile=BraveSoftware/Brave-Browser flags=brave-flags.conf ;;
+    /usr/bin/brave-origin) profile=BraveSoftware/Brave-Origin flags=brave-origin-flags.conf ;;
+    /usr/bin/microsoft-edge-stable) profile=microsoft-edge flags=microsoft-edge-stable-flags.conf ;;
+    *) return 1 ;;
+  esac
+  shift
+
+  if [[ -n ${CHROME_USER_DATA_DIR:-}${CHROME_CONFIG_HOME:-} ]] ||
+    cat "/etc/$flags" "$config/$flags" 2>/dev/null | sed 's/#.*//' | tr -s '[:space:]' '\n' |
+      grep -vE '^(--(ozone-platform|ozone-platform-hint|password-store|enable-features|load-extension)=.*|--no-default-browser-check|--no-first-run)?$' | grep -q .; then
+    return 1
+  fi
+
+  for arg in "$@"; do
+    [[ $arg == --user-data-dir* ]] && return 1
+  done
+
+  socket="$config/$profile/SingletonSocket"
+  [[ -S $socket && -O $socket ]] || return 1
+
+  reply=$({
+    printf 'START\0%s\0browser' "$PWD"
+    printf '\0%s' "$@"
+  } | socat -t2 - "UNIX-CONNECT:$socket" 2>/dev/null || true)
+
+  [[ $reply == "ACK" ]]
+}
+
+default_browser=$(quattro-cmd default-browser 2>/dev/null || true)
+
 IFS=: read -ra data_dirs <<<"${XDG_DATA_HOME:-$HOME/.local/share}:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 browser_exec=""
-for data_dir in "${data_dirs[@]}"; do
-  entry="$data_dir/applications/$default_browser"
-  [[ -f $entry ]] || continue
-  browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$entry" | head -1)
-  break
-done
+if [[ -n $default_browser ]]; then
+  for data_dir in "${data_dirs[@]}"; do
+    entry="$data_dir/applications/$default_browser"
+    [[ -f $entry ]] || continue
+    browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$entry" | head -1)
+    break
+  done
+fi
 
-# Handing an empty command to uwsm-app surfaces as "Command not found: \"\"",
-# which fails a keybinding silently. Say what is missing and how to fix it.
 if [[ -z $browser_exec ]]; then
   echo "quattro-launch-browser: no default browser found; set one with 'quattro default browser <browser>'" >&2
   quattro-notification-send -u critical -g 󰖟 "$(quattro-i18n browser.notFound)" "$(quattro-i18n browser.notFoundHint)"
   exit 1
 fi
 
-# Only a private launch needs the browser's flag, and probing a Firefox-family
-# browser's --help starts the whole binary, so ordinary launches skip it and
-# leave their arguments as they are.
 private_flag="--private"
 if [[ " $* " == *" --private "* ]]; then
   if $browser_exec --help 2>/dev/null | grep -q MOZ_LOG; then
@@ -38,7 +70,7 @@ if [[ " $* " == *" --private "* ]]; then
   fi
 fi
 
-if ! quattro-cmd-browser-handoff "$browser_exec" "${@/--private/$private_flag}"; then
+if ! browser_handoff "$browser_exec" "${@/--private/$private_flag}"; then
   systemd-run --user --quiet --collect --unit="quattro-browser-$(date +%s%N)" \
     --property=StandardOutput=null --property=StandardError=null \
     uwsm-app -- "$browser_exec" "${@/--private/$private_flag}"

@@ -4,7 +4,7 @@
 # quattro:requires-sudo=true
 # quattro:hidden=true
 
-set -e
+set -euo pipefail
 
 # Install and upgrade callers can start this helper as root. Ignore their PATH
 # so optional commands never fall through to a user-writable directory.
@@ -14,9 +14,9 @@ fi
 
 target_user=${QUATTRO_INSTALL_USER:-${SUDO_USER:-}}
 if [[ -z $target_user && -n ${PKEXEC_UID:-} ]]; then
-  target_user=$(getent passwd "$PKEXEC_UID" | cut -d: -f1)
+  target_user=$(getent passwd "$PKEXEC_UID" | cut -d: -f1 || true)
 fi
-target_user=${target_user:-$USER}
+target_user=${target_user:-${USER:-$(id -un)}}
 
 if [[ -z ${QUATTRO_PATH:-} ]]; then
   script_root=$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." 2>/dev/null && pwd || true)

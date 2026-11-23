@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# quattro:summary=Check hibernation availability and swap encryption
+# quattro:group=hibernation
+# quattro:args=<available|encrypted>
+
+set -euo pipefail
+
+hibernation_available() {
+  local SYS_POWER_PATH="${QUATTRO_SYS_POWER_PATH:-/sys/power}"
+  local SWAPS_PATH="${QUATTRO_SWAPS_PATH:-/proc/swaps}"
+  local RESUME_CONF_PATH="${QUATTRO_RESUME_CONF_PATH:-/etc/mkinitcpio.conf.d/quattro_resume.conf}"
+
+  [[ -r $SYS_POWER_PATH/state && -r $SYS_POWER_PATH/image_size ]] || return 1
+
+  local SLEEP_STATES=" $(<"$SYS_POWER_PATH/state") "
+  [[ $SLEEP_STATES == *" disk "* ]] || return 1
+
+  local SWAPSIZE_KB SWAPSIZE HIBERNATION_IMAGE_SIZE
+  SWAPSIZE_KB=$(awk '!/Filename|zram/ {sum += $3} END {print sum+0}' "$SWAPS_PATH")
+  SWAPSIZE=$(( 1024 * ${SWAPSIZE_KB:-0} ))
+  HIBERNATION_IMAGE_SIZE=$(<"$SYS_POWER_PATH/image_size")
+
+  [[ $HIBERNATION_IMAGE_SIZE =~ ^[0-9]+$ ]] || return 1
+  (( SWAPSIZE > HIBERNATION_IMAGE_SIZE )) && [[ -f $RESUME_CONF_PATH ]]
+}
+
+hibernation_encrypted() {
+  local swaps swap device
+  swaps=$(swapon --show=NAME --noheadings --raw 2>/dev/null | grep -v '^/dev/zram' || true)
+  [[ -n $swaps ]] || return 1
+
+  while read -r swap; do
+    device=$swap
+    [[ -f $swap ]] && device=$(findmnt -no SOURCE -T "$swap" | sed 's/\[.*//')
+    lsblk -J -s -p -o NAME,TYPE "$device" 2>/dev/null | jq -e '
+      def encrypted: .type == "crypt" or ((.children // []) as $below | $below != [] and all($below[]; encrypted));
+      .blockdevices != [] and all(.blockdevices[]; encrypted)' >/dev/null || return 1
+  done <<<"$swaps"
+}
+
+case "${1:-}" in
+  available) hibernation_available ;;
+  encrypted) hibernation_encrypted ;;
+  *)
+    echo "Usage: quattro-hibernation <available|encrypted>" >&2
+    exit 1
+    ;;
+esac

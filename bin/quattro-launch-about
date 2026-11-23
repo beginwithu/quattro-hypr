@@ -8,6 +8,9 @@
 # it instead of resizing after the first paint. Bash defers WINCH traps while read
 # blocks, so poll for size changes and re-render fastfetch whenever it is resized.
 
+
+set -uo pipefail
+
 QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 LOGO_FILE="$HOME/.config/quattro/branding/about.txt"
 FIT_FILE="$HOME/.local/state/quattro/windows/about.fit"
@@ -33,10 +36,6 @@ FIT_SPARE_COLUMNS=2
 FIT_SPARE_ROWS=1
 
 POLL_SECONDS=0.5
-
-# fastfetch has no animation of its own, so the sheen is ours. It knows about a
-# logo and nothing about About, which is why it is a file of its own.
-source quattro-branding-about-animation
 
 # A user copy that still matches Quattro's own fastfetch config byte-for-byte
 # (e.g. seeded by an older installer run) is not a custom layout.
@@ -268,89 +267,14 @@ fit_window() {
   return 1
 }
 
-# One run answers both questions the sheen has to ask first. How tall the layout
-# is, because a window too small for it scrolls, which moves the logo off the rows
-# the frames address. And what colour fastfetch drew the logo in, because the
-# glint has to hand every cell back in the colour it arrived in — assume it, and
-# a logo fastfetch colours differently comes out of the first glint a new one.
 measure_layout() {
   [[ -n ${LAYOUT_ROWS:-} ]] && return 0
 
-  local rendered plain needle offset found row
-
-  # --pipe false because fastfetch drops its colours when it is not writing to a
-  # terminal, and it is writing to this substitution.
+  local rendered
   rendered=$(about_fastfetch --pipe false 2>/dev/null; printf X)
   rendered=${rendered%X}
   LAYOUT_ROWS=$(printf '%s' "$rendered" | wc -l)
-  (( LAYOUT_ROWS > 0 )) || return 1
-
-  # Find the logo in what fastfetch drew rather than working it out from the
-  # padding this file was written against. The config that runs is the one in
-  # /etc, which a checkout does not replace, so the two can disagree — and a logo
-  # measured two rows above where it was drawn is a logo the sheen moves. Not
-  # finding it at all is the same answer as finding it somewhere unexpected:
-  # whatever is on screen is not the text in the file, so leave it alone.
-  IFS=$'\t' read -r offset needle < <(logo_landmark) || return 1
-  [[ -n $needle ]] || return 1
-
-  plain=$(printf '%s' "$rendered" | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g')
-  found=$(printf '%s' "$plain" | LC_ALL=C.UTF-8 awk -v needle="$needle" \
-    'index($0, needle) { print NR, index($0, needle); exit }')
-  [[ -n $found ]] || return 1
-  read -r LOGO_ROW LOGO_COLUMN <<<"$found"
-  LOGO_ROW=$(( LOGO_ROW - offset ))
-  (( LOGO_ROW >= 1 && LOGO_COLUMN >= 1 )) || return 1
-
-  # Whatever fastfetch set before that row is what the sheen has to give back.
-  row=$(printf '%s' "$rendered" | sed -n "$(( LOGO_ROW + offset ))p")
-  LOGO_COLOR=""
-  [[ $row =~ ^(($ESC\[[0-9;]*m)+) ]] && LOGO_COLOR=${BASH_REMATCH[1]}
-
-  return 0
-}
-
-# The longest line of the logo, and how far down the logo it sits — the most
-# distinctive thing to look for in the render, and the offset that turns where it
-# was found back into where the logo starts.
-# Tab-separated, and the offset first, because the line may hold spaces of its
-# own and splitting on them would cut the landmark short.
-logo_landmark() {
-  LC_ALL=C.UTF-8 awk '
-    { if (length($0) > best) { best = length($0); line = $0; at = NR - 1 } }
-    END { if (best > 0) printf "%d\t%s\n", at, line }
-  ' "$LOGO_FILE" 2>/dev/null
-}
-
-# The About screen's own reasons the logo might not be where these frames would
-# draw it. Whether the logo itself can be animated is the sheen's own question.
-build_sheen() {
-  # Whatever the last build left is not this window's, and the loop below plays
-  # whatever is here — so a build that fails has to leave nothing to play.
-  SHEEN_FRAMES=()
-
-  custom_fastfetch_config && return 1
-
-  # fastfetch honours NO_COLOR when it writes to a terminal but not when it writes
-  # to the measurement below, so a logo drawn without colour would be measured as
-  # green and left green by the first glint. A glint is colour anyway, which is
-  # the thing NO_COLOR asks for none of.
-  [[ -n ${NO_COLOR:-} ]] && return 1
-
-  measure_layout || return 1
-
-  # The layout needs a row for the cursor past its last line. Without one it has
-  # scrolled, and the logo is no longer on the rows the frames address. Ask the
-  # terminal where the cursor actually is rather than trust the arithmetic, and
-  # keep the arithmetic for a terminal that will not say.
-  local rows cols
-  read -r rows cols <<<"$(stty size)"
-  (( rows > LAYOUT_ROWS )) || return 1
-
-  # The cell the logo's first row starts on, every attribute fastfetch left on
-  # those cells so a glint that has passed leaves them as it found them, and the
-  # room it has to work in left of the module column.
-  sheen_build "$LOGO_FILE" "$LOGO_ROW" "$LOGO_COLUMN" "${ESC}[0m${LOGO_COLOR}" "$(( cols - LOGO_COLUMN + 1 ))"
+  (( LAYOUT_ROWS > 0 ))
 }
 
 # What the frames were built against. A window that resized, or a logo that was
@@ -368,43 +292,10 @@ tick() {
   (( $? > 128 )) || exit
 }
 
-play_sheen() {
-  local index
-
-  for (( index = 0; index < ${#SHEEN_FRAMES[@]}; index++ )); do
-    # Stop before painting a frame rather than after: a resize has already moved
-    # the cells these address, and the rest of a sweep would land across them.
-    # The grid costs a process, so it stays on the poll interval. The trap costs
-    # nothing, so it is read last — a signal that arrived while the grid was being
-    # read would otherwise be seen only after another frame had gone out.
-    (( index % SHEEN_POLL_FRAMES == 0 )) && content_changed && return 1
-    [[ $resized == true ]] && return 1
-
-    printf '%s' "${SHEEN_FRAMES[index]}"
-    tick "$SHEEN_FRAME_SECONDS"
-  done
-
-  return 0
-}
-
-# The logo is still between glints, so About is a quiet window to leave open.
-rest_sheen() {
-  local ticks
-
-  for (( ticks = 0; ticks < SHEEN_REST_TICKS; ticks++ )); do
-    tick "$POLL_SECONDS"
-    content_changed && return 1
-  done
-
-  return 0
-}
-
 if [[ ${1:-} == "--render" ]]; then
   printf '\e[?25l'
   write_about_config
 
-  # A sweep runs for seconds between polls, so it reads this instead. The polling
-  # stays as the backstop, for a signal that arrived while it could not be taken.
   resized=false
   trap 'resized=true' WINCH
 
@@ -420,18 +311,13 @@ if [[ ${1:-} == "--render" ]]; then
     LAYOUT_ROWS=""
     clear
     about_fastfetch
-    # A second pass picks up a fit that could not measure the window the first
-    # time. Beyond that, a window that will not settle would be fitted again on
-    # every repaint.
     if [[ $fitted == false ]] && (( ++passes <= 2 )); then
       fit_window && fitted=true
       [[ $resized == true ]] && continue
     fi
-    # An empty frame list plays nothing, so a logo that cannot be animated waits
-    # here exactly as the still one did, and there is one loop rather than two.
-    build_sheen
-    while play_sheen && rest_sheen; do :; done
-    # A rebranded logo changes the content dimensions, so measure again.
+    while ! content_changed; do
+      tick "$POLL_SECONDS"
+    done
     if [[ $(stat -c %Y "$LOGO_FILE" 2>/dev/null) != $logo_stamp ]]; then
       fitted=false
       passes=0

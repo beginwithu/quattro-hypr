@@ -6,7 +6,9 @@
 # quattro:args=<clipboard|file|folder> [path...]
 # quattro:examples=quattro share clipboard | quattro share file ~/Downloads/example.txt
 
-if (($# == 0)); then
+set -euo pipefail
+
+if (( $# == 0 )); then
   echo "Usage: quattro-menu-share [clipboard|file|folder]"
   exit 1
 fi
@@ -14,11 +16,106 @@ fi
 MODE="$1"
 shift
 
+file_select() {
+  python3 - "$@" <<'PY'
+import argparse, os, subprocess, sys
+import gi
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib
+
+ANSWER_TIMEOUT_SEC = 600
+EXIT_NOTHING_PICKED = 1
+EXIT_CHOOSER_FAILED = 2
+
+def default_title():
+    try:
+        title = subprocess.run("quattro-i18n files.selectFile".split(), capture_output=True, text=True).stdout
+    except OSError:
+        title = ""
+    if not title or title == "files.selectFile":
+        title = "Select file"
+    return title
+
+def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--title", default=None)
+    parser.add_argument("--multiple", action="store_true")
+    parser.add_argument("--directory", action="store_true")
+    parser.add_argument("--extensions", default="")
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        print("quattro-menu-share: unknown option %s" % unknown[0], file=sys.stderr)
+        return EXIT_CHOOSER_FAILED
+    if args.title is None:
+        args.title = default_title()
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    loop = GLib.MainLoop()
+    uris = []
+    def on_response(connection, sender, path, interface, signal, params):
+        code, results = params.unpack()
+        if code == 0:
+            uris.extend(results.get("uris", []))
+        loop.quit()
+    def subscribe(path):
+        bus.signal_subscribe(
+            "org.freedesktop.portal.Desktop",
+            "org.freedesktop.portal.Request",
+            "Response",
+            path,
+            None,
+            Gio.DBusSignalFlags.NONE,
+            on_response,
+        )
+    token = "quattro%d" % os.getpid()
+    sender = bus.get_unique_name()[1:].replace(".", "_")
+    predicted = "/org/freedesktop/portal/desktop/request/%s/%s" % (sender, token)
+    subscribe(predicted)
+    options = {
+        "handle_token": GLib.Variant("s", token),
+        "multiple": GLib.Variant("b", args.multiple),
+    }
+    if args.directory:
+        options["directory"] = GLib.Variant("b", True)
+    if args.extensions and not args.directory:
+        exts = [ext.lstrip(".").lower() for ext in args.extensions.split()]
+        patterns = [(0, "*." + ext) for ext in exts] + [(0, "*." + ext.upper()) for ext in exts]
+        label = " ".join("*." + ext for ext in exts)
+        filters = GLib.Variant("a(sa(us))", [(label, patterns)])
+        options["filters"] = filters
+        options["current_filter"] = GLib.Variant("(sa(us))", (label, patterns))
+    handle = bus.call_sync(
+        "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.portal.FileChooser",
+        "OpenFile",
+        GLib.Variant("(ssa{sv})", ("", args.title, options)),
+        None,
+        Gio.DBusCallFlags.NONE,
+        -1,
+        None,
+    ).unpack()[0]
+    if handle != predicted:
+        subscribe(handle)
+    GLib.timeout_add_seconds(ANSWER_TIMEOUT_SEC, loop.quit)
+    loop.run()
+    for uri in uris:
+        print(GLib.filename_from_uri(uri)[0])
+    return 0 if uris else EXIT_NOTHING_PICKED
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except GLib.Error as error:
+        print("quattro-menu-share: %s" % error.message, file=sys.stderr)
+        sys.exit(EXIT_CHOOSER_FAILED)
+PY
+}
+
 if [[ $MODE == "clipboard" ]]; then
   TEMP_FILE=$(mktemp --suffix=.txt)
   wl-paste >"$TEMP_FILE"
   FILE_ARRAY=("$TEMP_FILE")
-elif (($# > 0)); then
+elif (( $# > 0 )); then
   FILE_ARRAY=("$@")
 else
   if [[ $MODE == "folder" ]]; then
@@ -27,12 +124,10 @@ else
     select_args=(--title "$(quattro-i18n share.filesTitle)" --multiple)
   fi
 
-  # Command substitution so the chooser's exit status survives: reading it
-  # through a process substitution reports success for a chooser that never
-  # opened, which is indistinguishable here from someone deciding not to share.
-  picked=$(quattro-file-select "${select_args[@]}") || status=$?
+  status=0
+  picked=$(file_select "${select_args[@]}") || status=$?
 
-  if ((${status:-0} > 1)); then
+  if (( status > 1 )); then
     quattro-notification-send -g "" -u critical "$(quattro-i18n share.couldNot)" "$(quattro-i18n share.chooserClosed)"
     exit 1
   fi
@@ -41,10 +136,5 @@ else
   readarray -t FILE_ARRAY <<<"$picked"
 fi
 
-# Run LocalSend in its own systemd service (detached from terminal)
 systemd-run --user --quiet --collect localsend --headless send "${FILE_ARRAY[@]}"
-
-# Note: Temporary file will remain until system cleanup for clipboard mode
-# This ensures the file content is available for the LocalSend GUI
-
 exit 0

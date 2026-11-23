@@ -3,6 +3,9 @@
 # quattro:summary=List webcam devices that support video capture
 # quattro:hidden=true
 
+
+set -uo pipefail
+
 capture_capable() {
   local device="$1"
 

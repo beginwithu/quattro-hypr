@@ -3,15 +3,22 @@
 # quattro:summary=Apply the current theme color to Chromium, Chrome, Edge, and Brave
 # quattro:hidden=true
 
+set -euo pipefail
+
 QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
-source "$QUATTRO_PATH/default/chromium/browser-policy.sh"
+
+BROWSER_POLICY_MANAGED_DIRS=(
+  /etc/chromium/policies/managed
+  /etc/opt/chrome/policies/managed
+  /etc/opt/edge/policies/managed
+  /etc/brave/policies/managed
+)
+BROWSER_POLICY_DEFAULT_COLOR="#1c2027"
 
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
-CHROMIUM_THEME="$STATE_HOME/quattro/current/theme/chromium.theme"
-THEME_HEX_COLOR=$BROWSER_POLICY_DEFAULT_COLOR
-
-if [[ -f $CHROMIUM_THEME ]]; then
-  THEME_HEX_COLOR=$(browser_policy_theme_hex "$(<$CHROMIUM_THEME)")
+THEME_HEX_COLOR=$(quattro-theme-color background "$BROWSER_POLICY_DEFAULT_COLOR" 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo "$BROWSER_POLICY_DEFAULT_COLOR")
+if [[ ! $THEME_HEX_COLOR =~ ^#[0-9a-f]{6}$ ]]; then
+  THEME_HEX_COLOR="$BROWSER_POLICY_DEFAULT_COLOR"
 fi
 
 # Clean up any legacy unpacked Brave theme extension directory.
@@ -95,15 +102,15 @@ done < <(ps -eo comm=,args=)
 
 # Chrome installs as either binary name, so take whichever exists.
 chrome=google-chrome-stable
-quattro-cmd-present "$chrome" || chrome=google-chrome
+quattro-cmd present "$chrome" || chrome=google-chrome
 
 browsers_to_refresh=()
 for browser in chromium:chromium "chrome:$chrome" msedge:microsoft-edge-stable brave:brave; do
-  [[ -n ${running_names[${browser%%:*}]:-} ]] && quattro-cmd-present "${browser#*:}" && browsers_to_refresh+=("${browser#*:}")
+  [[ -n ${running_names[${browser%%:*}]:-} ]] && quattro-cmd present "${browser#*:}" && browsers_to_refresh+=("${browser#*:}")
 done
 # Match on the binary path: the running process is named plain "brave", and a
 # bare brave-origin pattern would also match the installer's own terminal.
-[[ $running_args == *"/opt/brave-origin-bin/"* ]] && quattro-cmd-present brave-origin && browsers_to_refresh+=(brave-origin)
+[[ $running_args == *"/opt/brave-origin-bin/"* ]] && quattro-cmd present brave-origin && browsers_to_refresh+=(brave-origin)
 
 wait "$policy_pid" || failed=1
 

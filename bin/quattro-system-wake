@@ -5,6 +5,9 @@
 # quattro:name=wake
 # quattro:examples=quattro system wake
 
+
+set -uo pipefail
+
 quattro-brightness-display on
 quattro-brightness-keyboard restore
 quattro-hyprland-monitor-clamshell >/dev/null 2>&1 || true

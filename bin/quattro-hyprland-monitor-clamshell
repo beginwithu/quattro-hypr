@@ -3,6 +3,8 @@
 # quattro:summary=Apply clamshell display state to Hyprland monitors
 # quattro:hidden=true
 
+set -uo pipefail
+
 TOGGLES_DIR="$HOME/.local/state/quattro/toggles/hypr"
 CLAMSHELL_FLAG="$TOGGLES_DIR/internal-monitor-clamshell.lua"
 MANUAL_DISABLE_FLAG="$TOGGLES_DIR/internal-monitor-disable.lua"
@@ -10,7 +12,7 @@ SCALE_STATE="$TOGGLES_DIR/internal-monitor-scale"
 MONITOR_LUA="$HOME/.config/hypr/monitors.lua"
 MONITOR_SETTINGS="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/monitors/settings"
 
-INTERNAL=$(quattro-hyprland-monitor-laptop)
+INTERNAL=$(quattro-hyprland-monitor laptop 2>/dev/null || true)
 
 # INTERNAL is written into generated Lua and hyprctl eval/dispatch below, so a
 # name that is not a plain connector string could execute on the next reload.
@@ -143,7 +145,7 @@ saved_internal_monitor_value() {
   *) return 0 ;;
   esac
 
-  identity=$(quattro-hyprland-monitor-identity "$INTERNAL")
+  identity=$(quattro-hyprland-monitor identity "$INTERNAL")
   # The identity is the last field: lines saved before rotation was saved lack
   # the transform before it.
   awk -F'\t' -v identity="$identity" -v field="$field" '$NF == identity { print $field; exit }' "$MONITOR_SETTINGS"
@@ -243,7 +245,7 @@ enable_internal_output() {
   # is physically connected and no other output is enabled: that is the unplug
   # this recovers from (#16307). Otherwise the choice to run elsewhere stands,
   # and this is reached every two seconds by the docked poll.
-  quattro-hw-external-monitors || other_output_enabled || enable="disabled = false, "
+  quattro-hw external-monitors || other_output_enabled || enable="disabled = false, "
   hyprctl eval "hl.monitor({ output = \"$INTERNAL\", ${enable}mode = \"$mode\", position = \"$position\", scale = $scale })" >/dev/null 2>&1 || true
 }
 
@@ -296,10 +298,10 @@ enable_internal() {
   fi
 
   if (( changed )); then
-    quattro-restart-hyprctl
+    quattro-restart hyprctl
   fi
 
-  [[ -f $MANUAL_DISABLE_FLAG ]] && quattro-hyprland-monitor-external-active && return 0
+  [[ -f $MANUAL_DISABLE_FLAG ]] && quattro-hyprland-monitor external-active && return 0
   sync_internal_scale
 
   if (( changed )); then
@@ -319,14 +321,14 @@ disable_internal() {
 
   if [[ ! -f $CLAMSHELL_FLAG ]] || [[ $(< "$CLAMSHELL_FLAG") != $config ]]; then
     printf '%s\n' "$config" >"$CLAMSHELL_FLAG"
-    quattro-restart-hyprctl
+    quattro-restart hyprctl
   fi
 }
 
-quattro-hyprland-monitor-internal recover >/dev/null 2>&1 || true
-quattro-hyprland-monitor-internal-mirror recover >/dev/null 2>&1 || true
+quattro-hyprland-monitor internal recover >/dev/null 2>&1 || true
+quattro-hyprland-monitor internal-mirror recover >/dev/null 2>&1 || true
 
-if quattro-hw-clamshell && quattro-hyprland-monitor-external-active; then
+if quattro-hw-laptop-closed && quattro-hw external-monitors && quattro-hyprland-monitor external-active; then
   disable_internal
 else
   enable_internal

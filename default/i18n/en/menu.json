@@ -1,12 +1,6 @@
 {
-  "root": {
-    "label": "Go"
-  },
   "apps": {
     "label": "Apps"
-  },
-  "learn": {
-    "label": "Learn"
   },
   "appearance": {
     "label": "Appearance"
@@ -25,6 +19,9 @@
   },
   "update": {
     "label": "Update"
+  },
+  "learn": {
+    "label": "Learn"
   },
   "about": {
     "label": "About"
@@ -64,9 +61,6 @@
   },
   "learn.arch": {
     "label": "Arch"
-  },
-  "learn.neovim": {
-    "label": "Neovim"
   },
   "learn.bash": {
     "label": "Bash"
@@ -224,17 +218,11 @@
   "appearance.branding.about.text": {
     "label": "Edit Text"
   },
-  "appearance.branding.about.image": {
-    "label": "Set From Image"
-  },
   "appearance.branding.about.default": {
     "label": "Restore Default"
   },
   "appearance.branding.screensaver.text": {
     "label": "Edit Text"
-  },
-  "appearance.branding.screensaver.image": {
-    "label": "Set From Image"
   },
   "appearance.branding.screensaver.default": {
     "label": "Restore Default"
@@ -318,6 +306,15 @@
   "trigger.reminder": {
     "label": "Reminder"
   },
+  "trigger.reminder.set": {
+    "label": "Set Reminder"
+  },
+  "trigger.reminder.list": {
+    "label": "Active Reminders"
+  },
+  "trigger.reminder.cancel": {
+    "label": "Cancel Reminder"
+  },
   "trigger.capture": {
     "label": "Capture"
   },
@@ -354,9 +351,6 @@
   "trigger.capture.screenrecord.webcam": {
     "label": "With desktop + microphone audio + webcam"
   },
-  "trigger.transcode": {
-    "label": "Transcode"
-  },
   "trigger.share": {
     "label": "Share"
   },
@@ -378,44 +372,17 @@
   "trigger.hardware.mirror-display-off": {
     "label": "Display Mirroring Off"
   },
-  "trigger.hardware.hybrid-gpu-on": {
-    "label": "Switch to Hybrid GPU"
-  },
-  "trigger.hardware.hybrid-gpu-off": {
-    "label": "Switch to Integrated GPU"
-  },
   "trigger.hardware.touchpad-on": {
     "label": "Enable Touchpad"
   },
   "trigger.hardware.touchpad-off": {
     "label": "Disable Touchpad"
   },
-  "trigger.hardware.touchpad-haptics": {
-    "label": "Touchpad Haptics"
-  },
-  "trigger.hardware.touchpad-haptics.low": {
-    "label": "low"
-  },
-  "trigger.hardware.touchpad-haptics.mid": {
-    "label": "mid"
-  },
-  "trigger.hardware.touchpad-haptics.high": {
-    "label": "high"
-  },
   "trigger.hardware.touchscreen-on": {
     "label": "Enable Touchscreen"
   },
   "trigger.hardware.touchscreen-off": {
     "label": "Disable Touchscreen"
-  },
-  "trigger.reminder.set": {
-    "label": "Set one"
-  },
-  "trigger.reminder.show": {
-    "label": "Show all"
-  },
-  "trigger.reminder.clear": {
-    "label": "Clear all"
   },
   "trigger.share.clipboard": {
     "label": "Clipboard"
@@ -431,51 +398,6 @@
   },
   "trigger.tests.network-speedtest": {
     "label": "Network Speed Test"
-  },
-  "trigger.tests.disk-speedtest": {
-    "label": "Disk Speed Test"
-  },
-  "setup.keyboard": {
-    "label": "Keyboard"
-  },
-  "setup.keyboard.keybindings": {
-    "label": "Keybindings"
-  },
-  "setup.keyboard.inputs": {
-    "label": "Keyboard Inputs"
-  },
-  "setup.keyboard.input-methods": {
-    "label": "Input Methods"
-  },
-  "setup.input": {
-    "label": "Input"
-  },
-  "setup.monitors": {
-    "label": "Monitors"
-  },
-  "setup.language": {
-    "label": "Language"
-  },
-  "setup.network": {
-    "label": "Network"
-  },
-  "setup.network.dns": {
-    "label": "DNS"
-  },
-  "setup.network.dns.dhcp": {
-    "label": "DHCP"
-  },
-  "setup.network.dns.cloudflare": {
-    "label": "Cloudflare"
-  },
-  "setup.network.dns.google": {
-    "label": "Google"
-  },
-  "setup.network.dns.custom": {
-    "label": "Custom"
-  },
-  "setup.network.qr": {
-    "label": "QR Code"
   },
   "setup.default": {
     "label": "Defaults"
@@ -509,17 +431,8 @@
     "label": "Terminal",
     "title": "Default Terminal"
   },
-  "setup.default.terminal.alacritty": {
-    "label": "Alacritty"
-  },
   "setup.default.terminal.foot": {
     "label": "Foot"
-  },
-  "setup.default.terminal.ghostty": {
-    "label": "Ghostty"
-  },
-  "setup.default.terminal.kitty": {
-    "label": "Kitty"
   },
   "setup.default.editor": {
     "label": "Editor",
@@ -546,24 +459,6 @@
   "setup.default.editor.emacs": {
     "label": "Emacs"
   },
-  "setup.plugin": {
-    "label": "Plugins"
-  },
-  "setup.plugin.enable": {
-    "label": "Enable Plugin"
-  },
-  "setup.plugin.disable": {
-    "label": "Disable Plugin"
-  },
-  "setup.plugin.add": {
-    "label": "Add Plugin"
-  },
-  "setup.plugin.clone": {
-    "label": "Clone Plugin"
-  },
-  "setup.plugin.remove": {
-    "label": "Remove Plugin"
-  },
   "setup.security": {
     "label": "Security"
   },
@@ -582,9 +477,6 @@
   "setup.security.ssh-agent": {
     "label": "SSH Agent"
   },
-  "setup.security.sudoless-docker": {
-    "label": "Sudoless Docker"
-  },
   "setup.security.passwordless-sudo": {
     "label": "Passwordless Sudo"
   },
@@ -600,17 +492,47 @@
   "setup.config.xcompose": {
     "label": "XCompose"
   },
+  "setup.keyboard": {
+    "label": "Keyboard"
+  },
+  "setup.keyboard.keybindings": {
+    "label": "Keybindings"
+  },
+  "setup.keyboard.inputs": {
+    "label": "Keyboard Inputs"
+  },
+  "setup.input": {
+    "label": "Input"
+  },
+  "setup.monitors": {
+    "label": "Monitors"
+  },
+  "setup.network": {
+    "label": "Network"
+  },
+  "setup.network.dns": {
+    "label": "DNS"
+  },
+  "setup.network.dns.dhcp": {
+    "label": "DHCP"
+  },
+  "setup.network.dns.cloudflare": {
+    "label": "Cloudflare"
+  },
+  "setup.network.dns.google": {
+    "label": "Google"
+  },
+  "setup.network.dns.custom": {
+    "label": "Custom"
+  },
+  "setup.network.qr": {
+    "label": "QR Code"
+  },
   "install.package": {
     "label": "Package"
   },
-  "install.service": {
-    "label": "Service"
-  },
-  "install.development": {
-    "label": "Development"
-  },
-  "install.editor": {
-    "label": "Editor"
+  "install.aur": {
+    "label": "AUR"
   },
   "install.style": {
     "label": "Style"
@@ -621,255 +543,11 @@
   "install.style.background": {
     "label": "Background"
   },
-  "install.style.font": {
-    "label": "Font"
-  },
-  "install.style.font.cascadia": {
-    "label": "Cascadia Mono"
-  },
-  "install.style.font.meslo": {
-    "label": "Meslo LG Mono"
-  },
-  "install.style.font.fira": {
-    "label": "Fira Code"
-  },
-  "install.style.font.victor": {
-    "label": "Victor Code"
-  },
-  "install.style.font.bitstream": {
-    "label": "Bitstream Vera Mono"
-  },
-  "install.style.font.iosevka": {
-    "label": "Iosevka"
-  },
-  "install.gaming": {
-    "label": "Gaming"
-  },
-  "install.browser": {
-    "label": "Browser"
-  },
-  "install.webapp": {
-    "label": "Web App"
-  },
-  "install.terminal": {
-    "label": "Terminal"
-  },
-  "install.tui": {
-    "label": "TUI"
-  },
-  "install.windows": {
-    "label": "Windows"
-  },
-  "install.aur": {
-    "label": "AUR"
-  },
-  "install.browser.chromium": {
-    "label": "Chromium"
-  },
-  "install.browser.chrome": {
-    "label": "Chrome"
-  },
-  "install.browser.edge": {
-    "label": "Edge"
-  },
-  "install.browser.brave": {
-    "label": "Brave"
-  },
-  "install.browser.brave-origin": {
-    "label": "Brave Origin"
-  },
-  "install.browser.firefox": {
-    "label": "Firefox"
-  },
-  "install.browser.zen": {
-    "label": "Zen"
-  },
-  "install.service.1password": {
-    "label": "1Password"
-  },
-  "install.service.dropbox": {
-    "label": "Dropbox"
-  },
-  "install.service.signal": {
-    "label": "Signal"
-  },
-  "install.service.slack": {
-    "label": "Slack"
-  },
-  "install.service.tailscale": {
-    "label": "Tailscale"
-  },
-  "install.service.nordvpn": {
-    "label": "NordVPN"
-  },
-  "install.service.notion": {
-    "label": "Notion"
-  },
-  "install.service.bitwarden": {
-    "label": "Bitwarden"
-  },
-  "install.service.microsoft": {
-    "label": "Microsoft"
-  },
-  "install.editor.vscode": {
-    "label": "VSCode"
-  },
-  "install.editor.zed": {
-    "label": "Zed"
-  },
-  "install.editor.sublime": {
-    "label": "Sublime Text"
-  },
-  "install.editor.helix": {
-    "label": "Helix"
-  },
-  "install.editor.vim": {
-    "label": "Vim"
-  },
-  "install.editor.emacs": {
-    "label": "Emacs"
-  },
-  "install.terminal.alacritty": {
-    "label": "Alacritty"
-  },
-  "install.terminal.foot": {
-    "label": "Foot"
-  },
-  "install.terminal.ghostty": {
-    "label": "Ghostty"
-  },
-  "install.terminal.kitty": {
-    "label": "Kitty"
-  },
-  "install.gaming.steam": {
-    "label": "Steam"
-  },
-  "install.gaming.retroarch": {
-    "label": "RetroArch"
-  },
-  "install.gaming.minecraft": {
-    "label": "Minecraft"
-  },
-  "install.gaming.geforce-now": {
-    "label": "NVIDIA GeForce NOW"
-  },
-  "install.gaming.xbox-cloud": {
-    "label": "Xbox Cloud Gaming"
-  },
-  "install.gaming.xbox-controllers": {
-    "label": "Xbox Controllers"
-  },
-  "install.gaming.moonlight": {
-    "label": "Moonlight"
-  },
-  "install.gaming.battlenet": {
-    "label": "Battle.net"
-  },
-  "install.gaming.lutris": {
-    "label": "Lutris"
-  },
-  "install.gaming.heroic": {
-    "label": "Heroic (Epic Games)"
-  },
-  "install.gaming.retro-launcher": {
-    "label": "RetroArch Game Launcher"
-  },
-  "install.development.rails": {
-    "label": "Ruby on Rails"
-  },
-  "install.development.docker-dbs": {
-    "label": "Docker DB"
-  },
-  "install.development.javascript": {
-    "label": "JavaScript"
-  },
-  "install.development.go": {
-    "label": "Go"
-  },
-  "install.development.php": {
-    "label": "PHP"
-  },
-  "install.development.python": {
-    "label": "Python"
-  },
-  "install.development.elixir": {
-    "label": "Elixir"
-  },
-  "install.development.zig": {
-    "label": "Zig"
-  },
-  "install.development.rust": {
-    "label": "Rust"
-  },
-  "install.development.java": {
-    "label": "Java"
-  },
-  "install.development.dotnet": {
-    "label": ".NET"
-  },
-  "install.development.ocaml": {
-    "label": "OCaml"
-  },
-  "install.development.clojure": {
-    "label": "Clojure"
-  },
-  "install.development.scala": {
-    "label": "Scala"
-  },
-  "install.development.javascript.node": {
-    "label": "Node.js"
-  },
-  "install.development.javascript.bun": {
-    "label": "Bun"
-  },
-  "install.development.javascript.deno": {
-    "label": "Deno"
-  },
-  "install.development.php.php": {
-    "label": "PHP"
-  },
-  "install.development.php.laravel": {
-    "label": "Laravel"
-  },
-  "install.development.php.symfony": {
-    "label": "Symfony"
-  },
-  "install.development.elixir.elixir": {
-    "label": "Elixir"
-  },
-  "install.development.elixir.phoenix": {
-    "label": "Phoenix"
-  },
   "remove.package": {
     "label": "Package"
   },
-  "remove.service": {
-    "label": "Services",
-    "title": "Remove"
-  },
-  "remove.development": {
-    "label": "Development",
-    "title": "Remove"
-  },
   "remove.theme": {
     "label": "Theme"
-  },
-  "remove.gaming": {
-    "label": "Gaming",
-    "title": "Remove"
-  },
-  "remove.browser": {
-    "label": "Browser",
-    "title": "Remove"
-  },
-  "remove.webapp": {
-    "label": "Web App"
-  },
-  "remove.tui": {
-    "label": "TUI"
-  },
-  "remove.windows": {
-    "label": "Windows"
   },
   "remove.security": {
     "label": "Security",
@@ -884,146 +562,11 @@
   "remove.security.sshd": {
     "label": "SSHD"
   },
-  "remove.security.sudoless-docker": {
-    "label": "Sudoless Docker"
-  },
-  "remove.browser.chromium": {
-    "label": "Chromium"
-  },
-  "remove.browser.chrome": {
-    "label": "Chrome"
-  },
-  "remove.browser.edge": {
-    "label": "Edge"
-  },
-  "remove.browser.brave": {
-    "label": "Brave"
-  },
-  "remove.browser.brave-origin": {
-    "label": "Brave Origin"
-  },
-  "remove.browser.firefox": {
-    "label": "Firefox"
-  },
-  "remove.browser.zen": {
-    "label": "Zen"
-  },
-  "remove.service.1password": {
-    "label": "1Password"
-  },
-  "remove.service.dropbox": {
-    "label": "Dropbox"
-  },
-  "remove.service.tailscale": {
-    "label": "Tailscale"
-  },
-  "remove.service.slack": {
-    "label": "Slack"
-  },
-  "remove.service.microsoft": {
-    "label": "Microsoft"
-  },
-  "remove.service.ssh-agent": {
+  "remove.security.ssh-agent": {
     "label": "SSH Agent"
   },
-  "remove.gaming.steam": {
-    "label": "Steam"
-  },
-  "remove.gaming.retroarch": {
-    "label": "RetroArch"
-  },
-  "remove.gaming.minecraft": {
-    "label": "Minecraft"
-  },
-  "remove.gaming.geforce-now": {
-    "label": "NVIDIA GeForce NOW"
-  },
-  "remove.gaming.xbox-cloud": {
-    "label": "Xbox Cloud Gaming"
-  },
-  "remove.gaming.xbox-controllers": {
-    "label": "Xbox Controllers (󰂯)"
-  },
-  "remove.gaming.moonlight": {
-    "label": "Moonlight"
-  },
-  "remove.gaming.battlenet": {
-    "label": "Battle.net"
-  },
-  "remove.gaming.lutris": {
-    "label": "Lutris"
-  },
-  "remove.gaming.heroic": {
-    "label": "Heroic (Epic Games)"
-  },
-  "remove.development.rails": {
-    "label": "Ruby on Rails"
-  },
-  "remove.development.javascript": {
-    "label": "JavaScript",
-    "title": "Remove"
-  },
-  "remove.development.go": {
-    "label": "Go"
-  },
-  "remove.development.php": {
-    "label": "PHP",
-    "title": "Remove"
-  },
-  "remove.development.python": {
-    "label": "Python"
-  },
-  "remove.development.elixir": {
-    "label": "Elixir",
-    "title": "Remove"
-  },
-  "remove.development.zig": {
-    "label": "Zig"
-  },
-  "remove.development.rust": {
-    "label": "Rust"
-  },
-  "remove.development.java": {
-    "label": "Java"
-  },
-  "remove.development.dotnet": {
-    "label": ".NET"
-  },
-  "remove.development.ocaml": {
-    "label": "OCaml"
-  },
-  "remove.development.clojure": {
-    "label": "Clojure"
-  },
-  "remove.development.scala": {
-    "label": "Scala"
-  },
-  "remove.development.javascript.node": {
-    "label": "Node.js"
-  },
-  "remove.development.javascript.bun": {
-    "label": "Bun"
-  },
-  "remove.development.javascript.deno": {
-    "label": "Deno"
-  },
-  "remove.development.php.php": {
-    "label": "PHP"
-  },
-  "remove.development.php.laravel": {
-    "label": "Laravel"
-  },
-  "remove.development.php.symfony": {
-    "label": "Symfony"
-  },
-  "remove.development.elixir.elixir": {
-    "label": "Elixir"
-  },
-  "remove.development.elixir.phoenix": {
-    "label": "Phoenix"
-  },
-  "update.quattro": {
-    "label": "Quattro"
+  "update.system": {
+    "label": "System & Packages"
   },
   "update.config": {
     "label": "Config",
@@ -1040,17 +583,11 @@
     "label": "Hardware",
     "title": "Restart"
   },
-  "update.firmware": {
-    "label": "Firmware"
-  },
   "update.password": {
     "label": "Password"
   },
   "update.timezone": {
     "label": "Timezone"
-  },
-  "update.time": {
-    "label": "Time"
   },
   "update.process.hyprsunset": {
     "label": "Hyprsunset"
@@ -1063,9 +600,6 @@
   },
   "update.config.hyprsunset": {
     "label": "Hyprsunset"
-  },
-  "update.config.plymouth": {
-    "label": "Plymouth"
   },
   "update.config.tmux": {
     "label": "Tmux"

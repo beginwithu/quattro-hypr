@@ -1,0 +1,271 @@
+#!/bin/bash
+
+# quattro:summary=Show or set the default browser, editor, or terminal
+# quattro:group=default
+# quattro:args=<browser|editor|terminal> [choice]
+# quattro:examples=quattro default browser brave-origin | quattro default editor nvim | quattro default terminal foot
+
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+
+sync_editor_mimetypes() {
+  local handler=quattro-launch-editor.desktop
+  local unless_chosen=false
+  [[ ${1:-} == "--unless-chosen" ]] && unless_chosen=true
+
+  local applications="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  if [[ ! -f $applications/$handler ]]; then
+    mkdir -p "$applications"
+    cp "$QUATTRO_PATH/applications/$handler" "$applications/"
+    command -v update-desktop-database >/dev/null && update-desktop-database "$applications" || true
+  fi
+
+  local types list older aliases updated desktop_list cleared
+  types=$(sed -n 's/^MimeType=//p' "$QUATTRO_PATH/applications/$handler" | tr ';' '\n' | sed '/^$/d')
+  list="${XDG_CONFIG_HOME:-$HOME/.config}/mimeapps.list"
+  mkdir -p "$(dirname "$list")"
+  [[ -f $list ]] || printf '[Default Applications]\n' >"$list"
+  tr -d '\r' <"$list" | grep -qE '^[[:space:]]*\[Default Applications\][[:space:]]*$' ||
+    printf '\n[Default Applications]\n' >>"$list"
+
+  older="${XDG_DATA_HOME:-$HOME/.local/share}/applications/mimeapps.list"
+  [[ -f $older ]] || older=/dev/null
+  aliases=/usr/share/mime/aliases
+  [[ -f $aliases ]] || aliases=/dev/null
+
+  updated=$(awk -v types="$types" -v handler="$handler" -v unless_chosen="$unless_chosen" -v older="$older" -v aliases="$aliases" '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function ours(app) { return app == "nvim.desktop" || app == "plain.desktop" || app == handler }
+    function canon(t) { return (t in alias) ? alias[t] : t }
+    BEGIN {
+      while ((getline pair < aliases) > 0) { split(pair, part, " "); alias[part[1]] = part[2] }
+      n = split(types, list, "\n")
+      for (i = 1; i <= n; i++) wanted[canon(list[i])] = 1
+    }
+    function header(line) { sub(/\r$/, "", line); return trim(line) }
+    FILENAME != current { current = FILENAME; file = (FILENAME == older ? 1 : 2); section = "" }
+    header($0) ~ /^\[/ { section = header($0) }
+    section != "[Default Applications]" || !/=/ {
+      if (file == 2) lines[FNR] = $0
+      next
+    }
+    {
+      type = $0; sub(/=.*/, "", type); type = trim(type)
+      app = $0; sub(/\r$/, "", app); sub(/^[^=]*=/, "", app); sub(/;.*/, "", app); app = trim(app)
+    }
+    file == 1 {
+      if (canon(type) in wanted) {
+        if (!(type in older_last)) older_keys[++older_count] = type
+        older_last[type] = app
+      }
+      next
+    }
+    {
+      lines[FNR] = $0
+      if (canon(type) in wanted) {
+        line_type[FNR] = canon(type)
+        if (!(type in last)) keys[++key_count] = type
+        last[type] = app
+      }
+    }
+    END {
+      for (k = 1; k <= key_count; k++) if (!(canon(keys[k]) in chosen)) chosen[canon(keys[k])] = !ours(last[keys[k]])
+      for (k = 1; k <= older_count; k++) if (!(canon(older_keys[k]) in older_choice)) older_choice[canon(older_keys[k])] = !ours(older_last[older_keys[k]])
+      if (unless_chosen == "true") {
+        for (type in chosen) if (chosen[type]) keep[type] = 1
+        for (type in older_choice) if (older_choice[type] && !(type in chosen)) keep[type] = 1
+      }
+      for (i = 1; i <= FNR; i++) {
+        if ((i in line_type) && !(line_type[i] in keep)) continue
+        print lines[i]
+        if (header(lines[i]) == "[Default Applications]" && !added) {
+          added = 1
+          for (j = 1; j <= n; j++) if (!(canon(list[j]) in keep)) print list[j] "=" handler
+        }
+      }
+    }
+  ' "$older" "$list")
+
+  printf '%s\n' "$updated" >"$list"
+
+  desktop_list="${XDG_CONFIG_HOME:-$HOME/.config}/hyprland-mimeapps.list"
+  if [[ $unless_chosen == false && -f $desktop_list && ! $desktop_list -ef $list ]]; then
+    cleared=$(awk -v types="$types" -v aliases="$aliases" '
+      function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+      function canon(t) { return (t in alias) ? alias[t] : t }
+      BEGIN {
+        while ((getline pair < aliases) > 0) { split(pair, part, " "); alias[part[1]] = part[2] }
+        n = split(types, list, "\n"); for (i = 1; i <= n; i++) wanted[canon(list[i])] = 1
+      }
+      { line = $0; sub(/\r$/, "", line) }
+      trim(line) ~ /^\[/ { section = trim(line) }
+      section == "[Default Applications]" && line ~ /=/ {
+        type = line; sub(/=.*/, "", type)
+        if (canon(trim(type)) in wanted) next
+      }
+      { print }
+    ' "$desktop_list")
+    printf '%s\n' "$cleared" >"$desktop_list"
+  fi
+}
+
+default_browser() {
+  local installing=false
+  if [[ ${1:-} == "--install" ]]; then
+    installing=true
+    shift
+  fi
+
+  if (( $# == 0 )); then
+    local current_browser
+    current_browser=$(quattro-cmd default-browser 2>/dev/null || true)
+    case "$current_browser" in
+      chromium.desktop) echo "chromium" ;;
+      google-chrome.desktop) echo "chrome" ;;
+      brave-browser.desktop) echo "brave" ;;
+      brave-origin.desktop) echo "brave-origin" ;;
+      microsoft-edge.desktop) echo "edge" ;;
+      firefox.desktop) echo "firefox" ;;
+      zen.desktop) echo "zen" ;;
+      *) echo "$current_browser" ;;
+    esac
+    return 0
+  fi
+
+  local browser command desktop_id name glyph
+  case "$1" in
+    chromium) browser="chromium"; command="chromium"; desktop_id="chromium.desktop"; name="Chromium"; glyph= ;;
+    chrome) browser="chrome"; command="google-chrome-stable"; desktop_id="google-chrome.desktop"; name="Chrome"; glyph=󰊯 ;;
+    brave) browser="brave"; command="brave"; desktop_id="brave-browser.desktop"; name="Brave"; glyph=󰖟 ;;
+    brave-origin) browser="brave-origin"; command="brave-origin"; desktop_id="brave-origin.desktop"; name="Brave Origin"; glyph=󰖟 ;;
+    edge) browser="edge"; command="microsoft-edge-stable"; desktop_id="microsoft-edge.desktop"; name="Edge"; glyph=󰇩 ;;
+    firefox) browser="firefox"; command="firefox"; desktop_id="firefox.desktop"; name="Firefox"; glyph=󰈹 ;;
+    zen) browser="zen"; command="zen-browser"; desktop_id="zen.desktop"; name="Zen"; glyph=󰖟 ;;
+    *)
+      echo "Usage: quattro-default browser <chromium|chrome|brave|brave-origin|edge|firefox|zen>" >&2
+      exit 1
+      ;;
+  esac
+
+  if quattro-cmd missing "$command"; then
+    if [[ $installing == "false" ]]; then
+      exec quattro-launch-floating-terminal-with-presentation quattro-default browser --install "$browser"
+    else
+      case "$browser" in
+        chromium) quattro-pkg add chromium ;;
+        chrome) quattro-pkg aur-add google-chrome ;;
+        brave) quattro-pkg aur-add brave-bin ;;
+        brave-origin) quattro-pkg add brave-origin-bin ;;
+        edge) quattro-pkg aur-add microsoft-edge-stable-bin ;;
+        firefox) quattro-pkg add firefox ;;
+        zen) quattro-pkg aur-add zen-browser-bin ;;
+      esac
+    fi
+  fi
+
+  env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser "$desktop_id"
+  quattro-notification-send -g "$glyph" "$(quattro-i18n default.browserSet "$name")"
+}
+
+default_editor() {
+  local installing=false
+  if [[ ${1:-} == "--install" ]]; then
+    installing=true
+    shift
+  fi
+
+  local editor_file="$HOME/.local/state/quattro/defaults/editor"
+
+  if (( $# == 0 )); then
+    local editor=""
+    if [[ -f $editor_file ]]; then
+      read -r editor <"$editor_file" || true
+    fi
+    [[ $editor == sublime_text ]] && editor=subl
+    [[ -n $editor ]] && echo "$editor" || echo "nvim"
+    return 0
+  fi
+
+  local selection editor name glyph
+  case "$1" in
+    code) selection="code"; editor="code"; name="VSCode"; glyph= ;;
+    zed | zeditor) selection="zed"; editor="zeditor"; name="Zed"; glyph= ;;
+    sublime_text | subl) selection="sublime_text"; editor="subl"; name="Sublime Text"; glyph= ;;
+    helix) selection="helix"; editor="helix"; name="Helix"; glyph= ;;
+    vim) selection="vim"; editor="vim"; name="Vim"; glyph= ;;
+    emacs) selection="emacs"; editor="emacs"; name="Emacs"; glyph= ;;
+    nvim) selection="nvim"; editor="nvim"; name="Neovim"; glyph= ;;
+    *)
+      echo "Usage: quattro-default editor <code|zed|sublime_text|helix|vim|emacs|nvim>" >&2
+      exit 1
+      ;;
+  esac
+
+  if quattro-cmd missing "$editor"; then
+    if [[ $installing == "false" ]]; then
+      exec quattro-launch-floating-terminal-with-presentation quattro-default editor --install "$selection"
+    else
+      case "$selection" in
+        code) quattro-pkg aur-add visual-studio-code-bin ;;
+        zed) quattro-pkg add zed ;;
+        sublime_text) quattro-pkg aur-add sublime-text-4 ;;
+        helix) quattro-pkg add helix ;;
+        vim) quattro-pkg add vim ;;
+        emacs) quattro-pkg add emacs ;;
+        nvim) quattro-pkg add neovim ;;
+      esac
+    fi
+  fi
+
+  mkdir -p "$(dirname "$editor_file")"
+  printf '%s\n' "$editor" >"$editor_file"
+  sync_editor_mimetypes
+  quattro-notification-send -g "$glyph" "$(quattro-i18n default.editorSet "$name")"
+}
+
+default_terminal() {
+  if (( $# == 0 )); then
+    local desktop_id
+    desktop_id=$(xdg-terminal-exec --print-id 2>/dev/null || true)
+    desktop_id=${desktop_id%%:*}
+    case "$desktop_id" in
+      foot.desktop | "") echo "foot" ;;
+      *) echo "${desktop_id%.desktop}" ;;
+    esac
+    return 0
+  fi
+
+  local desktop_id name
+  case "$1" in
+    foot)
+      desktop_id="foot.desktop"
+      name="Foot"
+      ;;
+    *)
+      echo "Usage: quattro-default terminal [foot]" >&2
+      exit 1
+      ;;
+  esac
+
+  mkdir -p "$HOME/.config"
+  cat >"$HOME/.config/xdg-terminals.list" <<EOF
+# Terminal emulator preference order for xdg-terminal-exec
+$desktop_id
+EOF
+
+  quattro-notification-send -g  "$(quattro-i18n default.terminalSet "$name")"
+}
+
+kind="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$kind" in
+  browser) default_browser "$@" ;;
+  editor) default_editor "$@" ;;
+  terminal) default_terminal "$@" ;;
+  *)
+    echo "Usage: quattro-default <browser|editor|terminal> [choice]" >&2
+    exit 1
+    ;;
+esac

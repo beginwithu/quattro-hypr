@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# quattro:summary=Detect hardware capabilities (external-monitors, laptop, recover-internal-monitor, touchpad, touchscreen, webcam)
+# quattro:group=hw
+# quattro:args=<external-monitors|laptop|recover-internal-monitor|touchpad|touchscreen|webcam>
+
+set -euo pipefail
+
+hw_external_monitors() {
+  local drm_path="${QUATTRO_DRM_PATH:-/sys/class/drm}"
+  local status
+  for status in "$drm_path"/card*-*/status; do
+    [[ -e $status ]] || continue
+    [[ $status =~ -(eDP|LVDS|DSI)-[^/]+/status$ ]] && continue
+    [[ $(<"$status") == "connected" ]] && return 0
+  done
+  return 1
+}
+
+hw_laptop() {
+  local acpi_lid="${QUATTRO_ACPI_LID_PATH:-/proc/acpi/button/lid}"
+  local input_class="${QUATTRO_INPUT_CLASS_PATH:-/sys/class/input}"
+  local dmi_chassis="${QUATTRO_DMI_CHASSIS_TYPE_PATH:-/sys/class/dmi/id/chassis_type}"
+
+  shopt -s nullglob
+  local -a acpi_states=("$acpi_lid"/*/state)
+  local -a input_switches=("$input_class"/*/capabilities/sw)
+  shopt -u nullglob
+
+  local state switches word chassis_type=""
+  local -a words=()
+  for state in "${acpi_states[@]}"; do
+    [[ -e $state ]] && return 0
+  done
+
+  for switches in "${input_switches[@]}"; do
+    [[ -r $switches ]] || continue
+    read -r -a words <"$switches" || true
+    (( ${#words[@]} )) || continue
+    word=${words[-1]}
+    [[ $word =~ ^[0-9a-fA-F]+$ ]] || continue
+    (( 16#$word & 1 )) && return 0
+  done
+
+  read -r chassis_type <"$dmi_chassis" 2>/dev/null || true
+  case "$chassis_type" in
+    8 | 9 | 10 | 14 | 30 | 31 | 32) return 0 ;;
+  esac
+  return 1
+}
+
+hw_recover_internal_monitor() {
+  local toggle="$HOME/.local/state/quattro/toggles/hypr/internal-monitor-disable.lua"
+  if [[ -f $toggle ]] && ! hw_external_monitors; then
+    rm -f "$toggle"
+  fi
+}
+
+hw_touchpad() {
+  local mice device=""
+  mice=$(hyprctl devices -j 2>/dev/null | jq -r '.mice[].name' || true)
+  device=$(grep -iE -m1 'touchpad|trackpad' <<<"$mice" || true)
+
+  if [[ -z $device ]]; then
+    local input_class="${QUATTRO_INPUT_CLASS_PATH:-/sys/class/input}"
+    local event name match mouse
+    for event in "$input_class"/event*; do
+      [[ -r $event/device/name ]] || continue
+      name=$(<"$event/device/name")
+      name=${name,,}
+      name=${name//[ ,$'\n']/-}
+      match=""
+      while IFS= read -r mouse; do
+        if [[ $mouse == "$name" || ( $mouse == "$name"-* && ${mouse#"$name"-} =~ ^[0-9]+$ ) ]]; then
+          match=$mouse
+          break
+        fi
+      done <<<"$mice"
+      [[ -n $match ]] || continue
+      udevadm info --query=property "$event" 2>/dev/null | grep -Fxq 'ID_INPUT_TOUCHPAD=1' || continue
+      device=$match
+      break
+    done
+  fi
+
+  [[ -n $device ]] && echo "$device" || true
+}
+
+hw_touchscreen() {
+  local device
+  device=$(hyprctl devices -j 2>/dev/null | jq -r '[.touch[]?.name, .tablets[]?.name] | first // empty' || true)
+  [[ -n $device ]] && echo "$device" || true
+}
+
+hw_webcam() {
+  local v4l_class_path="${QUATTRO_V4L_CLASS_PATH:-/sys/class/video4linux}"
+  local udev_data_path="${QUATTRO_UDEV_DATA_PATH:-/run/udev/data}"
+  local dev_path="${QUATTRO_DEV_PATH:-/dev}"
+
+  shopt -s nullglob
+  local -a nodes=("$v4l_class_path"/video*)
+  shopt -u nullglob
+
+  (( ${#nodes[@]} )) || return 1
+
+  udev_capabilities() {
+    local line
+    while IFS= read -r line; do
+      if [[ $line == E:ID_V4L_CAPABILITIES=* ]]; then
+        printf '%s\n' "${line#E:ID_V4L_CAPABILITIES=}"
+        return 0
+      fi
+    done <"$1"
+  }
+
+  local node device data
+  for node in "${nodes[@]}"; do
+    [[ -e $node/device && -r $node/dev ]] || continue
+    device="$dev_path/${node##*/}"
+    [[ -r $device && -w $device ]] || continue
+    data="$udev_data_path/c$(<"$node/dev")"
+    [[ -r $data && $(udev_capabilities "$data" || true) == *:capture:* ]] && return 0
+  done
+
+  [[ -n $(quattro-capture-webcam-list || true) ]]
+}
+
+case "${1:-}" in
+  external-monitors) hw_external_monitors ;;
+  laptop) hw_laptop ;;
+  recover-internal-monitor) hw_recover_internal_monitor ;;
+  touchpad) hw_touchpad ;;
+  touchscreen) hw_touchscreen ;;
+  webcam) hw_webcam ;;
+  *)
+    echo "Usage: quattro-hw <external-monitors|laptop|recover-internal-monitor|touchpad|touchscreen|webcam>" >&2
+    exit 1
+    ;;
+esac

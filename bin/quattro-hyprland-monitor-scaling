@@ -4,6 +4,9 @@
 # quattro:args=[--monitor NAME] [up|down|SCALE]
 # quattro:examples=quattro hyprland monitor scaling | quattro hyprland monitor scaling 1.6 | quattro hyprland monitor scaling up | quattro hyprland monitor scaling --monitor DP-2 2
 
+
+set -uo pipefail
+
 SCALES=(1 1.25 1.6 2 3 4)
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro"
 SCALE_LOG="$STATE_DIR/monitors/scaling"
@@ -97,7 +100,7 @@ set_scale() {
 
   local mode="${width}x${height}@${refresh_rate}"
 
-  quattro-hyprland-monitor-persist "$active_monitor" "$new_scale"
+  quattro-hyprland-monitor persist "$active_monitor" "$new_scale"
 
   # Beside other monitors it keeps its place, and the layout applies the new
   # scale in the same step as closing up around its new size, so the two never

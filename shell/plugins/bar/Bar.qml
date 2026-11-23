@@ -63,7 +63,7 @@ Item {
   property int barConfigSerial: 0
   property string position: "top"
   // Resolves through fontconfig at paint time (Style.font.family defaults
-  // to "monospace"), so changing the system font (via `quattro-font-set`)
+  // to "monospace"), so changing the system font (via `quattro-font set`)
   // updates the bar without a reload.
   property string fontFamily: Style.font.family
   // Bound to the central Color singleton so the bar tracks shell.toml's
@@ -201,241 +201,13 @@ Item {
   property var moduleSlots: []
   property var widgetHosts: []
   property var centerBoxes: []
-  property var pluginBarApis: ({})
-  // target -> { target, pluginId, clickTarget, popout }. Keyed by object so a
-  // registration edits one entry in place instead of copying and rescanning an
-  // array in QML; Qt's Map still finds a key by a native linear scan.
-  readonly property var pluginObjectOwners: new Map()
-  property bool pluginBarApiSyncQueued: false
 
-  Component {
-    id: pluginBarApiComponent
-    PluginBarApi { }
-  }
-
-  function publicLayoutConfig() {
-    return JSON.parse(JSON.stringify(root.layoutConfig || {}))
-  }
-
-  function bindPluginBarApi(api) {
-    if (!api) return
-    api.foreground = Qt.binding(function() { return root.foreground })
-    api.barForeground = Qt.binding(function() { return root.barForeground })
-    api.background = Qt.binding(function() { return root.background })
-    api.urgent = Qt.binding(function() { return root.urgent })
-    api.fontFamily = Qt.binding(function() { return root.fontFamily })
-    api.position = Qt.binding(function() { return root.position })
-    api.vertical = Qt.binding(function() { return root.vertical })
-    api.barSize = Qt.binding(function() { return root.barSize })
-    api.transparent = Qt.binding(function() { return root.transparent })
-    api.foregroundAnimationEnabled = Qt.binding(function() { return root.foregroundAnimationEnabled })
-    api.traySectionDragActive = Qt.binding(function() { return root.traySectionDragActive })
-    api.traySectionPopoutOpen = Qt.binding(function() { return root.traySectionPopoutOpen })
-    root.syncPluginBarApiObjects(api)
-  }
-
-  // Each api keeps its own detached copy of the layout. A flush serialises
-  // the layout once and passes the string in so it is not re-serialised for
-  // every plugin.
-  function syncPluginBarApiObjects(api, layoutSnapshot) {
-    if (!api) return
-    api.activePopout = root.pluginOwnsBarObject(api.pluginId, root.activePopout)
-      ? root.activePopout : (root.activePopout ? api.foreignPopoutMarker : null)
-    api.clickTargets = root.pluginClickTargets(api.pluginId)
-    api.layoutConfig = layoutSnapshot !== undefined
-      ? JSON.parse(layoutSnapshot) : root.publicLayoutConfig()
-  }
-
-  function pluginObjectRecord(target) {
-    return target ? (pluginObjectOwners.get(target) || null) : null
-  }
-
-  function markPluginObject(pluginId, target, role) {
-    var key = String(pluginId || "")
-    if (!key || !target) return false
-    var record = root.pluginObjectRecord(target)
-    if (record && record.pluginId !== key) return false
-    if (!record) {
-      record = { target: target, pluginId: key, clickTarget: false, popout: false }
-      pluginObjectOwners.set(target, record)
-    }
-    record[role] = true
-    return true
-  }
-
-  function unmarkPluginObject(pluginId, target, role) {
-    var key = String(pluginId || "")
-    var record = root.pluginObjectRecord(target)
-    if (!record || record.pluginId !== key) return
-    record[role] = false
-    if (!record.clickTarget && !record.popout) pluginObjectOwners.delete(target)
-  }
-
-  function pluginOwnsBarObject(pluginId, target) {
-    var record = target ? root.pluginObjectRecord(target) : null
-    return !!record && record.pluginId === String(pluginId || "")
-  }
-
-  function pluginClickTargets(pluginId) {
-    var out = []
-    for (var i = 0; i < root.clickTargets.length; i++) {
-      var target = root.clickTargets[i]
-      if (root.pluginOwnsBarObject(pluginId, target)) out.push(target)
-    }
-    return out
-  }
-
-  // Every click target registration, popout change and layout change used to
-  // resync every plugin api synchronously. Startup alone is hundreds of
-  // registrations, each walking every api and every target, so coalesce them
-  // into one resync per event-loop turn (as onWidgetHostsChanged already does
-  // for prunePluginBarApis). bindPluginBarApi still syncs a brand-new api
-  // directly so a widget never sees an empty api on its first read.
-  function schedulePluginBarApiSync() {
-    if (pluginBarApiSyncQueued) return
-    pluginBarApiSyncQueued = true
-    Qt.callLater(root.syncAllPluginBarApiObjects)
-  }
-
-  function syncAllPluginBarApiObjects() {
-    pluginBarApiSyncQueued = false
-    var layoutSnapshot = JSON.stringify(root.layoutConfig || {})
-    for (var id in pluginBarApis) {
-      var api = pluginBarApis[id]
-      if (api) root.syncPluginBarApiObjects(api, layoutSnapshot)
-    }
-  }
-
-  function registerPluginClickTarget(pluginId, target) {
-    if (!root.markPluginObject(pluginId, target, "clickTarget")) return
-    root.registerClickTarget(target)
-  }
-
-  function unregisterPluginClickTarget(pluginId, target) {
-    if (!root.pluginOwnsBarObject(pluginId, target)) return
-    root.unregisterClickTarget(target)
-    root.unmarkPluginObject(pluginId, target, "clickTarget")
-  }
-
-  // A plugin may read api.activePopout right after asking for its popout, so
-  // its own api is brought up to date inline; everyone else waits for the
-  // coalesced resync.
-  function requestPluginPopout(pluginId, owner) {
-    if (!root.markPluginObject(pluginId, owner, "popout")) return
-    root.requestPopout(owner)
-    root.syncPluginBarApiObjects(pluginBarApis[String(pluginId || "")])
-  }
-
-  function releasePluginPopout(pluginId, owner) {
-    if (!root.pluginOwnsBarObject(pluginId, owner)) return
-    root.releasePopout(owner)
-    root.unmarkPluginObject(pluginId, owner, "popout")
-    root.syncPluginBarApiObjects(pluginBarApis[String(pluginId || "")])
-  }
-
-  function pluginBarApiFor(pluginId, moduleName, registered) {
-    var key = String(pluginId || "")
-    if (!key) return null
-
-    var pluginShell = null
-    if (registered && root.shell && typeof root.shell.pluginShellForId === "function") {
-      // Only the trusted built-in bar receives ShellRoot and can request a
-      // service-capable facade for the widget it is instantiating.
-      pluginShell = root.shell.pluginShellForId(moduleName)
-    } else if (root.shell && typeof root.shell.pluginShellForBarEntry === "function") {
-      // Replacement bars receive a service-less entry facade. Giving an
-      // untrusted bar a generic facade factory would let it retrieve another
-      // third-party plugin's live service object.
-      pluginShell = root.shell.pluginShellForBarEntry(key, moduleName)
-    }
-
-    if (pluginBarApis[key]) {
-      pluginBarApis[key].shell = pluginShell
-      return pluginBarApis[key]
-    }
-
-    var api = pluginBarApiComponent.createObject(null, {
-      pluginId: key,
-      moduleName: String(moduleName || ""),
-      shell: pluginShell,
-      _showTooltip: function(target, text) { root.showTooltip(target, text) },
-      _hideTooltip: function(target) { root.hideTooltip(target) },
-      _registerClickTarget: function(target) { root.registerPluginClickTarget(key, target) },
-      _unregisterClickTarget: function(target) { root.unregisterPluginClickTarget(key, target) },
-      _requestPopout: function(owner) { root.requestPluginPopout(key, owner) },
-      _releasePopout: function(owner) { root.releasePluginPopout(key, owner) },
-      _switchPanelFrom: function(owner, direction) { return root.switchPanelFrom(owner, direction) },
-      _notePopoutCard: function(card) { root.notePopoutCard(card) },
-      _popoutCardFor: function(owner) { return root.popoutCardFor(owner) },
-      _targetBelongsToWindow: function(target, window) { return root.targetBelongsToWindow(target, window) },
-      _moduleWidgets: function(requestedId) {
-        return String(requestedId || "") === String(moduleName || "")
-          ? root.moduleWidgets(moduleName) : []
-      },
-      _run: function(command) { root.run(command) }
-    })
-    if (!api) return null
-    root.bindPluginBarApi(api)
-
-    var next = ({})
-    for (var id in pluginBarApis) next[id] = pluginBarApis[id]
-    next[key] = api
-    pluginBarApis = next
-    return api
-  }
-
-  function pluginBarApiUsed(pluginId) {
-    for (var i = 0; i < widgetHosts.length; i++) {
-      var host = widgetHosts[i]
-      if (host && host.pluginApiId === pluginId) return true
-    }
-    return false
-  }
-
-  function releasePluginObjects(pluginId) {
-    var owned = Array.from(pluginObjectOwners.values())
-    for (var i = 0; i < owned.length; i++) {
-      var record = owned[i]
-      if (!record || record.pluginId !== pluginId) continue
-      if (record.clickTarget) root.unregisterClickTarget(record.target)
-      if (record.popout && root.activePopout === record.target) root.releasePopout(record.target)
-      pluginObjectOwners.delete(record.target)
-    }
-  }
-
-  function prunePluginBarApis() {
-    var next = ({})
-    for (var id in pluginBarApis) {
-      var api = pluginBarApis[id]
-      if (root.pluginBarApiUsed(id)) {
-        next[id] = api
-        continue
-      }
-      root.releasePluginObjects(id)
-      if (api && typeof api.destroy === "function") api.destroy()
-    }
-    pluginBarApis = next
-  }
-
-  onActivePopoutChanged: schedulePluginBarApiSync()
-  onClickTargetsChanged: schedulePluginBarApiSync()
-  onLayoutConfigChanged: schedulePluginBarApiSync()
   // A layout written from elsewhere that moves widgets about mid-drag leaves
   // the drag's room in the wrong places, so the drag lets go and the layout
   // stands as written. A widget whose settings change keeps its key
   // (BarModel.layoutWidgets), so that alone leaves the drag be. Later, since
   // the change is still reaching the sections' models.
   onLayoutWidgetsChanged: if (barDragSource && JSON.stringify(layoutWidgets.sections) !== barDragKeys) Qt.callLater(clearBarDrag)
-  onWidgetHostsChanged: Qt.callLater(prunePluginBarApis)
-
-  Component.onDestruction: {
-    for (var id in pluginBarApis) {
-      root.releasePluginObjects(id)
-      if (pluginBarApis[id] && typeof pluginBarApis[id].destroy === "function")
-        pluginBarApis[id].destroy()
-    }
-    pluginBarApis = ({})
-  }
 
   function registerClickTarget(target) {
     if (!target || clickTargets.indexOf(target) !== -1) return
@@ -699,36 +471,7 @@ Item {
   readonly property bool vertical: position === "left" || position === "right"
   readonly property int barSize: vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
 
-  // Display cutouts (a camera notch) the platform's own package describes in
-  // the fixed platform root, which no environment variable moves. Most machines
-  // have none. It is read as the shell starts (blockLoading), so a bar surface
-  // knows before it maps whether its screen may have one. See
-  // BarModel.parseCutouts.
-  // Read synchronously at startup (the FileView blocks loading, so the bar
-  // knows before it maps whether its screen may have a cutout), then kept
-  // current by its load handlers below. Binding this to the missing flag
-  // the handlers write — as it was — loops on every shell start.
-  property var displayCutouts: BarModel.parseCutouts(displayCutoutsFile.text())
-  FileView {
-    id: displayCutoutsFile
-
-    // A file that went away describes nothing, whatever text() still holds.
-    property bool missing: false
-
-    path: "/usr/share/quattro-platform/display-cutouts.json"
-    blockLoading: true
-    watchChanges: true
-    printErrors: false
-    onLoaded: {
-      missing = false
-      root.displayCutouts = BarModel.parseCutouts(text())
-    }
-    onLoadFailed: {
-      missing = true
-      root.displayCutouts = []
-    }
-    onFileChanged: reload()
-  }
+  property var displayCutouts: []
 
   // The physical mode Hyprland reports for a screen, as hyprctl monitors does.
   // Qt's whole-number devicePixelRatio can't rebuild it at a fractional scale.
@@ -1587,7 +1330,7 @@ Item {
 
   // Presence of the `bar-off` flag = bar hidden. Watching the parent toggles
   // directory because FileView can't observe a file that doesn't exist yet,
-  // and the flag is created/removed by `quattro-toggle-bar`.
+  // and the flag is created/removed by `quattro-toggle bar`.
   Process {
     id: barHiddenProbe
     running: true
@@ -1603,7 +1346,7 @@ Item {
 
   // The directory watch can permanently stop delivering events after flag
   // changes land in quick succession, stranding the bar off screen until the
-  // shell restarts. `quattro-toggle-bar` nudges this after flipping the flag
+  // shell restarts. `quattro-toggle bar` nudges this after flipping the flag
   // so the probe re-reads it even when the watch has gone quiet.
   ShellIpc {
     target: "quattro.bar"
@@ -2757,8 +2500,7 @@ Item {
       // a bar, as the indicators do by reporting which are already active.
       if ("fixedEdge" in target) target.fixedEdge = fixedEdge
       if ("inTraySection" in target) target.inTraySection = inTraySection
-      if ("bar" in target) target.bar = firstParty
-        ? root : root.pluginBarApiFor(pluginApiId, moduleName, registered)
+      if ("bar" in target) target.bar = root
       if ("moduleName" in target) target.moduleName = moduleName
       if ("settings" in target) target.settings = moduleSettings
     }

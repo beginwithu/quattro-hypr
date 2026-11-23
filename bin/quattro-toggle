@@ -1,42 +1,335 @@
 #!/bin/bash
 
-# quattro:summary=Toggle Quattro features between enabled and disabled
-# quattro:args=<flag-name> [toggle|on|off]
+# quattro:summary=Toggle Quattro desktop features (animations, bar, fullscreen-desktop, idle, nightlight, notification-silencing, screensaver, touchpad, touchscreen, or state flags)
+# quattro:group=toggle
+# quattro:args=<animations|bar|fullscreen-desktop|idle|input-device|nightlight|notification-silencing|screensaver|touchpad|touchscreen|--enabled <flag>|<flag-name> [toggle|on|off]>
+# quattro:examples=quattro toggle bar | quattro toggle nightlight | quattro toggle idle | quattro toggle animations
 
-if (($# < 1)); then
-  echo "Usage: quattro-toggle <flag-name> [toggle|on|off]" >&2
-  exit 1
-fi
+set -euo pipefail
 
-FLAG_NAME="$1"
-ACTION="${2:-toggle}"
-FLAG="$HOME/.local/state/quattro/toggles/$FLAG_NAME"
+TOGGLES_DIR="$HOME/.local/state/quattro/toggles"
 
-enable() {
-  mkdir -p "$(dirname "$FLAG")"
-  touch "$FLAG"
+flag_enabled() {
+  [[ -f "$TOGGLES_DIR/${1:-}" ]]
 }
 
-disable() {
-  rm -f "$FLAG"
+flag_toggle() {
+  local flag_name="${1:-}"
+  local action="${2:-toggle}"
+  [[ -n $flag_name ]] || { echo "Usage: quattro-toggle <flag-name> [toggle|on|off]" >&2; exit 1; }
+  local flag="$TOGGLES_DIR/$flag_name"
+
+  case "$action" in
+    toggle | "")
+      if [[ -f $flag ]]; then
+        rm -f "$flag"
+      else
+        mkdir -p "$(dirname "$flag")"
+        touch "$flag"
+      fi
+      ;;
+    on)
+      mkdir -p "$(dirname "$flag")"
+      touch "$flag"
+      ;;
+    off)
+      rm -f "$flag"
+      ;;
+    *)
+      echo "Usage: quattro-toggle <flag-name> [toggle|on|off]" >&2
+      exit 1
+      ;;
+  esac
 }
 
-case "$ACTION" in
-  toggle|"")
-    if [[ -f $FLAG ]]; then
-      disable
+toggle_animations() {
+  local animations
+  case "${1:-toggle}" in
+    toggle)
+      if quattro-hyprland-toggle --animations-off; then
+        animations=on
+      else
+        animations=off
+      fi
+      ;;
+    on | off) animations="$1" ;;
+    *)
+      echo "Usage: quattro-toggle animations [toggle|on|off]" >&2
+      exit 1
+      ;;
+  esac
+
+  local without_gpu="$TOGGLES_DIR/animations-without-gpu"
+  if [[ $animations == "on" ]]; then
+    if [[ -e ${XDG_RUNTIME_DIR:-}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/quattro-software-rendering ]]; then
+      mkdir -p "${without_gpu%/*}"
+      touch "$without_gpu"
+    fi
+    quattro-hyprland-toggle no-animations off
+  else
+    rm -f "$without_gpu"
+    quattro-hyprland-toggle no-animations on
+  fi
+
+  if quattro-hyprland-toggle --animations-off; then
+    quattro-notification-send -g 󰗘 "$(quattro-i18n animations.disabled)"
+  else
+    quattro-notification-send -g 󰗘 "$(quattro-i18n animations.enabled)"
+  fi
+}
+
+toggle_bar() {
+  flag_toggle bar-off "${1:-toggle}"
+  quattro-shell -q quattro.bar syncHidden || true
+}
+
+toggle_fullscreen_desktop() {
+  local action="${1:-toggle}"
+  case "$action" in
+    toggle | "")
+      if flag_enabled bar-off && quattro-hyprland-toggle --enabled window-no-gaps; then
+        action="off"
+      else
+        action="on"
+      fi
+      ;;
+    on | off) ;;
+    *)
+      echo "Usage: quattro-toggle fullscreen-desktop [toggle|on|off]" >&2
+      exit 1
+      ;;
+  esac
+
+  toggle_bar "$action"
+  quattro-hyprland-toggle window-no-gaps "$action"
+}
+
+toggle_idle() {
+  local state_dir="$HOME/.local/state/quattro/indicators"
+  local state_file="$state_dir/stay-awake"
+
+  stay_awake_enabled() { [[ -f $state_file ]]; }
+  print_status() {
+    if stay_awake_enabled; then
+      printf '{"enabled":true,"class":"enabled","tooltip":"Allow Idle Lock & Screensaver"}\n'
     else
-      enable
+      printf '{"enabled":false,"class":"disabled","tooltip":"Stay Awake"}\n'
+    fi
+  }
+  print_idle_state() {
+    if stay_awake_enabled; then printf 'disabled\n'; else printf 'enabled\n'; fi
+  }
+  apply_state() {
+    case "$1" in
+      stay-awake) mkdir -p "$state_dir"; touch "$state_file" ;;
+      allow-idle) rm -f "$state_file" ;;
+    esac
+  }
+
+  case "${1:-toggle}" in
+    toggle)
+      if stay_awake_enabled; then apply_state allow-idle; else apply_state stay-awake; fi
+      print_idle_state
+      ;;
+    stay-awake | awake | on)
+      apply_state stay-awake
+      print_idle_state
+      ;;
+    allow-idle | idle | off)
+      apply_state allow-idle
+      print_idle_state
+      ;;
+    status | --status)
+      print_status
+      ;;
+    *)
+      echo "Usage: quattro-toggle idle [toggle|stay-awake|allow-idle|status]" >&2
+      exit 1
+      ;;
+  esac
+}
+
+toggle_input_device() {
+  local kind="${1:-}"
+  local action="${2:-toggle}"
+  local icon
+  case "$kind" in
+    touchpad) icon="touchpad" ;;
+    touchscreen) icon="touch" ;;
+    *)
+      echo "Usage: quattro-toggle input-device <touchpad|touchscreen> [on|off|toggle|cycle]" >&2
+      exit 1
+      ;;
+  esac
+
+  local name_file="$HOME/.local/state/quattro/toggles/hypr/$kind-disabled-name"
+  local device
+  device=$(quattro-hw "$kind" 2>/dev/null || true)
+
+  require_device() {
+    if [[ -z $device ]]; then
+      echo "No $kind device found" >&2
+      exit 1
+    fi
+    if [[ $device == *[[:cntrl:]]* ]]; then
+      echo "Invalid $kind device name" >&2
+      exit 1
+    fi
+  }
+
+  apply_device() {
+    local enabled=$1
+    local quoted=${device//\\/\\\\}
+    quoted=${quoted//\"/\\\"}
+    hyprctl eval "hl.device({ name = \"$quoted\", enabled = $enabled })" >/dev/null
+  }
+
+  enable_dev() {
+    rm -f "$name_file"
+    require_device
+    apply_device true
+    if [[ $kind == "touchpad" ]]; then
+      quattro-osd -i "$icon" -m "$(quattro-i18n input.touchpadEnabled)"
+    else
+      quattro-osd -i "$icon" -m "$(quattro-i18n input.touchscreenEnabled)"
+    fi
+  }
+
+  disable_dev() {
+    require_device
+    apply_device false
+    mkdir -p "$(dirname "$name_file")"
+    printf '%s\n' "$device" >"$name_file"
+    if [[ $kind == "touchpad" ]]; then
+      quattro-osd -i "$icon" -m "$(quattro-i18n input.touchpadDisabled)"
+    else
+      quattro-osd -i "$icon" -m "$(quattro-i18n input.touchscreenDisabled)"
+    fi
+  }
+
+  case "$action" in
+    on) enable_dev ;;
+    off) disable_dev ;;
+    cycle)
+      if [[ ! -f $name_file ]]; then
+        require_device
+        apply_device false
+        apply_device true
+      fi
+      ;;
+    toggle)
+      if [[ -f $name_file ]]; then enable_dev; else disable_dev; fi
+      ;;
+    *)
+      echo "Usage: quattro-toggle input-device <touchpad|touchscreen> [on|off|toggle|cycle]" >&2
+      exit 1
+      ;;
+  esac
+}
+
+toggle_nightlight() {
+  local ON_TEMP=4000 OFF_TEMP=6500 IDENTITY_TEMP=6000
+
+  current_temp() {
+    local output
+    output=$(hyprctl hyprsunset temperature 2>/dev/null) || return 0
+    grep -oE '[0-9]+' <<<"$output" | head -n1 || true
+  }
+
+  if [[ ${1:-} == "--status" || ${1:-} == "status" ]]; then
+    local temp enabled
+    temp=$(current_temp)
+    if [[ -n $temp ]] && (( temp < IDENTITY_TEMP )); then
+      enabled=true
+    else
+      enabled=false
+    fi
+    jq -cn --argjson enabled "$enabled" --arg temp "$temp" \
+      '{enabled:$enabled, temperature:(($temp | tonumber?) // null)}'
+    return 0
+  fi
+
+  local starting=false
+  if ! pgrep -x hyprsunset >/dev/null 2>&1; then
+    setsid uwsm-app -- hyprsunset >/dev/null 2>&1 &
+    starting=true
+  elif (( $(ps -o etimes= -p "$(pgrep -nx hyprsunset)" 2>/dev/null || echo 0) < 3 )); then
+    starting=true
+  fi
+
+  local cur_temp target_temp
+  cur_temp=$(current_temp)
+  if [[ -n $cur_temp ]] && (( cur_temp < IDENTITY_TEMP )); then
+    target_temp=$OFF_TEMP
+  else
+    target_temp=$ON_TEMP
+  fi
+
+  local _
+  for _ in {1..10}; do
+    hyprctl hyprsunset temperature "$target_temp" >/dev/null 2>&1 || true
+    if [[ $starting == "false" && $(current_temp) == "$target_temp" ]]; then
+      break
+    fi
+    sleep 0.2
+    [[ $(current_temp) == "$target_temp" ]] && break
+  done
+
+  if (( target_temp == OFF_TEMP )); then
+    hyprctl hyprsunset identity >/dev/null 2>&1 || true
+  fi
+
+  quattro-shell -q nightlight refresh || true
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  --enabled | enabled)
+    flag_enabled "${1:-}"
+    ;;
+  animations)
+    toggle_animations "$@"
+    ;;
+  bar)
+    toggle_bar "$@"
+    ;;
+  fullscreen-desktop)
+    toggle_fullscreen_desktop "$@"
+    ;;
+  idle)
+    toggle_idle "$@"
+    ;;
+  input-device)
+    toggle_input_device "$@"
+    ;;
+  nightlight)
+    toggle_nightlight "$@"
+    ;;
+  notification-silencing)
+    quattro-shell notifications toggleDnd >/dev/null 2>&1 || true
+    quattro-shell -q quattro.indicators refresh || true
+    ;;
+  screensaver)
+    flag_toggle screensaver-off "${1:-toggle}"
+    if flag_enabled screensaver-off; then
+      quattro-notification-send -g 󱄄 "$(quattro-i18n screensaver.disabled)"
+    else
+      quattro-notification-send -g 󱄄 "$(quattro-i18n screensaver.enabled)"
     fi
     ;;
-  on)
-    enable
+  touchpad)
+    toggle_input_device touchpad "${1:-toggle}"
     ;;
-  off)
-    disable
+  touchscreen)
+    toggle_input_device touchscreen "${1:-toggle}"
+    ;;
+  "")
+    echo "Usage: quattro-toggle <feature|flag-name> [args...]" >&2
+    exit 1
     ;;
   *)
-    echo "Usage: quattro-toggle <flag-name> [toggle|on|off]" >&2
-    exit 1
+    flag_toggle "$cmd" "$@"
     ;;
 esac

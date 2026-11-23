@@ -7,7 +7,8 @@
 
 set -euo pipefail
 
-source quattro-shell-config
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+source "$QUATTRO_PATH/default/bash/lib-shell-config.sh"
 
 usage() {
   cat <<USAGE
@@ -43,18 +44,10 @@ Placement:
 The center section is the box in the middle of the bar: its widgets are
 centered as one group. centerBegin and centerEnd hang off the box's two edges.
 
-Enable and disable widgets with 'quattro plugin enable' and
-'quattro plugin disable'.
-
-'put' places a widget the way 'plugin enable' does, but leaves one that is
-already on the bar where it is, and falls back to the widget's usual spot when
---before / --after names a widget the bar does not carry.
-
 Examples:
-  quattro bar use local.neon-bar
   quattro bar put quattro.keyboard-layout --after quattro.clock
   quattro bar move quattro.media left
-  quattro bar move quattro.weather --section centerBegin --index 0
+  quattro bar move quattro.clock --section centerBegin --index 0
   quattro bar set quattro.clock format HH:mm
 USAGE
 }
@@ -62,9 +55,7 @@ USAGE
 # ------------------------------------------------------------------ validation
 
 bar_option_exists() {
-  quattro-plugin-catalog | jq -e --arg id "$1" '
-    any(.[]; (.kinds | index("bar")) and .barPath != null and .id == $id)
-  ' >/dev/null
+  [[ $1 == "quattro.bar" ]]
 }
 
 validate_section() {
@@ -158,7 +149,7 @@ cmd_use() {
   if [[ $plugin == "default" || $plugin == "built-in" ]]; then
     plugin="quattro.bar"
   fi
-  bar_option_exists "$plugin" || fail "$plugin is not a known bar option; run 'quattro plugin list'"
+  bar_option_exists "$plugin" || fail "$plugin is not a known bar option"
 
   if [[ $plugin == "quattro.bar" ]]; then
     commit "$NORMALIZE | del(.bar.id)"
@@ -171,37 +162,8 @@ cmd_use() {
 cmd_defaults() {
   (( $# == 0 )) || fail "defaults does not take arguments"
 
-  local optional_widgets="[]"
-  local service widget
-  for service in dropbox tailscale; do
-    if "quattro-installed-service-$service"; then
-      widget=$(jq -cn \
-        --arg id "quattro.$service" \
-        --arg section "$(bar_widget_default_section "quattro.$service")" \
-        '{id: $id, section: $section}')
-      optional_widgets=$(jq -c --argjson widget "$widget" '. + [$widget]' <<<"$optional_widgets")
-    fi
-  done
-
-  # This remains one file mutation so it also works during the headless
-  # Quattro upgrade and cannot race the shell's in-memory config.
-  commit "$NORMALIZE
-    | .bar = \$defaults[0].bar
-    | def entry_id: if type == \"object\" then (.id // \"\" | tostring) else tostring end;
-      def anchor_for(\$section): { left: \"quattro.workspaces\", centerEnd: \"quattro.weather\", right: \"quattro.tray\" }[\$section];
-      reduce \$widgets[] as \$widget (.;
-        .bar.layout |= map_values(if type == \"array\" then map(select(entry_id != \$widget.id)) end)
-        | (.bar.layout[\$widget.section] | map(entry_id) | index(anchor_for(\$widget.section))) as \$anchor
-        | (\$anchor | if . == null then (.bar.layout[\$widget.section] | length) else . + 1 end) as \$index
-        | .bar.layout[\$widget.section] = (
-            .bar.layout[\$widget.section][0:\$index]
-            + [{id: \$widget.id}]
-            + .bar.layout[\$widget.section][\$index:]
-          )
-      )
-  " \
-    --slurpfile defaults "$DEFAULTS_FILE" \
-    --argjson widgets "$optional_widgets"
+  commit "$NORMALIZE | .bar = \$defaults[0].bar" \
+    --slurpfile defaults "$DEFAULTS_FILE"
   sync_glass || fail "could not change the blur behind the bar"
   echo "Restored the default Quattro bar"
 }
@@ -287,20 +249,7 @@ sync_glass() {
     rm -f "$flag" || return 1
   fi
 
-  quattro-restart-hyprctl
-}
-
-bar_widget_default_section() {
-  local catalog
-  catalog=$(quattro-plugin-catalog 2>/dev/null) || {
-    echo "centerEnd"
-    return 0
-  }
-  # A manifest's center means beside the clock, which is centerEnd.
-  jq -r --arg id "$1" '
-    map(select(.id == $id))[0].barWidget.defaultSection // "centerEnd"
-    | if IN("left", "centerBegin", "centerEnd", "tray", "right") then . else "centerEnd" end
-  ' <<<"$catalog"
+  quattro-restart hyprctl
 }
 
 # Asks the shell to place a widget, waiting out one still coming up. Answers 0
@@ -387,7 +336,7 @@ cmd_put() {
     ask_to_put "$id" "$(placement_json)" || return 0
   fi
 
-  [[ $PUT_RESULT != "unknown" ]] || fail "$id is not a known widget; run 'quattro plugin list'"
+  [[ $PUT_RESULT != "unknown" ]] || fail "$id is not a known widget"
   [[ $PUT_RESULT == "ok" ]] || fail "$PUT_RESULT"
   # Says nothing about whether it had to be placed: a widget already on the bar
   # is left where it is, and both outcomes are the same answer to the caller.

@@ -4,6 +4,9 @@
 # quattro:args=[theme|sharp|rounded]
 # quattro:examples=quattro hyprland corners | quattro hyprland corners rounded
 
+
+set -uo pipefail
+
 TOGGLES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/toggles/hypr"
 
 # Sharp and rounded are toggle files loaded after every theme, so they override
@@ -37,5 +40,5 @@ for mode in sharp rounded; do
   [[ $mode == "$1" ]] || rm -f "$TOGGLES_DIR/corners-$mode.lua" || exit 1
 done
 
-quattro-restart-hyprctl
+quattro-restart hyprctl
 quattro-notification-send -g 󰘇 "$LABEL"

@@ -25,6 +25,9 @@
 # device, so desktop and microphone audio together go through a temporary null
 # sink. Portal capture and --resolution are gpu-screen-recorder only.
 
+
+set -uo pipefail
+
 [[ -f ~/.config/user-dirs.dirs ]] && source ~/.config/user-dirs.dirs
 OUTPUT_DIR="${QUATTRO_SCREENRECORD_DIR:-${XDG_VIDEOS_DIR:-$HOME/Videos}}"
 
@@ -66,6 +69,12 @@ for arg in "$@"; do
   --with-desktop-audio) DESKTOP_AUDIO="true" ;;
   --with-microphone-audio) MICROPHONE_AUDIO="true" ;;
   --with-webcam) WEBCAM="true" ;;
+  --pick-webcam)
+    DESKTOP_AUDIO="true"
+    MICROPHONE_AUDIO="true"
+    WEBCAM="true"
+    PICK_WEBCAM="true"
+    ;;
   --webcam-device=*) WEBCAM_DEVICE="${arg#*=}" ;;
   --webcam-size=*) WEBCAM_SIZE="${arg#*=}" ;;
   --resolution=*) RESOLUTION="${arg#*=}" ;;
@@ -74,6 +83,19 @@ for arg in "$@"; do
   --status) STATUS="true" ;;
   esac
 done
+
+if [[ ${PICK_WEBCAM:-false} == "true" ]]; then
+  mapfile -t _webcam_devices < <(quattro-capture-webcam-list)
+  if (( ${#_webcam_devices[@]} == 0 )); then
+    quattro-notification-send "$(quattro-i18n capture.noWebcam)" -u critical -t 3000
+    exit 1
+  elif (( ${#_webcam_devices[@]} == 1 )); then
+    WEBCAM_DEVICE="${_webcam_devices[0]%%[[:space:]]*}"
+  else
+    _webcam_selection=$(quattro-menu-select "$(quattro-i18n capture.selectWebcam)" "${_webcam_devices[@]}" -- --width 520 --maxheight 520) || exit 1
+    WEBCAM_DEVICE="${_webcam_selection%%[[:space:]]*}"
+  fi
+fi
 
 case $WEBCAM_SIZE in
 small | medium | large) ;;
@@ -183,7 +205,7 @@ recorder_backends() {
   local backend found=false
 
   for backend in gpu-screen-recorder wf-recorder; do
-    if quattro-cmd-present "$backend"; then
+    if quattro-cmd present "$backend"; then
       echo "$backend"
       found=true
     fi
@@ -191,6 +213,56 @@ recorder_backends() {
 
   # Neither installed: fail the way a missing gpu-screen-recorder always has.
   $found || echo gpu-screen-recorder
+}
+
+recorder_process() {
+  local proc_root=${QUATTRO_PROC_ROOT:-/proc}
+  local wanted=" " signal="" pid
+  while (( $# )); do
+    case "$1" in
+      --pid)
+        [[ ${2-} =~ ^0*([0-9]+)$ ]] || return 2
+        pid=${BASH_REMATCH[1]}
+        (( ${#pid} <= 10 && 10#$pid <= 4194304 )) || return 2
+        wanted+="$((10#$pid)) "
+        shift 2
+        ;;
+      --signal)
+        [[ ${2-} == "INT" || ${2-} == "KILL" ]] || return 2
+        signal=$2
+        shift 2
+        ;;
+      *) return 2 ;;
+    esac
+  done
+
+  is_recorder_pid() {
+    local exe
+    exe=$(readlink "$proc_root/$1/exe" 2>/dev/null) || return 1
+    exe=${exe% (deleted)}
+    exe=${exe##*/}
+    [[ $exe == "gpu-screen-recorder" || $exe == "wf-recorder" ]]
+  }
+
+  local -a matched=()
+  while read -r pid; do
+    if [[ $wanted == " " || $wanted == *" $pid "* ]] && is_recorder_pid "$pid"; then
+      matched+=("$pid")
+    fi
+  done < <(pgrep -u "$UID" -x 'gpu-screen-reco(rder)?|wf-recorder' || true)
+
+  (( ${#matched[@]} > 0 )) || return 1
+
+  if [[ -n $signal ]]; then
+    local delivered=0
+    for pid in "${matched[@]}"; do
+      if is_recorder_pid "$pid" && kill "-$signal" "$pid" 2>/dev/null; then
+        delivered=1
+      fi
+    done
+    (( delivered )) || return 1
+  fi
+  return 0
 }
 
 # wf-recorder records a single audio device. Map the desktop/mic flags onto one:
@@ -311,7 +383,7 @@ start_screenrecording() {
   # slurp + the kms backend, which avoids the EGL DMA-BUF modifier import
   # failures the portal path can hit on some configurations.
   if [[ $FULLSCREEN == "true" ]]; then
-    target="monitor:$(quattro-hyprland-monitor-focused)"
+    target="monitor:$(quattro-hyprland-monitor focused)"
     capture_args=(-w "${target#monitor:}" -s "${RESOLUTION:-$(default_resolution)}")
   elif [[ ${QUATTRO_SCREENRECORD_USE_PORTAL:-false} == "true" ]]; then
     target="portal"
@@ -393,7 +465,7 @@ start_screenrecording() {
   done
 
   if ! start_cancelled; then
-    if ! quattro-cmd-present gpu-screen-recorder && ! quattro-cmd-present wf-recorder; then
+    if ! quattro-cmd present gpu-screen-recorder && ! quattro-cmd present wf-recorder; then
       quattro-notification-send -u critical -t 5000 "$(quattro-i18n capture.recordingError)" "Install gpu-screen-recorder or wf-recorder to record the screen." >/dev/null 2>&1
     else
       quattro-notification-send -u critical -t 5000 "$(quattro-i18n capture.recordingError)" "Screen recorder failed to start (run with QUATTRO_SCREENRECORD_DEBUG=true for logs)." >/dev/null 2>&1
@@ -414,17 +486,17 @@ select_recorder() {
 
   local pid
   pid=$(<"$REC_PID_FILE")
-  [[ $pid =~ ^[0-9]+$ ]] && quattro-capture-screenrecording-process --pid "$pid" || return 1
+  [[ $pid =~ ^[0-9]+$ ]] && recorder_process --pid "$pid" || return 1
   RECORDER=(--pid "$pid")
 }
 
 # Stops the recorder screenrecording_active selected.
 stop_screenrecording() {
-  quattro-capture-screenrecording-process "${RECORDER[@]}" --signal INT # SIGINT required to save video properly
+  recorder_process "${RECORDER[@]}" --signal INT # SIGINT required to save video properly
 
   # Wait a maximum of 5 seconds to finish before hard killing
   local count=0
-  while quattro-capture-screenrecording-process "${RECORDER[@]}" && ((count < 50)); do
+  while recorder_process "${RECORDER[@]}" && ((count < 50)); do
     sleep 0.1
     count=$((count + 1))
   done
@@ -433,8 +505,8 @@ stop_screenrecording() {
   cleanup_webcam
   wf_audio_cleanup
 
-  if quattro-capture-screenrecording-process "${RECORDER[@]}"; then
-    quattro-capture-screenrecording-process "${RECORDER[@]}" --signal KILL
+  if recorder_process "${RECORDER[@]}"; then
+    recorder_process "${RECORDER[@]}" --signal KILL
     quattro-notification-send -u critical -t 5000 "$(quattro-i18n capture.recordingError)" "$(quattro-i18n capture.recordingKilled)"
   elif [[ ! -f $(cat "$RECORDING_FILE" 2>/dev/null) ]]; then
     # No recording to finalize or show, as when stopping a recorder this script did not start.
@@ -465,7 +537,6 @@ stop_screenrecording() {
     quattro-notification-send "$(quattro-i18n capture.recordingSaved)" "$(recording_details "$filename")" \
       -t 10000 "${image_args[@]}" \
       --action "$(quattro-i18n capture.recordingOpen)" mpv -- \
-      --action "$(quattro-i18n capture.recordingCut)" quattro-video-cut \
       --with "$filename"
 
     # The shell loads the preview into memory when the toast appears and never
@@ -521,7 +592,7 @@ toggle_screenrecording_indicator() {
 }
 
 screenrecording_active() {
-  if select_recorder && quattro-capture-screenrecording-process "${RECORDER[@]}"; then
+  if select_recorder && recorder_process "${RECORDER[@]}"; then
     return 0
   else
     if [[ -f $REC_PID_FILE ]]; then
@@ -576,7 +647,7 @@ fi
     if flock -n 9; then
       screenrecording_active
     else
-      select_recorder && quattro-capture-screenrecording-process "${RECORDER[@]}"
+      select_recorder && recorder_process "${RECORDER[@]}"
     fi
   else
     # A start still in its picker or waiting on its recorder is cancelled, not

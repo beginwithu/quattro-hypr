@@ -308,7 +308,7 @@ function dropRoom(drop, source, sections, drawn) {
 }
 
 // An entry as JSON with its keys in order, so a config written back with its
-// keys sorted (quattro-shell-config does) reads as the same entry.
+// keys sorted (lib-shell-config.sh does) reads as the same entry.
 function entryJson(value) {
   if (Array.isArray(value)) return "[" + value.map(entryJson).join(",") + "]"
   if (isPlainObject(value))
@@ -546,8 +546,7 @@ function dragDistanceOutside(point, width, height) {
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-// Display cutouts (a camera notch at the top of a laptop panel) are described
-// by the platform's own package, in /usr/share/quattro-platform/display-cutouts.json:
+// Display cutouts (a camera notch at the top of a laptop panel):
 //
 //   { "panels": [ { "connector": "eDP", "width": 3024, "height": 1964, "top": 64 } ] }
 //

@@ -1,4 +1,0 @@
-# Optional AUR packages (install manually as needed with: yay -S <pkg>)
-google-chrome
-tzupdate
-ufw-docker

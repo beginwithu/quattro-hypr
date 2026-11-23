@@ -9,6 +9,9 @@
 # override of a packaged app, like Quattro's own for imv and mpv, still shows
 # the version of the package it launches.
 
+
+set -uo pipefail
+
 dirs=("${XDG_DATA_HOME:-$HOME/.local/share}/applications")
 IFS=":" read -ra data_dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 for dir in "${data_dirs[@]}"; do
@@ -35,8 +38,8 @@ LC_ALL=C pacman -Qo "${files[@]}" 2>/dev/null | while IFS= read -r line; do
   file="${BASH_REMATCH[1]}"
   version="${BASH_REMATCH[2]#*:}"
   version="${version%-*}"
-  id="${file_ids[$file]}"
-  [[ -n ${seen_ids[$id]-} ]] && continue
+  id="${file_ids[$file]:-}"
+  [[ -n $id && -z ${seen_ids[$id]-} ]] || continue
   seen_ids[$id]=1
   printf '%s\t%s\n' "$id" "$version"
 done

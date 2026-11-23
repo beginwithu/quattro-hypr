@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# quattro:summary=Returns true when the compositor holds a session lock
+# quattro:summary=Returns true when the compositor holds a session lock (or a stranded one with --stranded <pid>)
+# quattro:args=[--stranded <own-pid>]
 # quattro:hidden=true
 
-# Hyprland reports no lock state directly, but an active ext-session-lock is one
-# of the reasons a monitor cannot go solitary: LOCK in solitaryBlockedBy. It
-# stays set once the lock's client dies, which is the case worth detecting.
-#
-# Exits 0 locked, 1 unlocked, 2 undetermined. Hyprland stops at the first reason
-# on a monitor with no workspace yet, before it ever reaches the lock, so a
-# missing LOCK there means nothing was asked. Callers branching only on success
-# treat 2 as unlocked.
+set -euo pipefail
+
+stranded_pid=""
+if [[ ${1:-} == "--stranded" ]]; then
+  stranded_pid="${2:-}"
+fi
+
 monitors=$(hyprctl -j monitors 2>/dev/null) || exit 2
 
 state=$(jq '
@@ -21,9 +21,17 @@ state=$(jq '
   elif any(.[]; readable)                 then 1
   else                                         2
   end
-' <<<"$monitors" 2>/dev/null)
+' <<<"$monitors" 2>/dev/null || echo 2)
 
-case $state in
-  0 | 1) exit "$state" ;;
+case "$state" in
+  0)
+    if [[ -n $stranded_pid ]]; then
+      if pgrep -u "$UID" -x 'quickshell|qs|hyprlock' | grep -qvxF "$stranded_pid"; then
+        exit 2
+      fi
+    fi
+    exit 0
+    ;;
+  1) exit 1 ;;
   *) exit 2 ;;
 esac

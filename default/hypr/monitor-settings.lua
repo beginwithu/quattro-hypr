@@ -5,7 +5,7 @@
 -- scale and transform, any of them empty when never chosen, then its identity (make,
 -- model and serial, as monitor-workspaces names it). A dock renames its
 -- connectors between plugs, so a rule naming DP-1 would hand one monitor's
--- mode to whatever turns up on that port next. quattro-hyprland-monitor-persist
+-- mode to whatever turns up on that port next. quattro-hyprland-monitor persist
 -- writes the file; nothing here writes it.
 --
 -- Applied while the config loads, after hypr/monitors.lua, so a choice made in

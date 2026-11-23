@@ -412,7 +412,7 @@ function displayRow(items, itemOrder, checkedResults, disabledResults, entry, de
 
 // Commands a `checked:` expression reads a value out of. Every sibling row
 // asks the same one -- Defaults > Browser has seven rows all comparing
-// against `quattro-default-browser` -- so the batch runs it once and the rows
+// against `quattro-cmd default-browser` -- so the batch runs it once and the rows
 // read the captured answer.
 //
 // The capture has to be eager. These are read inside `$(...)`, and a value
@@ -424,17 +424,17 @@ var GUARD_READERS = [
   "quattro-bar get quattro.clock format",
   "quattro-bar get quattro.clock verticalFormat",
   "quattro-bar position",
-  "quattro-default-browser",
-  "quattro-default-editor",
-  "quattro-default-terminal",
+  "quattro-default browser",
+  "quattro-default editor",
+  "quattro-default terminal",
   "quattro-dns",
   "quattro-dock autohide",
   "quattro-dock position",
   "quattro-hyprland-corners",
-  "quattro-hyprland-window-transparency",
-  "quattro-hyprland-workspace-layout-default",
+  "quattro-hyprland-window transparency",
+  "quattro-hyprland-workspace-layout default",
   "quattro-shell notifications isDnd",
-  "quattro-toggle-nightlight --status"
+  "quattro-toggle nightlight --status"
 ]
 
 // Package and command presence account for most of what the guards ask, and
@@ -510,10 +510,8 @@ function guardHelpers() {
     + 'for __quattro_pkg in "${__quattro_pkg_names[@]}"; do __quattro_pkgs[$__quattro_pkg]=1; done\n'
     + '__quattro_pkg_has() { [[ -n ${__quattro_pkgs[$1]-} ]] && return 0; '
     + '[[ $1 == *[\\<\\>=]* ]] && { pacman -Q "$1" &>/dev/null; return; }; return 1; }\n'
-    + 'quattro-pkg-present() { local p; for p in "$@"; do __quattro_pkg_has "$p" || return 1; done; return 0; }\n'
-    + 'quattro-pkg-missing() { local p; for p in "$@"; do __quattro_pkg_has "$p" || return 0; done; return 1; }\n'
-    + 'quattro-cmd-present() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0; }\n'
-    + 'quattro-cmd-missing() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 0; done; return 1; }\n'
+    + 'quattro-pkg() { local sub=${1:-} p; shift || true; case $sub in present) for p in "$@"; do __quattro_pkg_has "$p" || return 1; done; return 0 ;; missing) for p in "$@"; do __quattro_pkg_has "$p" || return 0; done; return 1 ;; *) command quattro-pkg "$sub" "$@" ;; esac; }\n'
+    + 'quattro-cmd() { local sub=${1:-} c; shift || true; case $sub in present) for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0 ;; missing) for c in "$@"; do command -v "$c" &>/dev/null || return 0; done; return 1 ;; *) command quattro-cmd "$sub" "$@" ;; esac; }\n'
 }
 
 // Substitute the captured answer into the expression rather than shadowing

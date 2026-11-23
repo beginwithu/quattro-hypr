@@ -232,9 +232,9 @@ Item {
     if (!row) return
     root.dismiss()
     if (row.entryType === "image") {
-      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-paste-file", row.mime, row.path])
+      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "paste-file", row.mime, row.path])
     } else if (row.fullText) {
-      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-paste-text", "--shift-insert", "--history-index", String(row.historyIndex)])
+      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "paste-text", "--shift-insert", "--history-index", String(row.historyIndex)])
     }
   }
 
@@ -242,16 +242,16 @@ Item {
     if (!row) return
     root.dismiss()
     if (row.entryType === "image") {
-      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-paste-file", "--copy-only", row.mime, row.path])
+      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "paste-file", "--copy-only", row.mime, row.path])
     } else if (row.fullText) {
-      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-paste-text", "--copy-only", "--history-index", String(row.historyIndex)])
+      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "paste-text", "--copy-only", "--history-index", String(row.historyIndex)])
     }
   }
 
   function openSelected(row) {
     if (!row) return
     root.dismiss()
-    Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard-open", "--history-index", String(row.historyIndex)])
+    Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "open", "--history-index", String(row.historyIndex)])
   }
 
   Component.onCompleted: initProc.running = true

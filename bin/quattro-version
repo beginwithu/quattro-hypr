@@ -1,9 +1,35 @@
 #!/bin/bash
 
-# quattro:summary=Print the installed Quattro version
+# quattro:summary=Print installed Quattro version, git branch, or last package upgrade time
+# quattro:args=[--branch|--pkgs]
+
+set -euo pipefail
 
 quattro_path=${QUATTRO_PATH:-$HOME/.local/share/quattro}
 quattro_path=${quattro_path%/}
+
+case "${1:-}" in
+  --branch | branch)
+    [[ $quattro_path != "/usr/share/quattro" ]] || exit 1
+    branch=$(git -C "$quattro_path" branch --show-current 2>/dev/null || true)
+    if [[ -z $branch ]]; then
+      hash=$(git -C "$quattro_path" rev-parse --short HEAD 2>/dev/null || true)
+      [[ -n $hash ]] || exit 1
+      branch="detached@$hash"
+    fi
+    echo "$branch"
+    exit 0
+    ;;
+  --pkgs | pkgs)
+    upgraded=$(grep upgraded /var/log/pacman.log 2>/dev/null | tail -1 | sed -E 's/\[([^]]+)\].*/\1/' || true)
+    [[ -n $upgraded ]] || exit 0
+    locale=$(quattro-language locale)
+    quattro-i18n about.updatedAt \
+      "$(LC_TIME=$locale date -d "$upgraded" +"%A %d %B %Y")" \
+      "$(date -d "$upgraded" +"%H:%M")"
+    exit 0
+    ;;
+esac
 
 if [[ -f $quattro_path/version ]]; then
   version_file=$(<"$quattro_path/version")

@@ -6,6 +6,9 @@
 # quattro:examples=quattro screenshot | quattro capture screenshot region | quattro capture screenshot edit
 # quattro:aliases=quattro screenshot
 
+
+set -uo pipefail
+
 SCREENSHOT_DIR="${QUATTRO_SCREENSHOT_DIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots}"
 mkdir -p "$SCREENSHOT_DIR"
 

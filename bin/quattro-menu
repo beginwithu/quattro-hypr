@@ -1,11 +1,9 @@
 #!/bin/bash
 
-# quattro:summary=Control the Quattro menu (toggle / summon / close / refresh)
-# quattro:args=[toggle|summon|close|refresh|ping] [route]
-# quattro:examples=quattro menu | quattro menu toggle system | quattro menu summon appearance.theme | quattro menu refresh
-
-# Thin wrapper around the standard plugin IPC surface. The menu is the
-# first-party `quattro.menu` plugin; routes are passed as JSON payload.
+# quattro:summary=Control the Quattro menu, emoji picker, or timezone selector
+# quattro:group=menu
+# quattro:args=[toggle|summon|close|refresh|ping|emoji|emoji-insert <emoji>|timezone] [route]
+# quattro:examples=quattro menu | quattro menu toggle system | quattro menu emoji | quattro menu timezone
 
 set -euo pipefail
 
@@ -29,19 +27,38 @@ case "$verb" in
   refresh | ping)
     exec quattro-shell shell call quattro.menu "$verb" "{}"
     ;;
+  emoji)
+    exec quattro-shell shell toggle quattro.emojis
+    ;;
+  emoji-insert)
+    emoji="${2:-}"
+    [[ -n $emoji ]] || exit 0
+    printf '%s' "$emoji" | wl-copy --type text/plain --sensitive --foreground &
+    copy_pid=$!
+    sleep 0.15
+    wtype -M shift -k Insert -m shift 2>/dev/null || true
+    sleep 0.2
+    kill "$copy_pid" 2>/dev/null || true
+    ;;
+  timezone)
+    timezone=$(timedatectl list-timezones | quattro-menu-select "$(quattro-i18n timezone.setTitle)" -- --width 520 --maxheight 520) || exit 1
+    sudo timedatectl set-timezone "$timezone"
+    quattro-shell -q quattro.clock refresh
+    quattro-notification-send "$(quattro-i18n timezone.changed "$timezone")"
+    ;;
   -h | --help | help)
     cat <<USAGE
 Usage: quattro menu [verb] [route]
 
 Verbs:
-  toggle [route]   Open the menu at <route>, or close it if already open. Default verb.
-  summon [route]   Always open the menu (no close-if-visible toggle).
-  close            Close the menu if it is visible.
-  refresh          Re-parse the menu JSONC files.
-  ping             Health check.
-
-Route is an item id (e.g. setup.power) or alias (e.g. power). Defaults to
-"root", which opens the top-level menu.
+  toggle [route]         Open the menu at <route>, or close it if already open. Default verb.
+  summon [route]         Always open the menu (no close-if-visible toggle).
+  close                  Close the menu if it is visible.
+  refresh                Re-parse the menu JSONC files.
+  ping                   Health check.
+  emoji                  Toggle the emoji picker.
+  emoji-insert <emoji>   Insert an emoji into the focused application.
+  timezone               Pick and set the system timezone.
 USAGE
     exit 0
     ;;

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -o pipefail
+set -uo pipefail
 
 QUATTRO_BIN_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 METADATA_SCAN_LIMIT=80
@@ -26,7 +26,6 @@ declare -A ROUTE_IS_ALIAS
 declare -A BINARY_TO_KEY
 declare -A GROUP_DESCRIPTIONS
 
-GROUP_DESCRIPTIONS[ascii]="Text drawn as ASCII art"
 GROUP_DESCRIPTIONS[audio]="Audio input and output controls"
 GROUP_DESCRIPTIONS[bar]="Quattro shell bar layout and settings"
 GROUP_DESCRIPTIONS[battery]="Battery status helpers"
@@ -36,60 +35,41 @@ GROUP_DESCRIPTIONS[brightness]="Display and keyboard brightness"
 GROUP_DESCRIPTIONS[capture]="Screenshots and screen recording"
 GROUP_DESCRIPTIONS[clipboard]="Clipboard helpers"
 GROUP_DESCRIPTIONS[cmd]="Command and shortcut helpers"
-GROUP_DESCRIPTIONS[config]="System configuration helpers"
 GROUP_DESCRIPTIONS[debug]="Diagnostics and support logs"
 GROUP_DESCRIPTIONS[default]="Default application selection"
-GROUP_DESCRIPTIONS[dev]="Quattro development tools"
-GROUP_DESCRIPTIONS[disk]="Disk performance helpers"
 GROUP_DESCRIPTIONS[display]="Display and text scaling"
 GROUP_DESCRIPTIONS[dns]="DNS resolver configuration"
 GROUP_DESCRIPTIONS[dock]="Dock shown on floating workspaces"
 GROUP_DESCRIPTIONS[drive]="Drive selection and encryption"
-GROUP_DESCRIPTIONS[file]="File selection helpers"
 GROUP_DESCRIPTIONS[font]="Font management"
-GROUP_DESCRIPTIONS[games]="Game launchers and helpers"
 GROUP_DESCRIPTIONS[hibernation]="Hibernation availability checks"
 GROUP_DESCRIPTIONS[hook]="User hook runner"
 GROUP_DESCRIPTIONS[hw]="Hardware detection and controls"
 GROUP_DESCRIPTIONS[hyprland]="Hyprland window, monitor, and toggle controls"
-GROUP_DESCRIPTIONS[install]="Optional software installers"
-GROUP_DESCRIPTIONS[installed]="Installed optional service checks"
 GROUP_DESCRIPTIONS[launch]="Application launchers"
-GROUP_DESCRIPTIONS[keyboard]="Keyboard top row and Fn-lock"
 GROUP_DESCRIPTIONS[language]="Display language and system locale"
 GROUP_DESCRIPTIONS[menu]="Quattro menu commands"
 GROUP_DESCRIPTIONS[monitor]="Monitor status helpers"
 GROUP_DESCRIPTIONS[network]="Network status helpers"
 GROUP_DESCRIPTIONS[notification]="Notification helpers"
-GROUP_DESCRIPTIONS[mise]="Mise tool wrappers"
 GROUP_DESCRIPTIONS[osd]="On-screen display status helpers"
 GROUP_DESCRIPTIONS[pkg]="Package management helpers"
-GROUP_DESCRIPTIONS[plugin]="Quattro shell plugin and bar widget management"
-GROUP_DESCRIPTIONS[plymouth]="Plymouth boot theme management"
-GROUP_DESCRIPTIONS[power]="Power supply detection"
 GROUP_DESCRIPTIONS[powerprofiles]="Power profile management"
 GROUP_DESCRIPTIONS[refresh]="Reset config to defaults"
-GROUP_DESCRIPTIONS[reminder]="Desktop notification reminders"
+GROUP_DESCRIPTIONS[reminder]="Lightweight desktop reminders via systemd timers"
 GROUP_DESCRIPTIONS[remove]="Removal workflows"
 GROUP_DESCRIPTIONS[restart]="Restart Quattro components"
 GROUP_DESCRIPTIONS[setup]="Interactive setup wizards"
 GROUP_DESCRIPTIONS[shell]="Quattro shell IPC helpers"
 GROUP_DESCRIPTIONS[sudo]="Sudo configuration helpers"
 GROUP_DESCRIPTIONS[system]="System status, reboot, shutdown, logout, and lock"
-GROUP_DESCRIPTIONS[tailscale]="Tailscale helpers"
 GROUP_DESCRIPTIONS[theme]="Theme management"
 GROUP_DESCRIPTIONS[toggle]="Toggle Quattro features"
-GROUP_DESCRIPTIONS[transcode]="Image and video transcoding"
-GROUP_DESCRIPTIONS[tui]="Terminal UI launchers"
 GROUP_DESCRIPTIONS[update]="Quattro and system updates"
 GROUP_DESCRIPTIONS[version]="Version information"
-GROUP_DESCRIPTIONS[weather]="Weather status"
-GROUP_DESCRIPTIONS[webapp]="Web app launchers"
-GROUP_DESCRIPTIONS[wifi]="Wi-Fi helpers"
-GROUP_DESCRIPTIONS[windows]="Windows VM management"
 
 join_words() {
-  local separator="$1"
+  local separator="${1:-}"
   shift
   local joined=""
 
@@ -105,8 +85,8 @@ join_words() {
 }
 
 append_pipe_value() {
-  local current="$1"
-  local addition="$2"
+  local current="${1:-}"
+  local addition="${2:-}"
 
   if [[ -z $current ]]; then
     printf '%s' "$addition"
@@ -141,14 +121,14 @@ remaining_has_json_flag() {
 }
 
 register_route() {
-  local route="$1"
-  local key="$2"
+  local route="${1:-}"
+  local key="${2:-}"
   local is_alias="${3:-false}"
 
   [[ -z $route || -z $key ]] && return
 
-  if [[ -n ${ROUTE_TO_KEY[$route]} && ${ROUTE_TO_KEY[$route]} != "$key" ]]; then
-    ROUTE_COLLISIONS+=("$route -> ${ROUTE_TO_KEY[$route]} conflicts with $key")
+  if [[ -n ${ROUTE_TO_KEY[$route]:-} && ${ROUTE_TO_KEY[$route]:-} != "$key" ]]; then
+    ROUTE_COLLISIONS+=("$route -> ${ROUTE_TO_KEY[$route]:-} conflicts with $key")
     return
   fi
 
@@ -159,7 +139,7 @@ register_route() {
 }
 
 register_command() {
-  local file="$1"
+  local file="${1:-}"
   local file_binary="${file##*/}"
   local group=""
   local name=""
@@ -195,8 +175,8 @@ register_command() {
     fi
 
     if [[ $line =~ ^[[:space:]]*#[[:space:]]*quattro:([[:alnum:]_-]+)=(.*)$ ]]; then
-      metadata_key="${BASH_REMATCH[1]}"
-      metadata_value="${BASH_REMATCH[2]}"
+      metadata_key="${BASH_REMATCH[1]:-}"
+      metadata_value="${BASH_REMATCH[2]:-}"
       metadata_value="${metadata_value%$'\r'}"
       metadata_value="${metadata_value//$'\t'/ }"
 
@@ -233,7 +213,7 @@ register_command() {
         ;;
       esac
     elif [[ -z $fallback_summary && $line =~ ^[[:space:]]*#[[:space:]]*(.+)$ ]]; then
-      fallback_summary="${BASH_REMATCH[1]}"
+      fallback_summary="${BASH_REMATCH[1]:-}"
       fallback_summary="${fallback_summary%$'\r'}"
       fallback_summary="${fallback_summary//$'\t'/ }"
 
@@ -299,7 +279,7 @@ register_command() {
     alias_route="${alias_route% }"
     [[ -z $alias_route || $alias_route == "$route" ]] && continue
     register_route "$alias_route" "$key" true
-    COMMAND_ALIASES["$key"]=$(append_pipe_value "${COMMAND_ALIASES[$key]}" "$alias_route")
+    COMMAND_ALIASES["$key"]=$(append_pipe_value "${COMMAND_ALIASES[$key]:-}" "$alias_route")
   done
   IFS="$old_ifs"
 }
@@ -329,7 +309,7 @@ load_commands() {
 # metadata-moved routes without reading every header. A superset is harmless,
 # and they register in the same order a full load would use.
 load_route_candidates() {
-  local first="$1"
+  local first="${1:-}"
   local -A seen=()
   local file=""
 
@@ -344,13 +324,13 @@ load_route_candidates() {
 
   # The full load's own glob, so colliding routes register in the same order.
   for file in "$QUATTRO_BIN_DIR"/quattro-*; do
-    [[ -n ${seen[$file]} && -f $file && -x $file ]] || continue
+    [[ -n ${seen[$file]:-} && -f $file && -x $file ]] || continue
     register_command "$file"
   done
 }
 
 load_command_by_binary() {
-  local binary="$1"
+  local binary="${1:-}"
   local file="$QUATTRO_BIN_DIR/$binary"
 
   [[ -f $file && -x $file ]] || return 1
@@ -358,7 +338,7 @@ load_command_by_binary() {
 }
 
 load_child_commands_by_binary() {
-  local binary="$1"
+  local binary="${1:-}"
   local file=""
 
   for file in "$QUATTRO_BIN_DIR/$binary"-*; do
@@ -368,7 +348,7 @@ load_child_commands_by_binary() {
 }
 
 group_has_child_commands() {
-  local group="$1"
+  local group="${1:-}"
   local file=""
 
   for file in "$QUATTRO_BIN_DIR/quattro-$group"-*; do
@@ -379,19 +359,19 @@ group_has_child_commands() {
 }
 
 group_has_binary_commands() {
-  local group="$1"
+  local group="${1:-}"
 
   [[ -x $QUATTRO_BIN_DIR/quattro-$group ]] && return 0
   group_has_child_commands "$group"
 }
 
 command_requires_args() {
-  local key="$1"
-  local args="${COMMAND_ARGS[$key]}"
+  local key="${1:-}"
+  local args="${COMMAND_ARGS[$key]:-}"
   local required="$args"
 
   while [[ $required =~ ^(.*)\[[^][]*\](.*)$ ]]; do
-    required="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    required="${BASH_REMATCH[1]:-}${BASH_REMATCH[2]:-}"
   done
 
   required="${required// /}"
@@ -401,8 +381,8 @@ command_requires_args() {
 # A command whose documented arguments are all flags can't take a word, so a
 # word after it names a subcommand rather than an argument to that binary.
 command_takes_only_flags() {
-  local key="$1"
-  local args="${COMMAND_ARGS[$key]}"
+  local key="${1:-}"
+  local args="${COMMAND_ARGS[$key]:-}"
   local token=""
 
   local in_option=false
@@ -428,7 +408,7 @@ command_takes_only_flags() {
 }
 
 load_group_commands() {
-  local group="$1"
+  local group="${1:-}"
   local file=""
 
   if [[ -f $QUATTRO_BIN_DIR/quattro-$group && -x $QUATTRO_BIN_DIR/quattro-$group ]]; then
@@ -443,7 +423,7 @@ load_group_commands() {
 }
 
 resolve_direct_route() {
-  local argc="$1"
+  local argc="${1:-}"
   shift
   local args=("$@")
   local prefix_count=0
@@ -468,62 +448,62 @@ resolve_direct_route() {
 }
 
 sorted_keys() {
-  local include_all="$1"
+  local include_all="${1:-}"
   local key=""
 
   for key in "${COMMAND_KEYS[@]}"; do
-    if [[ $include_all != "true" && ${COMMAND_HIDDEN[$key]} == "true" ]]; then
+    if [[ $include_all != "true" && ${COMMAND_HIDDEN[$key]:-} == "true" ]]; then
       continue
     fi
-    printf '%s\t%s\n' "${COMMAND_ROUTE[$key]}" "$key"
+    printf '%s\t%s\n' "${COMMAND_ROUTE[$key]:-}" "$key"
   done | sort -u | cut -f2-
 }
 
 fallback_group_for_key() {
-  local key="$1"
+  local key="${1:-}"
   local fallback="${COMMAND_FALLBACK_ROUTE[$key]#quattro }"
 
   printf '%s' "${fallback%% *}"
 }
 
 command_route_for_group() {
-  local key="$1"
-  local group="$2"
+  local key="${1:-}"
+  local group="${2:-}"
 
-  if [[ $(fallback_group_for_key "$key") == "$group" && ${COMMAND_GROUP[$key]} != "$group" ]]; then
-    printf '%s' "${COMMAND_FALLBACK_ROUTE[$key]}"
+  if [[ $(fallback_group_for_key "$key") == "$group" && ${COMMAND_GROUP[$key]:-} != "$group" ]]; then
+    printf '%s' "${COMMAND_FALLBACK_ROUTE[$key]:-}"
   else
-    printf '%s' "${COMMAND_ROUTE[$key]}"
+    printf '%s' "${COMMAND_ROUTE[$key]:-}"
   fi
 }
 
 command_usage_for_group() {
-  local key="$1"
-  local group="$2"
+  local key="${1:-}"
+  local group="${2:-}"
   local route=""
 
   route=$(command_route_for_group "$key" "$group")
-  if [[ -n ${COMMAND_ARGS[$key]} ]]; then
-    route+=" ${COMMAND_ARGS[$key]}"
+  if [[ -n ${COMMAND_ARGS[$key]:-} ]]; then
+    route+=" ${COMMAND_ARGS[$key]:-}"
   fi
 
   printf '%s' "$route"
 }
 
 sorted_group_keys() {
-  local group="$1"
-  local include_all="$2"
+  local group="${1:-}"
+  local include_all="${2:-}"
   local key=""
   local fallback_group=""
   local route=""
 
   for key in "${COMMAND_KEYS[@]}"; do
-    if [[ $include_all != "true" && ${COMMAND_HIDDEN[$key]} == "true" ]]; then
+    if [[ $include_all != "true" && ${COMMAND_HIDDEN[$key]:-} == "true" ]]; then
       continue
     fi
 
     fallback_group=$(fallback_group_for_key "$key")
-    if [[ ${COMMAND_GROUP[$key]} != "$group" && $fallback_group != "$group" ]]; then
+    if [[ ${COMMAND_GROUP[$key]:-} != "$group" && $fallback_group != "$group" ]]; then
       continue
     fi
 
@@ -533,7 +513,7 @@ sorted_group_keys() {
 }
 
 examples_as_lines() {
-  local examples="$1"
+  local examples="${1:-}"
   local old_ifs="$IFS"
   local example=""
   IFS='|'
@@ -548,7 +528,7 @@ examples_as_lines() {
 }
 
 pipe_values_as_lines() {
-  local values="$1"
+  local values="${1:-}"
   local old_ifs="$IFS"
   local value=""
   IFS='|'
@@ -567,7 +547,7 @@ show_group_list() {
 
   printf '%s\n' "${!GROUP_DESCRIPTIONS[@]}" | sort | while IFS= read -r sorted_group; do
     [[ -n $sorted_group ]] || continue
-    printf '  %-14s %s\n' "$sorted_group" "${GROUP_DESCRIPTIONS[$sorted_group]}"
+    printf '  %-14s %s\n' "$sorted_group" "${GROUP_DESCRIPTIONS[$sorted_group]:-}"
   done
 }
 
@@ -618,7 +598,7 @@ EOF
 }
 
 print_command_table() {
-  local rows="$1"
+  local rows="${1:-}"
   local max_width=0
   local width=0
   local command=""
@@ -639,7 +619,7 @@ print_command_table() {
 }
 
 show_commands() {
-  local include_all="$1"
+  local include_all="${1:-}"
   local key=""
   local route=""
   local usage=""
@@ -654,18 +634,18 @@ show_commands() {
 
   while IFS= read -r key; do
     [[ -n $key ]] || continue
-    usage="${COMMAND_USAGE[$key]}"
-    rows+="$usage"$'\t'"${COMMAND_SUMMARY[$key]}"$'\n'
+    usage="${COMMAND_USAGE[$key]:-}"
+    rows+="$usage"$'\t'"${COMMAND_SUMMARY[$key]:-}"$'\n'
   done < <(sorted_keys "$include_all")
 
   print_command_table "$rows"
 
   for route in "${!ROUTE_IS_ALIAS[@]}"; do
-    key="${ROUTE_TO_KEY[$route]}"
-    if [[ $include_all != "true" && ${COMMAND_HIDDEN[$key]} == "true" ]]; then
+    key="${ROUTE_TO_KEY[$route]:-}"
+    if [[ $include_all != "true" && ${COMMAND_HIDDEN[$key]:-} == "true" ]]; then
       continue
     fi
-    alias_rows+="$route"$'\t'"${COMMAND_ROUTE[$key]}"$'\n'
+    alias_rows+="$route"$'\t'"${COMMAND_ROUTE[$key]:-}"$'\n'
   done
 
   if [[ -n $alias_rows ]]; then
@@ -676,13 +656,13 @@ show_commands() {
 }
 
 markdown_escape() {
-  local value="$1"
+  local value="${1:-}"
   value="${value//|/\\|}"
   printf '%s' "$value"
 }
 
 show_commands_markdown() {
-  local include_all="$1"
+  local include_all="${1:-}"
   local key=""
 
   echo "| Command | Binary | Summary |"
@@ -691,32 +671,32 @@ show_commands_markdown() {
   while IFS= read -r key; do
     [[ -n $key ]] || continue
     printf '| `%s` | `%s` | %s |\n' \
-      "$(markdown_escape "${COMMAND_USAGE[$key]}")" \
-      "$(markdown_escape "${COMMAND_BINARY[$key]}")" \
-      "$(markdown_escape "${COMMAND_SUMMARY[$key]}")"
+      "$(markdown_escape "${COMMAND_USAGE[$key]:-}")" \
+      "$(markdown_escape "${COMMAND_BINARY[$key]:-}")" \
+      "$(markdown_escape "${COMMAND_SUMMARY[$key]:-}")"
   done < <(sorted_keys "$include_all")
 }
 
 emit_command_record() {
-  local key="$1"
+  local key="${1:-}"
 
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "${COMMAND_ROUTE[$key]}" \
-    "${COMMAND_BINARY[$key]}" \
-    "${COMMAND_GROUP[$key]}" \
-    "${COMMAND_NAME[$key]}" \
-    "${COMMAND_SUMMARY[$key]}" \
-    "${COMMAND_REQUIRES_SUDO[$key]}" \
-    "${COMMAND_HIDDEN[$key]}" \
-    "${COMMAND_ARGS[$key]}" \
-    "${COMMAND_EXAMPLES[$key]}" \
-    "${COMMAND_ALIASES[$key]}" \
-    "${COMMAND_FALLBACK_ROUTE[$key]}" \
-    "${COMMAND_USAGE[$key]}"
+    "${COMMAND_ROUTE[$key]:-}" \
+    "${COMMAND_BINARY[$key]:-}" \
+    "${COMMAND_GROUP[$key]:-}" \
+    "${COMMAND_NAME[$key]:-}" \
+    "${COMMAND_SUMMARY[$key]:-}" \
+    "${COMMAND_REQUIRES_SUDO[$key]:-}" \
+    "${COMMAND_HIDDEN[$key]:-}" \
+    "${COMMAND_ARGS[$key]:-}" \
+    "${COMMAND_EXAMPLES[$key]:-}" \
+    "${COMMAND_ALIASES[$key]:-}" \
+    "${COMMAND_FALLBACK_ROUTE[$key]:-}" \
+    "${COMMAND_USAGE[$key]:-}"
 }
 
 emit_command_records() {
-  local include_all="$1"
+  local include_all="${1:-}"
   local key=""
 
   while IFS= read -r key; do
@@ -745,7 +725,7 @@ EOF
 }
 
 show_commands_json() {
-  local include_all="$1"
+  local include_all="${1:-}"
 
   emit_command_records "$include_all" | jq -Rn "$(commands_json_filter)"
 }
@@ -762,21 +742,21 @@ show_commands_check() {
   done
 
   for key in "${COMMAND_KEYS[@]}"; do
-    if [[ ${COMMAND_HAS_SUMMARY[$key]} != "true" ]]; then
-      echo "Missing metadata summary: ${COMMAND_BINARY[$key]}" >&2
+    if [[ ${COMMAND_HAS_SUMMARY[$key]:-} != "true" ]]; then
+      echo "Missing metadata summary: ${COMMAND_BINARY[$key]:-}" >&2
       failures=$((failures + 1))
     fi
 
-    if [[ -n ${COMMAND_METADATA_ERRORS[$key]} ]]; then
+    if [[ -n ${COMMAND_METADATA_ERRORS[$key]:-} ]]; then
       while IFS= read -r error; do
         [[ -n $error ]] || continue
-        echo "Invalid metadata in ${COMMAND_BINARY[$key]}: $error" >&2
+        echo "Invalid metadata in ${COMMAND_BINARY[$key]:-}: $error" >&2
         failures=$((failures + 1))
-      done < <(pipe_values_as_lines "${COMMAND_METADATA_ERRORS[$key]}")
+      done < <(pipe_values_as_lines "${COMMAND_METADATA_ERRORS[$key]:-}")
     fi
 
-    if [[ ! -x $QUATTRO_BIN_DIR/${COMMAND_BINARY[$key]} ]]; then
-      echo "Missing binary: ${COMMAND_BINARY[$key]}" >&2
+    if [[ ! -x $QUATTRO_BIN_DIR/${COMMAND_BINARY[$key]:-} ]]; then
+      echo "Missing binary: ${COMMAND_BINARY[$key]:-}" >&2
       failures=$((failures + 1))
     fi
   done
@@ -840,11 +820,11 @@ parse_commands_args() {
 }
 
 group_exists() {
-  local group="$1"
+  local group="${1:-}"
   local key=""
 
   for key in "${COMMAND_KEYS[@]}"; do
-    if [[ ${COMMAND_GROUP[$key]} == "$group" && -n ${COMMAND_NAME[$key]} ]]; then
+    if [[ ${COMMAND_GROUP[$key]:-} == "$group" && -n ${COMMAND_NAME[$key]:-} ]]; then
       return 0
     fi
   done
@@ -853,11 +833,11 @@ group_exists() {
 }
 
 show_group_help() {
-  local group="$1"
+  local group="${1:-}"
   local include_all="${2:-false}"
   local key=""
   local rows=""
-  local title="${GROUP_DESCRIPTIONS[$group]}"
+  local title="${GROUP_DESCRIPTIONS[$group]:-}"
 
   if [[ -n $title ]]; then
     echo "${group^} commands — $title:"
@@ -867,7 +847,7 @@ show_group_help() {
 
   while IFS= read -r key; do
     [[ -n $key ]] || continue
-    rows+="$(command_usage_for_group "$key" "$group")"$'\t'$'\t'"${COMMAND_SUMMARY[$key]}"$'\n'
+    rows+="$(command_usage_for_group "$key" "$group")"$'\t'$'\t'"${COMMAND_SUMMARY[$key]:-}"$'\n'
   done < <(sorted_group_keys "$group" "$include_all")
 
   if [[ -n $rows ]]; then
@@ -878,15 +858,15 @@ show_group_help() {
 }
 
 show_prefix_help() {
-  local prefix="$1"
+  local prefix="${1:-}"
   local prefix_with_space="$prefix "
   local key=""
   local rows=""
 
   while IFS= read -r key; do
     [[ -n $key ]] || continue
-    if [[ ${COMMAND_USAGE[$key]} == $prefix_with_space* ]]; then
-      rows+="${COMMAND_USAGE[$key]}"$'\t'$'\t'"${COMMAND_SUMMARY[$key]}"$'\n'
+    if [[ ${COMMAND_USAGE[$key]:-} == $prefix_with_space* ]]; then
+      rows+="${COMMAND_USAGE[$key]:-}"$'\t'$'\t'"${COMMAND_SUMMARY[$key]:-}"$'\n'
     fi
   done < <(sorted_keys false)
 
@@ -897,16 +877,16 @@ show_prefix_help() {
 }
 
 show_related_commands() {
-  local key="$1"
-  local group="${COMMAND_GROUP[$key]}"
+  local key="${1:-}"
+  local group="${COMMAND_GROUP[$key]:-}"
   local child_key=""
   local rows=""
 
-  [[ -z ${COMMAND_NAME[$key]} ]] || return
+  [[ -z ${COMMAND_NAME[$key]:-} ]] || return
 
   while IFS= read -r child_key; do
     [[ -n $child_key && $child_key != "$key" ]] || continue
-    rows+="$(command_usage_for_group "$child_key" "$group")"$'\t'$'\t'"${COMMAND_SUMMARY[$child_key]}"$'\n'
+    rows+="$(command_usage_for_group "$child_key" "$group")"$'\t'$'\t'"${COMMAND_SUMMARY[$child_key]:-}"$'\n'
   done < <(sorted_group_keys "$group" false)
 
   if [[ -n $rows ]]; then
@@ -917,17 +897,17 @@ show_related_commands() {
 }
 
 show_command_help() {
-  local key="$1"
-  local aliases="${COMMAND_ALIASES[$key]}"
-  local examples="${COMMAND_EXAMPLES[$key]}"
-  local args="${COMMAND_ARGS[$key]}"
+  local key="${1:-}"
+  local aliases="${COMMAND_ALIASES[$key]:-}"
+  local examples="${COMMAND_EXAMPLES[$key]:-}"
+  local args="${COMMAND_ARGS[$key]:-}"
   local example=""
   local alias=""
 
   echo "Usage:"
-  echo "  ${COMMAND_USAGE[$key]}"
+  echo "  ${COMMAND_USAGE[$key]:-}"
   echo ""
-  echo "${COMMAND_SUMMARY[$key]}"
+  echo "${COMMAND_SUMMARY[$key]:-}"
 
   if [[ -n $args ]]; then
     echo ""
@@ -953,19 +933,19 @@ show_command_help() {
 
   echo ""
   echo "Binary:"
-  echo "  ${COMMAND_BINARY[$key]}"
+  echo "  ${COMMAND_BINARY[$key]:-}"
 
-  if [[ ${COMMAND_FALLBACK_ROUTE[$key]} != "${COMMAND_ROUTE[$key]}" ]]; then
+  if [[ ${COMMAND_FALLBACK_ROUTE[$key]:-} != "${COMMAND_ROUTE[$key]:-}" ]]; then
     echo ""
     echo "Filename route:"
-    echo "  ${COMMAND_FALLBACK_ROUTE[$key]}"
+    echo "  ${COMMAND_FALLBACK_ROUTE[$key]:-}"
   fi
 
   show_related_commands "$key"
 }
 
 resolve_route() {
-  local argc="$1"
+  local argc="${1:-}"
   shift
   local args=("$@")
   local prefix_count=0
@@ -974,7 +954,7 @@ resolve_route() {
 
   for (( prefix_count = argc; prefix_count >= 1; prefix_count-- )); do
     route="quattro $(join_words " " "${args[@]:0:prefix_count}")"
-    key="${ROUTE_TO_KEY[$route]}"
+    key="${ROUTE_TO_KEY[$route]:-}"
 
     if [[ -n $key ]]; then
       RESOLVED_KEY="$key"
@@ -988,7 +968,7 @@ resolve_route() {
 }
 
 suggest_command() {
-  local first="$1"
+  local first="${1:-}"
   local candidate=""
 
   for candidate in "${!ROUTE_TO_KEY[@]}"; do
@@ -1016,7 +996,7 @@ dispatch_fast_or_help() {
       { (( ${#remaining[@]} == 1 )) || remaining_has_help_flag "${remaining[1]}"; } &&
       group_has_child_commands "${DIRECT_RESOLVED_BINARY#quattro-}-${remaining[0]}"; then
       load_command_by_binary "$DIRECT_RESOLVED_BINARY"
-      key="${BINARY_TO_KEY[$DIRECT_RESOLVED_BINARY]}"
+      key="${BINARY_TO_KEY[$DIRECT_RESOLVED_BINARY]:-}"
       if [[ -n $key ]] && command_takes_only_flags "$key"; then
         load_commands
         show_prefix_help "$DIRECT_RESOLVED_ROUTE ${remaining[0]}" && return 0
@@ -1033,7 +1013,7 @@ dispatch_fast_or_help() {
         load_child_commands_by_binary "$DIRECT_RESOLVED_BINARY"
       fi
 
-      key="${BINARY_TO_KEY[$DIRECT_RESOLVED_BINARY]}"
+      key="${BINARY_TO_KEY[$DIRECT_RESOLVED_BINARY]:-}"
       if remaining_has_json_flag "${remaining[@]}"; then
         show_command_json "$key"
       else
@@ -1044,7 +1024,7 @@ dispatch_fast_or_help() {
 
     if (( ${#remaining[@]} == 0 )); then
       load_command_by_binary "$DIRECT_RESOLVED_BINARY"
-      key="${BINARY_TO_KEY[$DIRECT_RESOLVED_BINARY]}"
+      key="${BINARY_TO_KEY[$DIRECT_RESOLVED_BINARY]:-}"
 
       if [[ -n $key ]] && command_requires_args "$key"; then
         if (( DIRECT_RESOLVED_COUNT == 1 )) && group_has_child_commands "$1"; then
@@ -1105,9 +1085,9 @@ dispatch_or_help() {
       return 0
     fi
 
-    binary_path="$QUATTRO_BIN_DIR/${COMMAND_BINARY[$key]}"
+    binary_path="$QUATTRO_BIN_DIR/${COMMAND_BINARY[$key]:-}"
     if [[ ! -x $binary_path ]]; then
-      echo "Binary is missing or not executable: ${COMMAND_BINARY[$key]}" >&2
+      echo "Binary is missing or not executable: ${COMMAND_BINARY[$key]:-}" >&2
       return 127
     fi
 

@@ -36,28 +36,8 @@ function keyboard.vconsole()
   return read_values("/etc/vconsole.conf")
 end
 
--- Choices whose console keymap is plain US but whose desktop layout is not:
--- Korean keeps US letters, and Lao is non-Latin, so US still leads. Korean
--- installs take kr104, which adds Right Alt and Right Ctrl as 한/영 and 한자;
--- plain kr is what earlier installs saved.
-local desktop_overrides = { kr = true, ["kr:kr104"] = true, la = true }
-
 function keyboard.installed()
-  local values = keyboard.vconsole()
-  local override = read_values("/etc/quattro/input-method").XKB_LAYOUT
-  if desktop_overrides[override]
-    and (values.XKBLAYOUT or "us") == "us"
-    and (values.XKBVARIANT or "") == "" then
-    values.XKBLAYOUT, values.XKBVARIANT = override:match("^([^:]*):?(.*)$")
-  end
-  return values
-end
-
--- Japanese (JIS) keyboards put +, ^, and the Henkan/Muhenkan keys where US
--- keyboards don't, so a few defaults only apply when that layout leads.
-function keyboard.jis()
-  local layout = keyboard.selected().XKBLAYOUT or "us"
-  return layout:match("^[^,]*") == "jp"
+  return keyboard.vconsole()
 end
 
 return keyboard

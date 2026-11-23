@@ -10,6 +10,9 @@
 # queries that only feed that status line's SSID, signal and frequency (~65ms
 # against ~3ms here). Keep the two agreeing.
 
+
+set -uo pipefail
+
 net_class_path="${QUATTRO_NET_CLASS_PATH:-/sys/class/net}"
 
 route=$(ip route get 1.1.1.1 2>/dev/null) || exit 1

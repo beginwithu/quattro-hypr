@@ -8,6 +8,9 @@
 # logind stops honouring the inhibitor and suspends mid-lock. Every call below
 # is bounded by what is left of the budget, so the deadline enforces itself
 # rather than depending on an estimate of how long a step ought to take.
+
+set -uo pipefail
+
 budget_cap_ms=12000
 lock_timeout_ms=1000
 status_timeout_ms=500

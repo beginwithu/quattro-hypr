@@ -168,7 +168,7 @@ BarWidget {
 
     onPressed: function(b) {
       if (b === Qt.RightButton) root.cycleFormat()
-      else if (b === Qt.MiddleButton) { if (root.bar) root.bar.run("quattro-menu-timezone") }
+      else if (b === Qt.MiddleButton) { if (root.bar) root.bar.run("quattro-menu timezone") }
       else root.togglePanel()
     }
 

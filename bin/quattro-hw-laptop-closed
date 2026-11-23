@@ -3,6 +3,9 @@
 # quattro:summary=Returns true when the laptop lid is closed
 # quattro:hidden=true
 
+
+set -uo pipefail
+
 acpi_lid="${QUATTRO_ACPI_LID_PATH:-/proc/acpi/button/lid}"
 input_class="${QUATTRO_INPUT_CLASS_PATH:-/sys/class/input}"
 

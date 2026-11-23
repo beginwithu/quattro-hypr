@@ -3,6 +3,9 @@
 # quattro:summary=Open a generic image selector menu
 # quattro:args=[--selected <image>] [--print-name] [--show-labels] [--filterable] [--lazy-thumbnails] [--preload] [--prepare-only] [--cache-only] [--print-rows] <image-dir>...
 
+
+set -uo pipefail
+
 selected_image=""
 print_name=false
 show_labels=false

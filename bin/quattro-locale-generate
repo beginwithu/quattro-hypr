@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# quattro:summary=Generate the system locale for an Quattro language
+# quattro:summary=Generate the system locale for a Quattro language
 # quattro:args=<code>
 # quattro:hidden=true
 

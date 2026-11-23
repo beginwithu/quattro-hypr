@@ -1,0 +1,150 @@
+#!/bin/bash
+
+# quattro:summary=Query, list, install, remove, or update Quattro themes
+# quattro:group=theme
+# quattro:args=<current|list|extras|install [git-url]|remove [theme-name]|update|set <theme-name>>
+# quattro:examples=quattro theme current | quattro theme list | quattro theme set "Tokyo Night" | quattro theme install <url>
+
+set -euo pipefail
+
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+
+theme_current() {
+  local theme_name_path="$HOME/.local/state/quattro/current/theme.name"
+  if [[ -f $theme_name_path ]]; then
+    sed -E 's/(^|-)([a-z])/\1\u\2/g; s/-/ /g' "$theme_name_path"
+  else
+    echo "Unknown"
+  fi
+}
+
+theme_list() {
+  {
+    find ~/.config/quattro/themes/ -mindepth 1 -maxdepth 1 \( -type d -o -type l \) -printf '%f\n' 2>/dev/null || true
+    find "$QUATTRO_PATH/themes/" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null || true
+  } | sort -u | sed -E 's/(^|-)([a-z])/\1\u\2/g; s/-/ /g'
+}
+
+theme_extras() {
+  local status=1 theme
+  shopt -s nullglob
+  for theme in ~/.config/quattro/themes/*; do
+    [[ ! -L $theme && -d $theme/.git ]] || continue
+    echo "$theme"
+    status=0
+  done
+  return "$status"
+}
+
+check_git_url() {
+  local url="${1-}"
+  local -a transports=(ssh git git+ssh ssh+git http https ftp ftps file)
+  if [[ -z $url ]]; then
+    echo "quattro-theme install: a git URL is required" >&2
+    return 1
+  fi
+  if [[ $url == -* || $url =~ ^[A-Za-z0-9][A-Za-z0-9+.-]*:: ]]; then
+    echo "quattro-theme install: '$url' names a git option or transport helper, not a repository." >&2
+    return 1
+  fi
+  if [[ $url =~ ^([A-Za-z0-9][A-Za-z0-9+.-]*):// ]]; then
+    local scheme="${BASH_REMATCH[1]}" transport
+    for transport in "${transports[@]}"; do
+      [[ $scheme == "$transport" ]] && return 0
+    done
+    echo "quattro-theme install: '$url' names the '$scheme' transport, which Quattro does not clone from." >&2
+    return 1
+  fi
+  return 0
+}
+
+theme_install() {
+  local repo_url=""
+  if [[ -z ${1:-} ]]; then
+    repo_url=$(gum input --placeholder="$(quattro-i18n theme.repoPlaceholder)" --header="" || true)
+  else
+    repo_url="$1"
+  fi
+
+  [[ -n $repo_url ]] || exit 1
+  check_git_url "$repo_url" || exit 1
+
+  local themes_dir="$HOME/.config/quattro/themes"
+  local repo_path="$repo_url" theme_name theme_path
+  [[ $repo_path != *"://"* && $repo_path == *:* && ${repo_path%%:*} != */* ]] && repo_path="${repo_path#*:}"
+  theme_name=$(basename -- "$repo_path" .git | sed -E 's/^quattro-//; s/-theme$//' | tr '[:upper:]' '[:lower:]')
+  theme_path="$themes_dir/$theme_name"
+
+  if ! (LC_ALL=C; [[ $theme_name =~ ^[a-z0-9_][a-z0-9._+-]*$ ]]); then
+    echo "Error: '$repo_url' does not give a usable theme name."
+    exit 1
+  fi
+
+  [[ -d $theme_path ]] && rm -rf "$theme_path"
+  if ! git clone -- "$repo_url" "$theme_path"; then
+    echo "Error: Failed to clone theme repo."
+    exit 1
+  fi
+
+  quattro-theme-set "$theme_name"
+}
+
+theme_remove() {
+  local theme_name=""
+  if [[ -z ${1:-} ]]; then
+    local -a extra_themes=()
+    mapfile -t extra_themes < <(find ~/.config/quattro/themes -mindepth 1 -maxdepth 1 -type d ! -xtype l -printf '%f\n' 2>/dev/null || true)
+    if (( ${#extra_themes[@]} > 0 )); then
+      mapfile -t extra_themes < <(printf '%s\n' "${extra_themes[@]}" | sort)
+      theme_name=$(quattro-menu-select "$(quattro-i18n theme.removeExtraTitle)" "${extra_themes[@]}" -- --width 520 --maxheight 520 || true)
+    else
+      echo "No extra themes installed."
+      exit 1
+    fi
+  else
+    theme_name="$1"
+  fi
+
+  local themes_dir="$HOME/.config/quattro/themes"
+  if [[ -z $theme_name || $theme_name == .* || $theme_name == */* ]]; then
+    exit 1
+  fi
+
+  local theme_path="$themes_dir/$theme_name"
+  if [[ ! -d $theme_path ]]; then
+    echo "Error: Theme '$theme_name' not found."
+    exit 1
+  fi
+
+  rm -rf "$theme_path"
+  quattro-notification-send "$(quattro-i18n theme.removed)" "$theme_name" || true
+  echo "Removed $theme_name"
+}
+
+theme_update() {
+  local -a themes=()
+  local theme
+  mapfile -t themes < <(theme_extras || true)
+  for theme in "${themes[@]}"; do
+    [[ -n $theme ]] || continue
+    echo "Updating: $(basename "$theme")"
+    git -C "$theme" pull
+  done
+}
+
+cmd="${1:-current}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  current) theme_current ;;
+  list) theme_list ;;
+  extras) theme_extras ;;
+  install) theme_install "$@" ;;
+  remove) theme_remove "$@" ;;
+  update) theme_update ;;
+  set) exec quattro-theme-set "$@" ;;
+  *)
+    echo "Usage: quattro-theme <current|list|extras|install [url]|remove [name]|update|set <name>>" >&2
+    exit 1
+    ;;
+esac

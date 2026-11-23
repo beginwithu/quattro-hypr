@@ -1,0 +1,381 @@
+#!/bin/bash
+
+# quattro:summary=Query and configure Hyprland monitors (focused, laptop, external-active, identity, internal, internal-mirror, persist, resolution, rotate)
+# quattro:group=hyprland
+# quattro:name=monitor
+# quattro:args=<focused|laptop|external-active|identity <output>|internal <on|off|toggle|recover>|internal-mirror <on|off|toggle|recover>|persist <args...>|resolution [--monitor NAME] [MODE]|rotate [--monitor NAME] [0|90|180|270]>
+# quattro:examples=quattro hyprland monitor focused | quattro hyprland monitor resolution 2560x1440 | quattro hyprland monitor rotate 90
+
+set -euo pipefail
+
+monitor_focused() {
+  hyprctl monitors -j | jq -r '.[] | select(.focused == true).name'
+}
+
+monitor_laptop() {
+  hyprctl monitors all -j | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)-")).name' | head -n 1
+}
+
+monitor_external_active() {
+  hyprctl monitors all -j | jq -e '.[] | select(.name | test("^(eDP|LVDS|DSI)-") | not) | select(.name != "FALLBACK") | select(.disabled == false)' >/dev/null 2>&1
+}
+
+monitor_identity() {
+  local output="${1:-}"
+  if [[ -z $output ]]; then
+    echo "Usage: quattro-hyprland-monitor identity OUTPUT" >&2
+    exit 1
+  fi
+  local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/quattro"
+  local identity=""
+  identity=$(awk -F'\t' -v connector="$output" '$2 == connector { print $3; exit }' "$state_dir/monitors/workspaces" 2>/dev/null || true)
+  if [[ -z $identity ]]; then
+    identity=$(hyprctl monitors all -j 2>/dev/null | jq -r --arg name "$output" '.[] | select(.name == $name) | .description // empty' 2>/dev/null || true)
+  fi
+  identity="${identity:-$output}"
+  printf '%s\n' "${identity//[$'\t\n']/ }"
+}
+
+monitor_persist() {
+  local output="${1:-}"
+  local scale="${2:-}"
+  local mode="${3:-}"
+  local position="${4:-}"
+  local transform="${5:-}"
+
+  if [[ -z $output || -z $scale ]]; then
+    echo "Usage: quattro-hyprland-monitor persist OUTPUT SCALE [MODE] [POSITION] [TRANSFORM]" >&2
+    exit 1
+  fi
+
+  if [[ ! $output =~ ^[A-Za-z0-9._-]+$ || ! $scale =~ ^[0-9]+([.][0-9]+)?$ ]] ||
+    [[ -n $mode && ! $mode =~ ^[0-9]+x[0-9]+(@[0-9.]+)?$ ]] ||
+    [[ -n $position && ! $position =~ ^-?[0-9]+x-?[0-9]+$ ]] ||
+    [[ -n $transform && ! $transform =~ ^[0-7]$ ]]; then
+    echo "Refusing to save an unsafe monitor setting: $*" >&2
+    exit 1
+  fi
+
+  local settings="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/monitors/settings"
+  local identity tmp
+  identity=$(monitor_identity "$output")
+
+  mkdir -p "${settings%/*}"
+  touch "$settings"
+  tmp=$(mktemp "$settings.XXXXXX")
+  awk -F'\t' -v OFS='\t' -v identity="$identity" -v mode="$mode" -v position="$position" -v scale="$scale" -v transform="$transform" '
+    $NF == identity {
+      if (mode == "") mode = $1
+      if (position == "") position = $2
+      if (transform == "" && NF > 4) transform = $4
+      next
+    }
+    { print }
+    END { print mode, position, scale, transform, identity }
+  ' "$settings" >"$tmp"
+  mv "$tmp" "$settings"
+
+  hyprctl eval 'if o.monitor_settings and o.monitor_settings.update_gdk_scale then o.monitor_settings.update_gdk_scale() end' >/dev/null 2>&1 || true
+}
+
+monitor_internal() {
+  local TOGGLE="internal-monitor-disable"
+  local TOGGLE_FLAG="$HOME/.local/state/quattro/toggles/hypr/$TOGGLE.lua"
+  local MIRROR_TOGGLE="internal-monitor-mirror"
+  local INTERNAL
+  INTERNAL=$(monitor_laptop)
+
+  wake() {
+    hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1 || true
+  }
+
+  on() {
+    if quattro-hyprland-toggle --enabled "$TOGGLE"; then
+      quattro-hyprland-toggle "$TOGGLE" off
+      quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.laptopEnabled)"
+    fi
+    wake
+  }
+
+  off() {
+    if [[ -z $INTERNAL ]]; then
+      quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.noLaptopDisplay)"
+      exit 1
+    fi
+    if [[ ! $INTERNAL =~ ^[A-Za-z0-9._-]+$ ]]; then
+      quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.unsafeName)"
+      exit 1
+    fi
+    if ! monitor_external_active; then
+      quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.onlyDisplay)"
+      exit 1
+    fi
+    if quattro-hyprland-toggle --disabled "$TOGGLE" && quattro-hyprland-toggle --disabled "$MIRROR_TOGGLE"; then
+      mkdir -p "$(dirname "$TOGGLE_FLAG")"
+      printf 'hl.monitor({ output = "%s", disabled = true })\n' "$INTERNAL" >"$TOGGLE_FLAG"
+      quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.laptopDisabled)"
+      quattro-restart hyprctl
+    fi
+  }
+
+  recover() {
+    monitor_external_active && return 0
+    quattro-hyprland-toggle --enabled "$TOGGLE" || return 0
+    quattro-hyprland-toggle "$TOGGLE" off
+    wake
+  }
+
+  case "${1:-}" in
+    on) on ;;
+    off) off ;;
+    toggle)
+      if quattro-hyprland-toggle --enabled "$TOGGLE"; then on; else off; fi
+      ;;
+    recover) recover ;;
+    *)
+      echo "Usage: quattro-hyprland-monitor internal {on|off|toggle|recover}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+monitor_internal_mirror() {
+  local TOGGLE="internal-monitor-mirror"
+  local TOGGLE_FLAG="$HOME/.local/state/quattro/toggles/hypr/$TOGGLE.lua"
+  local DISABLE_TOGGLE="internal-monitor-disable"
+  local INTERNAL
+  INTERNAL=$(monitor_laptop)
+  local -a EXTERNALS=()
+  mapfile -t EXTERNALS < <(hyprctl monitors -j | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)-") | not).name')
+
+  on() {
+    if (( ${#EXTERNALS[@]} == 0 )); then
+      quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.noExternalForMirror)"
+      exit 1
+    fi
+    if [[ -z $INTERNAL ]]; then
+      quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.noLaptopToMirror)"
+      exit 1
+    fi
+    local output external
+    for output in "$INTERNAL" "${EXTERNALS[@]}"; do
+      if [[ ! $output =~ ^[A-Za-z0-9._-]+$ ]]; then
+        quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.unsafeName)"
+        exit 1
+      fi
+    done
+    quattro-hyprland-toggle "$DISABLE_TOGGLE" off
+    if quattro-hyprland-toggle --disabled "$TOGGLE"; then
+      mkdir -p "$(dirname "$TOGGLE_FLAG")"
+      for external in "${EXTERNALS[@]}"; do
+        printf 'hl.monitor({ output = "%s", mode = "preferred", position = "auto", scale = 1, mirror = "%s" })\n' "$external" "$INTERNAL"
+      done >"$TOGGLE_FLAG"
+      quattro-restart hyprctl
+    fi
+  }
+
+  off() {
+    if quattro-hyprland-toggle --enabled "$TOGGLE"; then
+      quattro-hyprland-toggle "$TOGGLE" off
+    fi
+  }
+
+  case "${1:-}" in
+    on) on ;;
+    off) off ;;
+    toggle)
+      if quattro-hyprland-toggle --enabled "$TOGGLE"; then off; else on; fi
+      ;;
+    recover)
+      if ! monitor_external_active && quattro-hyprland-toggle --enabled "$TOGGLE"; then
+        quattro-hyprland-toggle "$TOGGLE" off
+      fi
+      ;;
+    *)
+      echo "Usage: quattro-hyprland-monitor internal-mirror {on|off|toggle|recover}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+monitor_resolution() {
+  usage_res() {
+    echo "Usage: quattro-hyprland-monitor resolution [--monitor NAME] [WIDTHxHEIGHT[@RATE]]"
+  }
+
+  clean_scale() {
+    awk -v scale="$1" -v width="$2" -v height="$3" '
+      function gcd(a, b, t) { while (b) { t = a % b; a = b; b = t } return a }
+      BEGIN {
+        g = gcd(width * 120, height * 120)
+        k = int(scale * 120 + 0.5)
+        if (k > g) k = g
+        while (g % k != 0) k++
+        printf "%g\n", k / 120
+      }'
+  }
+
+  local monitor_name="" monitor_info
+  if [[ ${1:-} == "--monitor" ]]; then
+    [[ -n ${2:-} ]] || { usage_res >&2; exit 1; }
+    monitor_name="$2"
+    shift 2
+  fi
+
+  if [[ -n $monitor_name ]]; then
+    monitor_info=$(hyprctl monitors -j | jq -e -c --arg name "$monitor_name" '.[] | select(.name == $name)' || true)
+  else
+    monitor_info=$(hyprctl monitors -j | jq -e -c '.[] | select(.focused == true)' || true)
+  fi
+
+  if [[ -z $monitor_info ]]; then
+    echo "No such monitor: ${monitor_name:-focused}" >&2
+    exit 1
+  fi
+
+  if [[ -z ${1:-} ]]; then
+    jq -r '"\(.width)x\(.height)"' <<<"$monitor_info"
+    return 0
+  fi
+
+  if [[ $1 == "-h" || $1 == "--help" ]]; then
+    usage_res
+    return 0
+  fi
+
+  if [[ ! $1 =~ ^([0-9]+x[0-9]+)(@([0-9]+([.][0-9]+)?))?$ ]]; then
+    usage_res >&2
+    exit 1
+  fi
+  local size="${BASH_REMATCH[1]}"
+  local rate="${BASH_REMATCH[3]}"
+  local active_monitor mode old_scale old_size scale others
+  active_monitor=$(jq -r '.name' <<<"$monitor_info")
+
+  if [[ ! $active_monitor =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "Refusing unsafe monitor name" >&2
+    exit 1
+  fi
+
+  mode=$(jq -r --arg size "$size" --arg rate "$rate" '
+    [.availableModes[]
+      | capture("^(?<size>[0-9]+x[0-9]+)@(?<rate>[0-9.]+)Hz$")
+      | select(.size == $size)
+      | select($rate == "" or ((.rate | tonumber) - ($rate | tonumber) | fabs) < 0.01)]
+    | max_by(.rate | tonumber) // empty
+    | "\(.size)@\(.rate | tonumber | . * 100 | round / 100)"' <<<"$monitor_info")
+
+  if [[ -z $mode ]]; then
+    echo "$active_monitor does not support $1" >&2
+    exit 1
+  fi
+
+  old_scale=$(jq -r '.scale' <<<"$monitor_info")
+  old_size=$(jq -r '"\(.width)x\(.height)"' <<<"$monitor_info")
+  scale=$(clean_scale "$old_scale" "${size%x*}" "${size#*x}")
+
+  monitor_persist "$active_monitor" "$scale" "$mode"
+
+  others=$(hyprctl monitors -j | jq --arg name "$active_monitor" '[.[] | select(.name != $name)] | length')
+  if (( others > 0 )); then
+    quattro-hyprland-monitor-layout --resized "$active_monitor" "$old_size" "$old_scale" "$size" "$scale" "$mode"
+  else
+    hyprctl eval "hl.monitor({ output = \"$active_monitor\", mode = \"$mode\", position = \"auto\", scale = $scale })" >/dev/null
+  fi
+}
+
+monitor_rotate() {
+  usage_rot() {
+    echo "Usage: quattro-hyprland-monitor rotate [--monitor NAME] [0|90|180|270]"
+  }
+
+  local monitor_name="" monitor_info
+  if [[ ${1:-} == "--monitor" ]]; then
+    [[ -n ${2:-} ]] || { usage_rot >&2; exit 1; }
+    monitor_name="$2"
+    shift 2
+  fi
+
+  if [[ -n $monitor_name ]]; then
+    monitor_info=$(hyprctl monitors -j | jq -e -c --arg name "$monitor_name" '.[] | select(.name == $name)' || true)
+  else
+    monitor_info=$(hyprctl monitors -j | jq -e -c '.[] | select(.focused == true)' || true)
+  fi
+
+  if [[ -z $monitor_info ]]; then
+    echo "No such monitor: ${monitor_name:-focused}" >&2
+    exit 1
+  fi
+
+  local old_transform
+  old_transform=$(jq -r '.transform // 0' <<<"$monitor_info")
+
+  if [[ -z ${1:-} ]]; then
+    if (( old_transform < 4 )); then
+      echo $(( old_transform * 90 ))
+    else
+      echo "flipped"
+    fi
+    return 0
+  fi
+
+  if [[ $1 == "-h" || $1 == "--help" ]]; then
+    usage_rot
+    return 0
+  fi
+
+  local transform
+  case "$1" in
+    0) transform=0 ;;
+    90) transform=1 ;;
+    180) transform=2 ;;
+    270) transform=3 ;;
+    *) usage_rot >&2; exit 1 ;;
+  esac
+
+  local active_monitor scale width height mode new_size others
+  active_monitor=$(jq -r '.name' <<<"$monitor_info")
+  if [[ ! $active_monitor =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "Refusing unsafe monitor name" >&2
+    exit 1
+  fi
+
+  scale=$(jq -r '.scale' <<<"$monitor_info")
+  width=$(jq -r '.width' <<<"$monitor_info")
+  height=$(jq -r '.height' <<<"$monitor_info")
+  mode=$(jq -r '"\(.width)x\(.height)@\(.refreshRate)"' <<<"$monitor_info")
+
+  monitor_persist "$active_monitor" "$scale" "" "" "$transform"
+
+  if (( old_transform % 2 != transform % 2 )); then
+    new_size="${height}x${width}"
+  else
+    new_size="${width}x${height}"
+  fi
+
+  others=$(hyprctl monitors -j | jq --arg name "$active_monitor" '[.[] | select(.name != $name)] | length')
+  if (( others > 0 )); then
+    quattro-hyprland-monitor-layout --resized "$active_monitor" "${width}x${height}" "$scale" "$new_size" "$scale" "$mode" "$transform"
+  else
+    hyprctl eval "hl.monitor({ output = \"$active_monitor\", mode = \"$mode\", position = \"auto\", scale = $scale, transform = $transform })" >/dev/null
+  fi
+}
+
+cmd="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$cmd" in
+  focused) monitor_focused ;;
+  laptop) monitor_laptop ;;
+  external-active) monitor_external_active ;;
+  identity) monitor_identity "$@" ;;
+  internal) monitor_internal "$@" ;;
+  internal-mirror) monitor_internal_mirror "$@" ;;
+  persist) monitor_persist "$@" ;;
+  resolution) monitor_resolution "$@" ;;
+  rotate) monitor_rotate "$@" ;;
+  *)
+    echo "Usage: quattro-hyprland-monitor <focused|laptop|external-active|identity|internal|internal-mirror|persist|resolution|rotate> [args...]" >&2
+    exit 1
+    ;;
+esac

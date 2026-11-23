@@ -3,6 +3,9 @@
 # quattro:summary=Restart audio services and recover stuck USB audio devices.
 # quattro:examples=quattro restart audio | quattro-restart-audio
 
+
+set -uo pipefail
+
 services=(wireplumber.service pipewire.service pipewire-pulse.service)
 
 restart_audio_services() {
@@ -154,7 +157,7 @@ reset_usb_audio_device() {
 
   [[ -d $sysfs ]] || return 1
 
-  if ! quattro-cmd-present usbreset; then
+  if ! quattro-cmd present usbreset; then
     echo "usbreset is not installed; replug or power-cycle $device to recover it."
     return 1
   fi

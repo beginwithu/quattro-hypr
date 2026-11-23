@@ -112,7 +112,7 @@ Item {
     return out
   }
 
-  // Buttons an Quattro sender asked for (--action), as commands the shell runs.
+  // Buttons a Quattro sender asked for (--action), as commands the shell runs.
   readonly property var execActions: Security.parseExecActions(row.execActions) || []
 
   // Every button, in Delivery.deeds' order, with the code labels translated.
@@ -253,7 +253,7 @@ Item {
       spacing: thumb.compact ? Style.space(8) : Style.space(12)
 
       // The sender's image, else the icon resolved for its source, else the
-      // glyph an Quattro sender asked for, else the first letter of the source.
+      // glyph a Quattro sender asked for, else the first letter of the source.
       Item {
         id: thumb
         readonly property bool pictured: picture.status === Image.Ready && best !== ""

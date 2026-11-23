@@ -135,7 +135,7 @@ Item {
   property int dividerHeight: Style.space(17)
   property bool searchDivider: false
   property int layoutSerial: 0
-  property int cardWidth: Math.min(root.dmenuActive ? Style.space(root.dmenuWidth) : ((root.activeMenu === "trigger.capture.screenrecord" || root.activeMenu === "appearance.font" || root.activeMenu === "update.kernel") ? Style.space(520) : Style.space(300)), panel.width - Style.gapsOut * 2)
+  property int cardWidth: Math.min(root.dmenuActive ? Style.space(root.dmenuWidth) : ((root.activeMenu === "trigger.capture.screenrecord" || root.activeMenu === "appearance.font") ? Style.space(520) : Style.space(300)), panel.width - Style.gapsOut * 2)
   property int visibleRowsHeight: root.dmenuActive ? dmenuRowListHeight(layoutSerial, displayModel.count, filterText) : rowListHeight(layoutSerial, displayModel.count, filterText, searchDivider)
   property int cardHeight: root.dmenuActive
     ? Math.min(contentMargin * 2 + headerHeight + (mode === "input" ? 0 : contentSpacing + visibleRowsHeight), panel.height - Style.gapsOut * 2)
@@ -322,13 +322,13 @@ Item {
   // shell started shows up without restarting it.
   readonly property var providers: ({
     "fonts": {
-      script: "current=$(quattro-font-current 2>/dev/null); quattro-font-list 2>/dev/null | while read -r f; do [[ -z $f ]] && continue; printf '%s\\t%s\\t%s\\n' \"$f\" \"$f\" \"$current\"; done",
+      script: "current=$(quattro-font current 2>/dev/null); quattro-font list 2>/dev/null | while read -r f; do [[ -z $f ]] && continue; printf '%s\\t%s\\t%s\\n' \"$f\" \"$f\" \"$current\"; done",
       icon: "",
       volatile: true,
-      actionFor: function(value) { return "quattro-font-set " + Util.shellQuote(value) }
+      actionFor: function(value) { return "quattro-font set " + Util.shellQuote(value) }
     },
     "power-profiles": {
-      script: "current=$(powerprofilesctl get 2>/dev/null); quattro-powerprofiles-list 2>/dev/null | while read -r p; do [[ -z $p ]] && continue; printf '%s\\t%s\\t%s\\n' \"$p\" \"$p\" \"$current\"; done",
+      script: "current=$(powerprofilesctl get 2>/dev/null); quattro-powerprofiles list 2>/dev/null | while read -r p; do [[ -z $p ]] && continue; printf '%s\\t%s\\t%s\\n' \"$p\" \"$p\" \"$current\"; done",
       icon: "\udb81\udc0b",
       // Profile names are powerprofilesctl ids; only the label is translated,
       // and the id stays searchable through searchTerms.
@@ -338,7 +338,7 @@ Item {
         if (value === "performance") return Commons.I18n.t("menu.powerProfilePerformance")
         return value
       },
-      actionFor: function(value) { return "quattro-powerprofiles-set autodetect " + Util.shellQuote(value) }
+      actionFor: function(value) { return "quattro-powerprofiles set autodetect " + Util.shellQuote(value) }
     },
     // Rows carry a fourth field (the English name) so searching "danish"
     // finds the row labeled with its native name; mergeProviderRows turns
