@@ -9,11 +9,12 @@ print_rows=false
 
 # The shell's picker opens from rows it already holds and runs this to refresh
 # them, so the theme list never waits on the index below.
-if [[ $1 == "--print-rows" ]]; then
+if [[ ${1:-} == "--print-rows" ]]; then
   print_rows=true
   shift
 fi
 
+QUATTRO_PATH="${QUATTRO_PATH:-$HOME/.local/share/quattro}"
 USER_THEMES_PATH="$HOME/.config/quattro/themes"
 QUATTRO_THEMES_PATH="$QUATTRO_PATH/themes"
 CACHE_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/quattro/theme-selector"

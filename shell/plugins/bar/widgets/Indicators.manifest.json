@@ -37,6 +37,11 @@
             "description": "GPU screen recorder status"
           },
           {
+            "value": "Reminder",
+            "label": "Reminder",
+            "description": "Active desktop reminders"
+          },
+          {
             "value": "NightLight",
             "label": "Night light",
             "description": "Blue-light filter"

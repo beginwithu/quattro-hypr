@@ -235,6 +235,16 @@ EOF
   if command -v foot >/dev/null 2>&1 && [[ -f $PROJECT_DIR/default/foot/foot.desktop ]]; then
     cp -a "$PROJECT_DIR/default/foot/foot.desktop" "$HOME/.local/share/applications/"
   fi
+  # Hide noisy system utility entries from the app launcher when present on host
+  for hidden_desktop in \
+    fcitx5-configtool.desktop \
+    fcitx5-wayland-launcher.desktop \
+    org.fcitx.Fcitx5.desktop; do
+    if [[ -f /usr/share/applications/$hidden_desktop ]]; then
+      printf '[Desktop Entry]\nType=Application\nNoDisplay=true\n' \
+        >"$HOME/.local/share/applications/$hidden_desktop"
+    fi
+  done
   rm -f "$HOME/.cache/xdg-terminal-exec"
   cp -a "$PROJECT_DIR/default/fonts/quattro/quattro.ttf" "$HOME/.local/share/fonts/quattro/quattro.ttf"
   cp -a "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf" "$HOME/.config/fontconfig/conf.d/50-quattro.conf"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# quattro:summary=Set, list, or cancel desktop reminders (systemd user timers, no daemon)
-# quattro:args=[set <when> <message...>|list|cancel [id|all]]
+# quattro:summary=Set, list, manage, or cancel desktop reminders (systemd user timers, no daemon)
+# quattro:args=[set <when> <message...>|list|manage|cancel [id|all]|status [--json]]
 # quattro:examples=quattro reminder set 10m Tea is ready | quattro reminder set 1h30m Stand up | quattro reminder set 14:30 Meeting | quattro reminder list | quattro reminder cancel all
 
 set -euo pipefail
@@ -13,17 +13,21 @@ set -euo pipefail
 
 UNIT_PREFIX="quattro-reminder-"
 DESCRIPTION_PREFIX="Quattro reminder: "
-GLYPH="󰀠"
+GLYPH="󰢌"
 BIN_DIR=$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: quattro-reminder [set <when> <message...>|list|cancel [id|all]]
+Usage: quattro-reminder [set <when> <message...>|list|manage|cancel [id|all]|status [--json]]
 
 <when> is a delay (90s, 10m, 1h30m, 2h; a bare number means minutes)
 or a 24-hour clock time (14:30), which schedules for tomorrow if already passed.
 Without arguments, prompts interactively for the time and message.
 USAGE
+}
+
+refresh_bar() {
+  "$BIN_DIR/quattro-shell" -q quattro.indicators refresh >/dev/null 2>&1 || true
 }
 
 # Prints the epoch second a <when> spec points at, or fails.
@@ -59,9 +63,26 @@ target_epoch() {
   echo $(( now + total ))
 }
 
+# Only list waiting timers so a timer whose service is currently firing is excluded.
 reminder_units() {
-  systemctl --user list-units --type=timer --state=active --plain --no-legend "${UNIT_PREFIX}*" 2>/dev/null |
+  systemctl --user list-units --type=timer --state=waiting --plain --no-legend "${UNIT_PREFIX}*" 2>/dev/null |
     awk '{ print $1 }' || true
+}
+
+# Emits "<epoch_us>\t<id>\t<next_human>\t<message>" sorted by due time.
+reminder_records() {
+  local unit id description next epoch_us
+  while IFS= read -r unit; do
+    [[ -n $unit ]] || continue
+    id=${unit#"$UNIT_PREFIX"}
+    id=${id%.timer}
+    description=$(systemctl --user show "$unit" -p Description --value 2>/dev/null || true)
+    next=$(systemctl --user show "$unit" -p NextElapseUSecRealtime --value 2>/dev/null || true)
+    epoch_us=$(systemctl --user show "$unit" -p NextElapseUSecRealtime --value --timestamp=unix 2>/dev/null || true)
+    epoch_us=${epoch_us#@}
+    [[ $epoch_us =~ ^[0-9]+$ ]] || epoch_us=0
+    printf '%s\t%s\t%s\t%s\n' "$epoch_us" "$id" "${next:-?}" "${description#"$DESCRIPTION_PREFIX"}"
+  done < <(reminder_units) | sort -n -k1,1
 }
 
 set_reminder() {
@@ -83,23 +104,65 @@ set_reminder() {
     --on-calendar="$(date -d "@$epoch" '+%Y-%m-%d %H:%M:%S')" \
     --timer-property=AccuracySec=1s \
     --setenv=PATH="$BIN_DIR:$PATH" \
-    "$BIN_DIR/quattro-notification-send" -u critical -g "$GLYPH" "Reminder" "$message"
+    "$BIN_DIR/quattro-reminder" _fire "$message"
 
+  refresh_bar
   printf 'Reminder [%s] set for %s: %s\n' "$id" "$(date -d "@$epoch" '+%a %H:%M')" "$message"
 }
 
+fire_reminder() {
+  local message=${*:-Time is up}
+  "$BIN_DIR/quattro-notification-send" -u critical -g "$GLYPH" "Reminder" "$message" || true
+  refresh_bar
+}
+
 list_reminders() {
-  local unit id found=0 description next
-  while IFS= read -r unit; do
-    [[ -n $unit ]] || continue
+  local epoch_us id next msg found=0
+  while IFS=$'\t' read -r epoch_us id next msg; do
+    [[ -n $id ]] || continue
     found=1
-    id=${unit#"$UNIT_PREFIX"}
-    id=${id%.timer}
-    description=$(systemctl --user show "$unit" -p Description --value 2>/dev/null || true)
-    next=$(systemctl --user show "$unit" -p NextElapseUSecRealtime --value 2>/dev/null || true)
-    printf '%-14s  %-26s  %s\n' "$id" "${next:-?}" "${description#"$DESCRIPTION_PREFIX"}"
-  done < <(reminder_units)
+    printf '%-14s  %-26s  %s\n' "$id" "$next" "$msg"
+  done < <(reminder_records)
   (( found )) || echo "No active reminders."
+}
+
+status_reminders() {
+  local json=0 count=0 epoch_us id next msg short_time
+  local lines=() tooltip=""
+  [[ ${1:-} == "--json" ]] && json=1
+
+  while IFS=$'\t' read -r epoch_us id next msg; do
+    [[ -n $id ]] || continue
+    count=$((count + 1))
+    if (( count <= 4 )); then
+      if (( epoch_us > 0 )); then
+        short_time=$(date -d "@$epoch_us" '+%H:%M' 2>/dev/null || printf '%s' "$next")
+      else
+        short_time=$next
+      fi
+      lines+=("$short_time — $msg")
+    fi
+  done < <(reminder_records)
+
+  if (( count == 0 )); then
+    tooltip="Set Reminder"
+  elif (( count == 1 )); then
+    tooltip="${lines[0]}"
+  else
+    tooltip="$count reminders"
+    for line in "${lines[@]}"; do
+      tooltip+=$'\n'"$line"
+    done
+    if (( count > 4 )); then
+      tooltip+=$'\n'"... (+$((count - 4)) more)"
+    fi
+  fi
+
+  if (( json )); then
+    jq -nc --argjson count "$count" --arg tooltip "$tooltip" '{count: $count, tooltip: $tooltip}'
+  else
+    printf '%s\n' "$tooltip"
+  fi
 }
 
 cancel_reminders() {
@@ -132,6 +195,7 @@ cancel_reminders() {
     echo "Reminder not found: $target" >&2
     exit 1
   fi
+  refresh_bar
 }
 
 interactive() {
@@ -142,11 +206,27 @@ interactive() {
   set_reminder "$when" "$message"
 }
 
+manage_reminders() {
+  command -v gum >/dev/null 2>&1 || { list_reminders; return 0; }
+  list_reminders
+  echo
+  local action
+  action=$(gum choose --header "Reminders" "Set new reminder" "Cancel a reminder" "Cancel all") || exit 130
+  case "$action" in
+    "Set new reminder") interactive ;;
+    "Cancel a reminder") cancel_reminders ;;
+    "Cancel all") cancel_reminders all ;;
+  esac
+}
+
 case "${1:-}" in
   "") interactive ;;
   set) shift; set_reminder "$@" ;;
   list) list_reminders ;;
+  manage) manage_reminders ;;
   cancel) cancel_reminders "${2:-}" ;;
+  status) status_reminders "${2:-}" ;;
+  _fire) shift; fire_reminder "$@" ;;
   -h | --help) usage ;;
   *) usage; exit 1 ;;
 esac

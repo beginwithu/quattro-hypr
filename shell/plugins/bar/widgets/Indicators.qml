@@ -8,7 +8,7 @@ BarWidget {
   id: root
   moduleName: "quattro.indicators"
 
-  readonly property var defaultIndicatorEntries: [ "PasswordlessSudo", "ScreenRecording", "NightLight", "Dnd", "StayAwake" ]
+  readonly property var defaultIndicatorEntries: [ "PasswordlessSudo", "ScreenRecording", "Reminder", "NightLight", "Dnd", "StayAwake" ]
   readonly property var indicatorEntries: indicatorEntriesFromSettings(settings)
   property var activeIndicatorIds: []
   property var indicatorActiveStates: ({})
