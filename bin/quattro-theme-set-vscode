@@ -159,10 +159,18 @@ set_theme() {
     [[ $theme_name =~ ^[^[:cntrl:]\"\\]+$ ]] || theme_name=""
 
     # Only install a well-formed publisher.name id; a malformed one skips the
-    # install without skipping the colorTheme write below.
+    # install without skipping the colorTheme write below. If installation fails
+    # (e.g. offline or delisted extension), fall back to the generated theme.
     if [[ $extension =~ ^[a-zA-Z0-9._-]+$ ]] &&
       ! extension_installed "$editor_cmd" "$ext_base" "$extension"; then
-      "$editor_cmd" --install-extension "$extension" >/dev/null 2>&1
+      if ! "$editor_cmd" --install-extension "$extension" >/dev/null 2>&1; then
+        if [[ -f "$GENERATED_THEME" ]]; then
+          install_generated_extension "$ext_base/$GENERATED_EXTENSION_NAME"
+          theme_name="Quattro"
+        else
+          return 1
+        fi
+      fi
     fi
   elif [[ -f "$GENERATED_THEME" ]]; then
     # VS Code only discovers local color themes through an extension package.
