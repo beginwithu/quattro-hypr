@@ -141,6 +141,7 @@
   "theme.backgroundIntros": "Background Intros",
   "theme.commandsFailed": "%1 failed. See %2",
   "theme.noBackground": "No background was found for theme",
+  "theme.noExtraThemes": "No extra themes installed",
   "theme.notAppliedEverywhere": "Theme not applied everywhere",
   "theme.removeExtraTitle": "Remove extra theme",
   "theme.removed": "Theme removed",
