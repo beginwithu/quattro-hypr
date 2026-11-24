@@ -122,6 +122,8 @@ Item {
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
 
     // If a prior request was still active without finishing, release its doneFile.
+    slurpDelayTimer.stop()
+    if (slurpProc.running) slurpProc.running = false
     if (root.requestActive && root.doneFile && root.doneFile !== String(payload.doneFile || "")) {
       releaseDoneFile(root.doneFile)
     }
@@ -161,13 +163,29 @@ Item {
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
+  function activeDoneFile() {
+    return (root.opened || root.hidingForRegion) && root.requestActive ? root.doneFile : ""
+  }
+
+  function _writeResultCommand(cmd) {
+    if (root.standalone && !resultProc.running) {
+      resultProc.command = ["bash", "-c", cmd]
+      resultProc.running = true
+    } else {
+      Quickshell.execDetached(["bash", "-c", cmd])
+      if (root.standalone) Qt.callLater(Qt.quit)
+    }
+  }
+
   function close() {
-    if (!root.opened && !root.requestActive && !root.doneFile) return
+    if (!root.opened && !root.hidingForRegion && !root.requestActive && !root.doneFile) return
     _clearAndRelease()
   }
 
   function _clearAndRelease() {
     var activeDoneFile = root.doneFile
+    slurpDelayTimer.stop()
+    if (slurpProc.running) slurpProc.running = false
     root.requestActive = false
     root.hidingForRegion = false
     root.opened = false
@@ -176,8 +194,7 @@ Item {
     root.filterText = ""
 
     if (activeDoneFile) {
-      resultProc.command = ["bash", "-c", ": > " + Util.shellQuote(activeDoneFile)]
-      resultProc.running = true
+      _writeResultCommand(": > " + Util.shellQuote(activeDoneFile))
     } else if (root.standalone) {
       Qt.quit()
     }
@@ -185,13 +202,24 @@ Item {
 
   function releaseDoneFile(path) {
     if (!path) return
-    releaseProc.command = ["bash", "-c", ": > " + Util.shellQuote(path)]
-    releaseProc.running = true
+    Quickshell.execDetached(["bash", "-c", ": > " + Util.shellQuote(path)])
+  }
+
+  Component.onDestruction: {
+    slurpDelayTimer.stop()
+    if (slurpProc.running) slurpProc.running = false
+    if (root.doneFile) {
+      var activeDoneFile = root.doneFile
+      root.doneFile = ""
+      root.requestActive = false
+      Quickshell.execDetached(["bash", "-c", ": > " + Util.shellQuote(activeDoneFile)])
+    }
   }
 
   function finishWithSelection(target) {
     var activeSelectionFile = root.selectionFile
     var activeDoneFile = root.doneFile
+    slurpDelayTimer.stop()
     root.requestActive = false
     root.hidingForRegion = false
     root.opened = false
@@ -204,12 +232,10 @@ Item {
 
     var line = SharePickerModel.formatSelection(target, root.allowToken && root.rememberChoice)
     if (activeSelectionFile && activeDoneFile) {
-      resultProc.command = [
-        "bash", "-c",
+      _writeResultCommand(
         "printf '%s\\n' " + Util.shellQuote(line) + " > " + Util.shellQuote(activeSelectionFile)
         + "; : > " + Util.shellQuote(activeDoneFile)
-      ]
-      resultProc.running = true
+      )
     } else {
       console.log(line)
       if (root.standalone) Qt.quit()
@@ -289,10 +315,6 @@ Item {
     }
   }
 
-  Process {
-    id: releaseProc
-  }
-
   Timer {
     id: slurpDelayTimer
     interval: 140
@@ -306,12 +328,16 @@ Item {
   Process {
     id: slurpProc
     property string stdoutText: ""
-    command: ["slurp", "-f", "%o@%x,%y,%w,%h"]
+    // Redirect stdin from /dev/null: Quickshell Process attaches an open pipe to
+    // stdin, and slurp blocks reading predefined boxes until EOF when stdin is
+    // not a TTY, freezing region selection indefinitely.
+    command: ["bash", "-c", "exec slurp -f '%o@%x,%y,%w,%h' </dev/null"]
     stdout: SplitParser {
       splitMarker: ""
       onRead: function(data) { slurpProc.stdoutText += String(data || "") }
     }
     onExited: function(exitCode) {
+      if (!root.hidingForRegion) return
       var geom = String(slurpProc.stdoutText || "").trim()
       if (exitCode === 0 && geom.length > 0) {
         root.finishWithSelection("region:" + geom)

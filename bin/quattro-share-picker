@@ -284,12 +284,15 @@ def main() -> int:
             return
         quattro_shell_bin = os.path.join(quattro_path, "bin", "quattro-shell")
         if os.path.isfile(quattro_shell_bin):
-            subprocess.run(
-                [quattro_shell_bin, "-q", "shell", "hide", "quattro.share-picker"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=2,
-            )
+            try:
+                subprocess.run(
+                    [quattro_shell_bin, "-q", "shell", "hide", "quattro.share-picker"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=2,
+                )
+            except Exception:
+                pass
 
     def handle_signal(_signum, _frame):
         cleanup_remote()
@@ -313,17 +316,67 @@ def main() -> int:
         quattro_shell_bin = os.path.join(quattro_path, "bin", "quattro-shell")
         summoned = False
         if os.path.isfile(quattro_shell_bin):
-            res = subprocess.run(
-                [quattro_shell_bin, "shell", "summon", "quattro.share-picker", payload],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=3,
-            )
-            summoned = res.returncode == 0
+            try:
+                res = subprocess.run(
+                    [quattro_shell_bin, "shell", "summon", "quattro.share-picker", payload],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    timeout=3,
+                )
+                summoned = res.returncode == 0 and res.stdout.strip() == "ok"
+            except Exception:
+                summoned = False
 
         if summoned:
+            # Poll for done_file while periodically verifying quattro-shell is
+            # still alive and servicing this request so a shell restart or
+            # crashed overlay cannot deadlock xdg-desktop-portal-hyprland.
+            start_time = time.monotonic()
+            next_probe = start_time + 2.0
+            probe_supported = False
+            consecutive_misses = 0
+
             while not os.path.exists(done_file):
                 time.sleep(0.025)
+                if os.path.exists(done_file):
+                    break
+                now = time.monotonic()
+                if now < next_probe:
+                    continue
+
+                alive = False
+                try:
+                    probe = subprocess.run(
+                        [quattro_shell_bin, "shell", "call", "quattro.share-picker", "activeDoneFile", ""],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        text=True,
+                        timeout=2,
+                    )
+                    if probe.returncode == 0:
+                        out = probe.stdout.strip()
+                        if out == done_file:
+                            probe_supported = True
+                            alive = True
+                        elif out == "unknown" and not probe_supported:
+                            # Older running shell without activeDoneFile():
+                            # shell answered IPC so stay alive while shell is up.
+                            alive = True
+                except Exception:
+                    alive = False
+
+                if os.path.exists(done_file):
+                    break
+
+                if alive:
+                    consecutive_misses = 0
+                    next_probe = time.monotonic() + 1.0
+                else:
+                    consecutive_misses += 1
+                    if consecutive_misses >= 2:
+                        break
+                    next_probe = time.monotonic() + 0.5
         else:
             standalone_qml = os.path.join(quattro_path, "shell", "share-picker.qml")
             if shutil.which("quickshell") and os.path.isfile(standalone_qml):

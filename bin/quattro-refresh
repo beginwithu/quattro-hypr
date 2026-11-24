@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# quattro:summary=Reset user configs in ~/.config to Quattro shipped defaults (with backup)
+# quattro:summary=Reset user configs in ~/.config to Quattro shipped defaults
 # quattro:group=refresh
 # quattro:args=<config <path>|hyprland|hyprsunset|shell|tmux>
 # quattro:examples=quattro refresh hyprland | quattro refresh shell | quattro refresh config hypr/hyprland.lua
@@ -18,7 +18,6 @@ refresh_config_file() {
 
   local user_config_file="${HOME}/.config/$config_file"
   local default_config_file="$QUATTRO_PATH/config/$config_file"
-  local backup_config_file="$user_config_file.bak.$(date +%s)"
 
   if [[ ! -e $default_config_file ]]; then
     echo "Not a shipped user config: $config_file" >&2
@@ -27,16 +26,12 @@ refresh_config_file() {
 
   mkdir -p "$(dirname "$user_config_file")"
 
-  if [[ -f $user_config_file ]]; then
-    cp -f "$user_config_file" "$backup_config_file"
+  if [[ -f $user_config_file ]] && ! cmp -s "$default_config_file" "$user_config_file"; then
+    local diff_output
+    diff_output=$(diff "$default_config_file" "$user_config_file" || true)
     cp -f "$default_config_file" "$user_config_file"
-
-    if cmp -s "$user_config_file" "$backup_config_file"; then
-      rm "$backup_config_file"
-    else
-      echo -e "\e[31mReplaced $user_config_file with new Quattro default.\nSaved backup as ${backup_config_file}.\n\n\e[32mChanges:\e[0m"
-      diff "$user_config_file" "$backup_config_file" || true
-    fi
+    echo -e "\e[31mReplaced $user_config_file with new Quattro default.\n\n\e[32mChanges:\e[0m"
+    printf '%s\n' "$diff_output"
   else
     cp -f "$default_config_file" "$user_config_file"
   fi
