@@ -428,6 +428,7 @@ EOF
   sudo chmod -R a+rX,go-w /usr/share/quattro/titlebars
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/hypr/titlebars/LICENSE" /usr/share/licenses/quattro-hyprland-titlebars/LICENSE
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/hypr/titlebars/LICENSE.MIT" /usr/share/licenses/quattro-hyprland-titlebars/LICENSE.MIT
+  echo "==> Building Hyprland titlebars plugin..."
   if sudo /usr/bin/quattro-build-titlebars --system; then
     rm -f "$HOME/.local/state/quattro/titlebars/titlebars.so"
   fi

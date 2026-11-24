@@ -7,4 +7,4 @@ Target = hyprland
 [Action]
 Description = Rebuilding Quattro Hyprland titlebars plugin...
 When = PostTransaction
-Exec = /usr/bin/quattro-build-titlebars --system
+Exec = /usr/bin/quattro-build-titlebars --system --force

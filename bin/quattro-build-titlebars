@@ -1,28 +1,30 @@
 #!/bin/bash
 
 # quattro:summary=Build the Hyprland floating window titlebars plugin
-# quattro:args=[--system|--user]
+# quattro:args=[--system|--user] [--force]
 
 set -euo pipefail
 
 MODE=""
 SRC_DIR=""
+FORCE=false
 
 while (( $# > 0 )); do
   case "$1" in
     --system) MODE="system" ;;
     --user) MODE="user" ;;
+    --force) FORCE=true ;;
     --source)
       shift
       [[ $# -gt 0 ]] || { echo "quattro-build-titlebars: --source requires a directory" >&2; exit 1; }
       SRC_DIR="$1"
       ;;
     -h|--help)
-      echo "Usage: quattro-build-titlebars [--system|--user] [--source DIR]"
+      echo "Usage: quattro-build-titlebars [--system|--user] [--force] [--source DIR]"
       exit 0
       ;;
     *)
-      echo "Usage: quattro-build-titlebars [--system|--user] [--source DIR]" >&2
+      echo "Usage: quattro-build-titlebars [--system|--user] [--force] [--source DIR]" >&2
       exit 1
       ;;
   esac
@@ -77,13 +79,13 @@ else
   OUT_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/titlebars"
 fi
 OUT_FILE="$OUT_DIR/titlebars.so"
-
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+STAMP_FILE="$OUT_DIR/.titlebars.stamp"
 
 DEPS=(hyprland libdrm libinput libudev pixman-1 wayland-server xkbcommon)
 read -r -a CFLAGS <<<"$(pkg-config --cflags "${DEPS[@]}")"
 read -r -a LIBS <<<"$(pkg-config --libs "${DEPS[@]}")"
+
+OPT_FLAG="${QUATTRO_TITLEBARS_OPT:--O1}"
 
 SOURCES=(
   "$SRC_DIR/main.cpp"
@@ -92,9 +94,76 @@ SOURCES=(
   "$SRC_DIR/appName.cpp"
 )
 
-g++ -shared -fPIC -std=c++23 -O2 -fno-gnu-unique \
-  "${CFLAGS[@]}" \
-  "${SOURCES[@]}" \
+FINGERPRINT=""
+if command -v sha256sum >/dev/null 2>&1; then
+  HASH_FILES=("${SOURCES[@]}")
+  for hdr in "$SRC_DIR"/*.hpp; do
+    [[ -f $hdr ]] && HASH_FILES+=("$hdr")
+  done
+  FINGERPRINT=$({
+    printf 'opt=%s\n' "$OPT_FLAG"
+    g++ --version | head -n1
+    pkg-config --modversion hyprland
+    printf '%s\n' "${CFLAGS[*]}" "${LIBS[*]}"
+    if command -v pacman >/dev/null 2>&1; then
+      pacman -Q hyprland 2>/dev/null || true
+    fi
+    for abi_file in /usr/bin/Hyprland /usr/include/hyprland/src/version.h /usr/include/hyprland/src/plugins/PluginAPI.hpp; do
+      [[ -e $abi_file ]] && stat -c '%n %Y %s' "$abi_file" 2>/dev/null || true
+    done
+    LC_ALL=C sha256sum "${HASH_FILES[@]}"
+  } | sha256sum | awk '{print $1}')
+
+  if ! $FORCE && [[ -f $OUT_FILE && -f $STAMP_FILE ]] && [[ $(<"$STAMP_FILE") == "$FINGERPRINT" ]]; then
+    echo "Up to date: $OUT_FILE"
+    exit 0
+  fi
+fi
+
+TMP_DIR=$(mktemp -d)
+cleanup() {
+  local pids
+  pids=$(jobs -p 2>/dev/null || true)
+  if [[ -n $pids ]]; then
+    kill $pids 2>/dev/null || true
+    wait 2>/dev/null || true
+  fi
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+JOBS=$(nproc 2>/dev/null || echo 1)
+[[ $JOBS =~ ^[0-9]+$ && $JOBS -ge 1 ]] || JOBS=1
+
+COMPILE_CXX=(g++)
+if (( EUID != 0 )) && command -v ccache >/dev/null 2>&1; then
+  COMPILE_CXX=(ccache g++)
+fi
+
+OBJS=()
+ACTIVE_PIDS=()
+BUILD_FAILED=0
+
+for src in "${SOURCES[@]}"; do
+  base="${src##*/}"
+  obj="$TMP_DIR/${base%.cpp}.o"
+  OBJS+=("$obj")
+  "${COMPILE_CXX[@]}" -c -pipe -fPIC -std=c++23 "$OPT_FLAG" -fno-gnu-unique \
+    "${CFLAGS[@]}" "$src" -o "$obj" &
+  ACTIVE_PIDS+=("$!")
+  if (( ${#ACTIVE_PIDS[@]} >= JOBS )); then
+    wait "${ACTIVE_PIDS[0]}" || BUILD_FAILED=1
+    ACTIVE_PIDS=("${ACTIVE_PIDS[@]:1}")
+  fi
+done
+
+for pid in "${ACTIVE_PIDS[@]}"; do
+  wait "$pid" || BUILD_FAILED=1
+done
+(( BUILD_FAILED == 0 )) || exit 1
+
+g++ -shared -fPIC -fno-gnu-unique \
+  "${OBJS[@]}" \
   -o "$TMP_DIR/titlebars.so" \
   "${LIBS[@]}" -lrt
 
@@ -106,5 +175,15 @@ else
   install -m 0755 "$TMP_DIR/titlebars.so" "$TMP_OUT"
 fi
 mv -f "$TMP_OUT" "$OUT_FILE"
+
+if [[ -n $FINGERPRINT ]]; then
+  TMP_STAMP="$OUT_DIR/.titlebars.stamp.$$"
+  printf '%s\n' "$FINGERPRINT" >"$TMP_STAMP"
+  if [[ $MODE == "system" ]]; then
+    chown root:root "$TMP_STAMP"
+  fi
+  chmod 0644 "$TMP_STAMP"
+  mv -f "$TMP_STAMP" "$STAMP_FILE"
+fi
 
 echo "Built $OUT_FILE"
