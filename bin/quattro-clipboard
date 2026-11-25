@@ -85,7 +85,9 @@ clipboard_paste_file() {
   [[ $copy_only == "true" ]] && return 0
 
   sleep 0.15
-  wtype -M shift -k Insert -m shift 2>/dev/null || true
+  if [[ $(hyprctl dispatch 'o.universal_paste' 2>/dev/null || true) != "ok" ]]; then
+    wtype -M shift -k Insert -m shift 2>/dev/null || true
+  fi
 }
 
 clipboard_paste_text() {
@@ -111,7 +113,9 @@ clipboard_paste_text() {
     [[ $history_index =~ ^[0-9]+$ ]] || return 0
     jq -e --argjson index "$history_index" '.[$index].type == "text" and (.[$index].text | type == "string")' "$history_path" >/dev/null || return 0
     jq -j --argjson index "$history_index" '.[$index].text' "$history_path" | wl-copy
-    [[ $copy_only != "true" ]] && use_shift_insert=true
+    if [[ $copy_only != "true" && $use_shift_insert != "true" ]]; then
+      use_universal=true
+    fi
   else
     text=${1:-}
     [[ -n $text ]] || return 0
@@ -122,7 +126,9 @@ clipboard_paste_text() {
 
   sleep 0.15
   if [[ $use_universal == "true" ]]; then
-    hyprctl dispatch 'o.universal_paste' >/dev/null 2>&1 || true
+    if [[ $(hyprctl dispatch 'o.universal_paste' 2>/dev/null || true) != "ok" ]]; then
+      wtype -M shift -k Insert -m shift 2>/dev/null || true
+    fi
   elif [[ $use_shift_insert == "true" ]]; then
     wtype -M shift -k Insert -m shift 2>/dev/null || true
   else

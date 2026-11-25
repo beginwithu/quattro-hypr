@@ -33,11 +33,13 @@ case "$verb" in
   emoji-insert)
     emoji="${2:-}"
     [[ -n $emoji ]] || exit 0
-    printf '%s' "$emoji" | wl-copy --type text/plain --sensitive --foreground &
+    printf '%s' "$emoji" | wl-copy --sensitive --foreground &
     copy_pid=$!
     sleep 0.15
-    wtype -M shift -k Insert -m shift 2>/dev/null || true
-    sleep 0.2
+    if [[ $(hyprctl dispatch 'o.universal_paste' 2>/dev/null || true) != "ok" ]]; then
+      wtype -M shift -k Insert -m shift 2>/dev/null || true
+    fi
+    sleep 0.3
     kill "$copy_pid" 2>/dev/null || true
     ;;
   timezone)

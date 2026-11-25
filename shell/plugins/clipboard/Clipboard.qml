@@ -234,7 +234,7 @@ Item {
     if (row.entryType === "image") {
       Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "paste-file", row.mime, row.path])
     } else if (row.fullText) {
-      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "paste-text", "--shift-insert", "--history-index", String(row.historyIndex)])
+      Quickshell.execDetached([root.quattroPath + "/bin/quattro-clipboard", "paste-text", "--universal", "--history-index", String(row.historyIndex)])
     }
   }
 
