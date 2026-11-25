@@ -619,12 +619,24 @@ output_binding_records_uncached() {
 }
 
 keybindings_cache_key() {
-  {
-    printf 'v19\n'
-    leading_keyboard
-    hyprctl devices 2>/dev/null | grep -F 'active keymap:'
-    hyprctl binds 2>/dev/null
-  } | sha256sum | awk '{ print $1 }'
+  local hash _
+
+  read -r hash _ < <(
+    {
+      printf 'v20\n'
+      hyprctl --batch "getoption input:kb_layout;getoption input:kb_variant;devices;binds" 2>/dev/null |
+        awk '
+          /^mice:/ { in_devices = 1; next }
+          in_devices && /^bind/ { in_devices = 0 }
+          in_devices {
+            if (index($0, "active keymap:")) print
+            next
+          }
+          { print }
+        '
+    } | sha256sum
+  )
+  printf '%s\n' "$hash"
 }
 
 refresh_keybindings_cache() {

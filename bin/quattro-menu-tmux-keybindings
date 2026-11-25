@@ -36,7 +36,7 @@ if [[ ! -f $config_file ]]; then
   fi
 fi
 
-output_keybindings() (
+output_keybindings_uncached() (
   set -o pipefail
   socket_dir=$(mktemp -d)
   socket="$socket_dir/tmux"
@@ -122,6 +122,38 @@ $1 == "prefix2" && NF == 2 { prefix2 = $2; next }
 }'
 )
 
+output_keybindings() {
+  # Skip caching if the config sources external files or runs dynamic shell
+  # commands at load time, since those can change without editing config_file.
+  if grep -qE '^[[:space:]]*(source(-file)?|if(-shell)?|run(-shell)?)\b' "$config_file" 2>/dev/null; then
+    output_keybindings_uncached
+    return
+  fi
+
+  local cache_dir cache_name cache_file hash _ tmp_file
+  cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/quattro"
+  read -r hash _ < <({ printf 'v1\n'; cat "$config_file"; } | sha256sum)
+  cache_name="tmux-keybindings-$hash.records"
+  cache_file="$cache_dir/$cache_name"
+
+  if [[ -s $cache_file ]]; then
+    cat "$cache_file"
+    return
+  fi
+
+  if mkdir -p "$cache_dir" 2>/dev/null && tmp_file=$(mktemp "$cache_dir/tmux-keybindings.XXXXXX"); then
+    if output_keybindings_uncached >"$tmp_file" && [[ -s $tmp_file ]]; then
+      mv "$tmp_file" "$cache_file"
+      find "$cache_dir" -maxdepth 1 -type f -name 'tmux-keybindings-*.records' ! -name "$cache_name" -delete 2>/dev/null || true
+      cat "$cache_file"
+      return
+    fi
+    rm -f "$tmp_file"
+  fi
+
+  output_keybindings_uncached
+}
+
 if [[ $print_only == "true" ]]; then
   output_keybindings
   exit 0
@@ -129,7 +161,11 @@ fi
 
 records=$(output_keybindings)
 
-monitor_height=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused == true) | .height' 2>/dev/null)
+monitor_height=$(hyprctl monitors 2>/dev/null | awk '
+  /^Monitor / { h = "" }
+  /^\t[0-9]+x[0-9]+@/ { split($1, dims, /[x@]/); h = dims[2] }
+  /^\tfocused: yes$/ { print h; exit }
+')
 
 if [[ ! $monitor_height =~ ^[0-9]+$ ]] || ((monitor_height <= 0)); then
   monitor_height=900
