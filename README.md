@@ -15,6 +15,7 @@ Minimal [Hyprland](https://hypr.land/) desktop configuration and Quickshell envi
 - `etc/` - system config files (`fastfetch`, `mpv`, `xkb`, `profile.d`, `sddm.conf.d`, `sudoers.d`)
 - `packages/` - core Arch package list ([arch-core.packages](packages/arch-core.packages))
 - `install.sh` - single-command installer (deploys packages, runtime, configs, theme, and system integration)
+- `uninstall.sh` - complete uninstaller (removes runtime, configs, themes, system integration, core packages, and CachyOS repos)
 - `verify.sh` - checks script syntax, Lua compilation, JSON/XML configs, CLI routes, hygiene, pacman package names, and sandbox install
 
 ## Install
@@ -40,6 +41,23 @@ Log in via SDDM (choose **Quattro (Hyprland uwsm)**), or start it from a TTY:
 ```bash
 uwsm start hyprland.desktop
 ```
+
+## Uninstall
+
+Remove Quattro completely (runtime, user configs, themes/icons/fonts, system integration, all packages from `packages/arch-core.packages`, and CachyOS repos):
+
+```bash
+./uninstall.sh
+```
+
+Useful flags:
+
+```bash
+./uninstall.sh --yes            # skip confirmation prompt
+./uninstall.sh --keep-packages  # remove Quattro configs & system integration only, keep pacman packages
+```
+
+Personal directories (`~/Downloads`, `~/Documents`, `~/Projects`, `~/Pictures`, `~/Videos`) are never deleted.
 
 ## Notes
 
