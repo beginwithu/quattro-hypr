@@ -133,7 +133,7 @@ start_webcam_overlay() {
   local available_formats=$(v4l2-ctl --list-formats-ext -d "$WEBCAM_DEVICE" 2>/dev/null)
 
   for resolution in "${preferred_resolutions[@]}"; do
-    if echo "$available_formats" | grep -q "$resolution"; then
+    if [[ $available_formats == *"$resolution"* ]]; then
       capture_options="video_size=$resolution,$capture_options"
       break
     fi
@@ -406,12 +406,15 @@ start_screenrecording() {
   [[ $WEBCAM == "true" ]] && start_webcam_overlay "$target"
   start_cancelled && return 1
 
-  local filename="$OUTPUT_DIR/screenrecording-$(date +'%Y-%m-%d_%H-%M-%S').mp4"
-  local backend pid=""
+  local ts
+  printf -v ts '%(%Y-%m-%d_%H-%M-%S)T' -1
+  local filename="$OUTPUT_DIR/screenrecording-$ts.mp4"
+  local backend pid="" now_log
 
   for backend in $(recorder_backends); do
     [[ $backend == "wf-recorder" && $target == "portal" ]] && continue
-    echo "===== $(date '+%F %T') args: $* backend: $backend target: $target =====" >>"$LOG_FILE"
+    printf -v now_log '%(%F %T)T' -1
+    echo "===== $now_log args: $* backend: $backend target: $target =====" >>"$LOG_FILE"
 
     if [[ $backend == "wf-recorder" ]]; then
       launch_wf_recorder "$target" "$filename" || continue
@@ -505,14 +508,17 @@ stop_screenrecording() {
   cleanup_webcam
   wf_audio_cleanup
 
+  local recorded_path=""
+  [[ -r $RECORDING_FILE ]] && recorded_path=$(<"$RECORDING_FILE")
+
   if recorder_process "${RECORDER[@]}"; then
     recorder_process "${RECORDER[@]}" --signal KILL
     quattro-notification-send -u critical -t 5000 "$(quattro-i18n capture.recordingError)" "$(quattro-i18n capture.recordingKilled)"
-  elif [[ ! -f $(cat "$RECORDING_FILE" 2>/dev/null) ]]; then
+  elif [[ -z $recorded_path || ! -f $recorded_path ]]; then
     # No recording to finalize or show, as when stopping a recorder this script did not start.
     :
   else
-    local filename=$(cat "$RECORDING_FILE" 2>/dev/null)
+    local filename="$recorded_path"
     local preview="$RUNTIME_DIR/quattro-screenrecord-preview-$$.png"
 
     # Take the preview frame from the raw recording while finalizing runs,
@@ -603,9 +609,9 @@ screenrecording_active() {
 }
 
 finalize_recording() {
-  local latest
-  latest=$(cat "$RECORDING_FILE" 2>/dev/null)
-  [[ -f $latest ]] || return
+  local latest=""
+  [[ -r $RECORDING_FILE ]] && latest=$(<"$RECORDING_FILE")
+  [[ -n $latest && -f $latest ]] || return
 
   # Re-encode only when the first GOP contains discardable warmup packets — stream copy can't
   # trim those (it rewinds to the keyframe). Clean recordings stay on the fast stream-copy path.

@@ -24,7 +24,7 @@ refresh_config_file() {
     exit 1
   fi
 
-  mkdir -p "$(dirname "$user_config_file")"
+  mkdir -p "${user_config_file%/*}"
 
   if [[ -f $user_config_file ]] && ! cmp -s "$default_config_file" "$user_config_file"; then
     local diff_output

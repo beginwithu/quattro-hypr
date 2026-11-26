@@ -82,12 +82,11 @@ normalize_scale() {
 set_scale() {
   local requested_scale="$1"
   local requested="${2:-$requested_scale}"
-  local monitor_info="$(target_monitor_info)"
-  local active_monitor="$(echo "$monitor_info" | jq -r '.name')"
-  local current_scale="$(echo "$monitor_info" | jq -r '.scale')"
-  local width="$(echo "$monitor_info" | jq -r '.width')"
-  local height="$(echo "$monitor_info" | jq -r '.height')"
-  local refresh_rate="$(echo "$monitor_info" | jq -r '.refreshRate')"
+  local monitor_info="${3:-$(target_monitor_info)}"
+  local active_monitor="" current_scale="" width="" height="" refresh_rate=""
+  IFS=$'\t' read -r active_monitor current_scale width height refresh_rate < <(
+    jq -r '[.name, (.scale | tostring), (.width | tostring), (.height | tostring), (.refreshRate | tostring)] | @tsv' <<<"$monitor_info"
+  )
 
   # active_monitor is written into the Lua string eval'd below, so only a plain
   # connector name may pass; a hostile output name could execute otherwise.
@@ -183,35 +182,35 @@ if [[ ${1:-} == "--monitor" ]]; then
   shift 2
 fi
 
-if [[ ${1:-} != "-h" && ${1:-} != "--help" ]] && ! target_monitor_info >/dev/null; then
+if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if ! monitor_info=$(target_monitor_info); then
   echo "No such monitor: ${MONITOR_NAME:-focused}" >&2
   exit 1
 fi
 
 case "${1:-}" in
 "")
-  target_monitor_info | jq -r '.scale' | normalize_scale
-  ;;
--h | --help)
-  usage
+  jq -r '.scale' <<<"$monitor_info" | normalize_scale
   ;;
 up)
-  monitor_info=$(target_monitor_info)
-  set_scale "$(echo "$monitor_info" | jq -r '.scale' | scale_from_current next \
-    "$(echo "$monitor_info" | jq -r '.width')" "$(echo "$monitor_info" | jq -r '.height')")" "up"
+  IFS=$'\t' read -r _sc _w _h < <(jq -r '[(.scale | tostring), (.width | tostring), (.height | tostring)] | @tsv' <<<"$monitor_info")
+  set_scale "$(scale_from_current next "$_w" "$_h" <<<"$_sc")" "up" "$monitor_info"
   ;;
 down)
-  monitor_info=$(target_monitor_info)
-  set_scale "$(echo "$monitor_info" | jq -r '.scale' | scale_from_current previous \
-    "$(echo "$monitor_info" | jq -r '.width')" "$(echo "$monitor_info" | jq -r '.height')")" "down"
+  IFS=$'\t' read -r _sc _w _h < <(jq -r '[(.scale | tostring), (.width | tostring), (.height | tostring)] | @tsv' <<<"$monitor_info")
+  set_scale "$(scale_from_current previous "$_w" "$_h" <<<"$_sc")" "down" "$monitor_info"
   ;;
 1 | 1.25 | 1.6 | 2 | 3 | 4)
-  set_scale "$1" "$1"
+  set_scale "$1" "$1" "$monitor_info"
   ;;
 *)
   if [[ $1 =~ ^[0-9]+([.][0-9]+)?$ ]] &&
     awk -v scale="$1" 'BEGIN { exit !(scale >= 1 && scale <= 4) }'; then
-    set_scale "$1" "$1"
+    set_scale "$1" "$1" "$monitor_info"
   else
     usage >&2
     exit 1

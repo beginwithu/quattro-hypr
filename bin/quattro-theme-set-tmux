@@ -74,14 +74,17 @@ load_theme_colors() {
 }
 
 sync_theme_environment() {
-  local key value
+  local line key value
 
   [[ -f $GUM_ENV ]] || return
 
-  while IFS=$'\t' read -r key value; do
-    [[ -n $key && -n $value ]] || continue
-    queue_tmux_environment "$key" "$value"
-  done < <(awk -F'"' '/hl\.env\("[A-Z0-9_]+", "[^"]+"\)/ { print $2 "\t" $4 }' "$GUM_ENV")
+  while IFS= read -r line; do
+    if [[ $line =~ hl\.env\(\"([A-Z0-9_]+)\",[[:space:]]*\"([^\"]+)\"\) ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      queue_tmux_environment "$key" "$value"
+    fi
+  done <"$GUM_ENV"
 }
 
 sync_colorfgbg() {
@@ -97,7 +100,16 @@ sync_colorfgbg() {
 }
 
 theme_osc_sequences() {
-  quattro_theme_osc "$COLORS_TOML"
+  local i out=""
+  [[ -n ${THEME_COLORS[foreground]:-} ]] && out+=$'\033]10;'"${THEME_COLORS[foreground]}"$'\007'
+  [[ -n ${THEME_COLORS[background]:-} ]] && out+=$'\033]11;'"${THEME_COLORS[background]}"$'\007'
+  [[ -n ${THEME_COLORS[cursor]:-} ]] && out+=$'\033]12;'"${THEME_COLORS[cursor]}"$'\007'
+  [[ -n ${THEME_COLORS[selection_background]:-} ]] && out+=$'\033]17;'"${THEME_COLORS[selection_background]}"$'\007'
+  [[ -n ${THEME_COLORS[selection_foreground]:-} ]] && out+=$'\033]19;'"${THEME_COLORS[selection_foreground]}"$'\007'
+  for i in {0..15}; do
+    [[ -n ${THEME_COLORS[color$i]:-} ]] && out+=$'\033]4;'"$i;${THEME_COLORS[color$i]}"$'\007'
+  done
+  printf '%s' "$out"
 }
 
 sync_tmux_window_style() {
@@ -119,25 +131,18 @@ sync_tmux_window_style() {
   fi
 }
 
-sync_tmux_pane_colors() {
-  local pane_tty theme_osc
+sync_and_signal_tmux_panes() {
+  local pane_tty theme_osc="" tpgid
 
-  [[ -f $COLORS_TOML ]] || return
-
-  theme_osc=$(theme_osc_sequences)
-  [[ -n $theme_osc ]] || return
-
-  while IFS= read -r pane_tty; do
-    [[ $pane_tty == /dev/pts/* ]] || continue
-    printf '%b' "$theme_osc" >"$pane_tty" 2>/dev/null || true
-  done < <(tmux list-panes -a -F "#{pane_tty}" 2>/dev/null | sort -u)
-}
-
-signal_tmux_panes() {
-  local pane_tty tpgid
+  if [[ -f $COLORS_TOML ]]; then
+    theme_osc=$(theme_osc_sequences)
+  fi
 
   while IFS= read -r pane_tty; do
     [[ $pane_tty == /dev/pts/* ]] || continue
+    if [[ -n $theme_osc ]]; then
+      printf '%b' "$theme_osc" >"$pane_tty" 2>/dev/null || true
+    fi
     tpgid=$(ps -o tpgid= -t "${pane_tty#/dev/}" 2>/dev/null | awk 'NF && $1 > 0 { print $1; exit }')
     [[ -n $tpgid ]] || continue
     kill -WINCH "-$tpgid" 2>/dev/null || true
@@ -160,6 +165,5 @@ sync_theme_environment
 sync_colorfgbg
 sync_tmux_window_style
 apply_tmux_commands
-sync_tmux_pane_colors
-signal_tmux_panes
+sync_and_signal_tmux_panes
 refresh_tmux_clients

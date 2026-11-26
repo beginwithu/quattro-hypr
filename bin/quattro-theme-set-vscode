@@ -15,10 +15,10 @@ register_generated_extension() {
   local ext_dir="$1"
   local ext_base extensions_file obsolete_file relative tmp
 
-  ext_base=$(dirname "$ext_dir")
+  ext_base="${ext_dir%/*}"
   extensions_file="$ext_base/extensions.json"
   obsolete_file="$ext_base/.obsolete"
-  relative=$(basename "$ext_dir")
+  relative="${ext_dir##*/}"
 
   if [[ -f $obsolete_file ]]; then
     tmp=$(mktemp)
@@ -150,9 +150,10 @@ set_theme() {
   if [[ -f "$VS_CODE_THEME_DESCRIPTOR" ]]; then
     # Theme specifies a preferred 3rd-party extension/theme pair. Both fields
     # come from the theme, so neither is trusted as a shell or sed argument.
-    local extension
-    theme_name=$(jq -r '.name // empty' "$VS_CODE_THEME_DESCRIPTOR")
-    extension=$(jq -r '.extension // empty' "$VS_CODE_THEME_DESCRIPTOR")
+    local extension=""
+    IFS=$'\t' read -r theme_name extension < <(
+      jq -r '[(.name // ""), (.extension // "")] | @tsv' "$VS_CODE_THEME_DESCRIPTOR"
+    ) || true
 
     # A label with quotes, backslashes, or control characters can't land in
     # settings.json as valid JSON, so drop it rather than write it out.
@@ -179,7 +180,7 @@ set_theme() {
   fi
 
   if [[ -n "$theme_name" ]]; then
-    mkdir -p "$(dirname "$settings_path")"
+    mkdir -p "${settings_path%/*}"
     [[ -f $settings_path ]] || printf '{\n}\n' >"$settings_path"
 
     # settings.json is JSONC: comments and trailing commas are legal there and

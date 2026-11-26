@@ -12,7 +12,10 @@ local layouts_dir = paths.state_home .. "/quattro/workspace-layouts"
 -- module name, and bootstrap only puts ~/.local/state on the search path. A
 -- state home anywhere else would list the saved layouts and then fail to require
 -- them, or load same-named ones from under the home directory instead.
-package.path = paths.state_home .. "/?.lua;" .. package.path
+local state_pattern = paths.state_home .. "/?.lua"
+if not (";" .. package.path .. ";"):find(";" .. state_pattern .. ";", 1, true) then
+  package.path = state_pattern .. ";" .. package.path
+end
 
 require_all.files(layouts_dir, "quattro.workspace-layouts", { reload = true })
 

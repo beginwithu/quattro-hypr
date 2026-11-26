@@ -1,17 +1,43 @@
-if [[ $- == *i* ]] && [[ ${TERM:-} != "dumb" ]] && command -v starship &> /dev/null; then
-  eval "$(starship init bash --print-full-init)"
+# Generated init scripts are cached: `starship init` and `zoxide init` each
+# exec a binary on every interactive shell before the first prompt. The cache
+# is reused only while it is newer than both the binary and the pacman local
+# DB (pacman keeps a package's build mtime, so an upgrade could otherwise look
+# older than the cache), and while its header names the same binary and args.
+_quattro_cached_init() {
+  local name=$1 bin cache header out
+  shift
+  hash "$name" 2>/dev/null || return 1
+  bin=${BASH_CMDS[$name]}
+  [[ -n $bin ]] || return 1
+  cache="${XDG_CACHE_HOME:-$HOME/.cache}/quattro/bash-init/$name.bash"
+
+  if [[ -s $cache && $cache -nt $bin ]] &&
+    { [[ ! -d /var/lib/pacman/local ]] || [[ $cache -nt /var/lib/pacman/local ]]; } &&
+    read -r header <"$cache" && [[ $header == "# $bin $*" ]]; then
+    source "$cache"
+    return
+  fi
+
+  out=$("$bin" "$@") || return 1
+  if mkdir -p "${cache%/*}" 2>/dev/null &&
+    printf '# %s %s\n%s\n' "$bin" "$*" "$out" >"$cache.$$" 2>/dev/null; then
+    mv -f "$cache.$$" "$cache" 2>/dev/null || rm -f "$cache.$$"
+  fi
+  eval "$out"
+}
+
+if [[ $- == *i* ]] && [[ ${TERM:-} != "dumb" ]]; then
+  _quattro_cached_init starship init bash --print-full-init
 fi
 
-if command -v zoxide &> /dev/null; then
-  eval "$(zoxide init bash)"
-fi
+_quattro_cached_init zoxide init bash
 
 # Only the key bindings (Ctrl-R, Ctrl-T, Alt-C): fzf's completion.bash rewraps
 # ~76 commands' completions on every shell start, adding ~25ms before the prompt.
-if command -v fzf &> /dev/null; then
-  if [[ -f /usr/share/fzf/key-bindings.bash ]]; then
-    source /usr/share/fzf/key-bindings.bash
-  fi
+if [[ -f /usr/share/fzf/key-bindings.bash ]] && hash fzf 2>/dev/null; then
+  source /usr/share/fzf/key-bindings.bash
 fi
+
+unset -f _quattro_cached_init
 
 source "$QUATTRO_PATH/default/bash/completions"

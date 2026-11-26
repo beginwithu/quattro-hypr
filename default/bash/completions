@@ -3,9 +3,16 @@ _quattro_complete() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
 
   local quattro_path bin_dir
-  quattro_path=$(command -v quattro 2>/dev/null) || return 0
-  bin_dir=$(dirname -- "$(readlink -f -- "$quattro_path" 2>/dev/null || printf '%s' "$quattro_path")")
-  [[ -d $bin_dir ]] || return 0
+  if [[ -n ${QUATTRO_PATH:-} && -x $QUATTRO_PATH/bin/quattro ]]; then
+    bin_dir="$QUATTRO_PATH/bin"
+  else
+    quattro_path=$(command -v quattro 2>/dev/null) || return 0
+    if [[ -L $quattro_path ]]; then
+      quattro_path=$(readlink -f -- "$quattro_path" 2>/dev/null || printf '%s' "$quattro_path")
+    fi
+    bin_dir="${quattro_path%/*}"
+    [[ -d $bin_dir ]] || return 0
+  fi
 
   local prefix="quattro"
   local i part
@@ -58,9 +65,16 @@ _quattro_complete() {
     done
 
     if [[ -n ${command_path:-} && -x $command_path ]]; then
-      local args spec alt token actual alts value match current_arg_index
-      args=$(grep -m 1 '^# quattro:args=' "$command_path" 2>/dev/null)
-      args="${args#*quattro:args=}"
+      local args="" hdr_line hdr_n=0 spec alt token actual alts value match current_arg_index
+      while IFS= read -r hdr_line && (( ++hdr_n <= 40 )); do
+        (( hdr_n == 1 )) && [[ $hdr_line == "#!"* ]] && continue
+        [[ $hdr_line == "" ]] && continue
+        [[ $hdr_line == "#"* ]] || break
+        if [[ $hdr_line == "# quattro:args="* ]]; then
+          args="${hdr_line#\# quattro:args=}"
+          break
+        fi
+      done <"$command_path"
       current_arg_index=$((COMP_CWORD - first_arg_index))
 
       alts="${args// | /$'\n'}"

@@ -45,23 +45,34 @@ format_duration() {
 battery=""
 battery_info=""
 while read -r candidate; do
-  [[ -n $candidate ]] || continue
+  [[ -n $candidate && $candidate == */battery_* ]] || continue
   candidate_info=$(upower -i "$candidate" 2>/dev/null) || continue
-  if grep -qE '^\s*power supply:\s+yes' <<<"$candidate_info"; then
+  if [[ $candidate_info =~ (^|$'\n')[[:space:]]*power\ supply:[[:space:]]+yes($|$'\n') ]]; then
     battery=$candidate
     battery_info=$candidate_info
     break
   fi
-done < <(upower -e 2>/dev/null | grep '/battery_')
+done < <(upower -e 2>/dev/null)
 [[ -z $battery ]] && exit 0
 
-percentage=$(awk '/percentage/ { print int($2); exit }' <<<"$battery_info")
-capacity=$(awk '/energy-full:/ { printf "%d", $2; exit }' <<<"$battery_info")
-energy=$(awk '/^ *energy:/ { print $2; exit }' <<<"$battery_info")
-energy_full=$(awk '/energy-full:/ { print $2; exit }' <<<"$battery_info")
-upower_hours=$(awk '/time to (empty|full)/ { print ($5 ~ /^minute/ ? $4 / 60 : $4); exit }' <<<"$battery_info")
-power_rate_raw=$(awk '/energy-rate/ { print $2; exit }' <<<"$battery_info")
-native_path=$(awk '/native-path/ { print $2; exit }' <<<"$battery_info")
+# Single awk pass over UPower output instead of 10 separate awk invocations.
+IFS=$'\t' read -r percentage capacity energy energy_full upower_hours power_rate_raw native_path state threshold_start threshold_end < <(
+  awk '
+    /^[[:space:]]*percentage:/ && percentage == "" { percentage = int($2); next }
+    /^[[:space:]]*energy-full:/ && energy_full == "" { energy_full = $2; capacity = sprintf("%d", $2); next }
+    /^[[:space:]]*energy:/ && energy == "" { energy = $2; next }
+    /^[[:space:]]*time to (empty|full):/ && upower_hours == "" { upower_hours = ($5 ~ /^minute/ ? $4 / 60 : $4); next }
+    /^[[:space:]]*energy-rate:/ && power_rate_raw == "" { power_rate_raw = $2; next }
+    /^[[:space:]]*native-path:/ && native_path == "" { native_path = $2; next }
+    /^[[:space:]]*state:/ && state == "" { state = $2; next }
+    /^[[:space:]]*charge-start-threshold:/ && threshold_start == "" { gsub(/%/, "", $2); threshold_start = int($2); next }
+    /^[[:space:]]*charge-end-threshold:/ && threshold_end == "" { gsub(/%/, "", $2); threshold_end = int($2); next }
+    END {
+      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+        percentage, capacity, energy, energy_full, upower_hours, power_rate_raw, native_path, state, threshold_start, threshold_end
+    }
+  ' <<<"$battery_info"
+)
 battery_path="$power_supply_path/$native_path"
 
 # A sysfs reading as a number, or nothing. Firmware that doesn't know the
@@ -74,26 +85,17 @@ read_sysfs_number() {
   echo "$value"
 }
 
-# UPower's energy-rate can lag the kernel telemetry by tens of seconds. Use
-# the instantaneous sysfs reading when there is one so the open panel stays
-# live; without one, UPower's rate, worked out from the falling charge, stands.
+microwatts=""
+microamps=""
+microvolts=""
 if microwatts=$(read_sysfs_number "$battery_path/power_now"); then
-  power_rate_raw=$(awk -v microwatts="$microwatts" 'BEGIN { print microwatts / 1000000 }')
+  :
 elif microamps=$(read_sysfs_number "$battery_path/current_now") && microvolts=$(read_sysfs_number "$battery_path/voltage_now"); then
-  power_rate_raw=$(awk -v microamps="$microamps" -v microvolts="$microvolts" 'BEGIN { print microamps * microvolts / 1000000000000 }')
+  :
+else
+  microamps=""
+  microvolts=""
 fi
-
-# Some kernels sign power_now by direction (negative while discharging on
-# Apple Silicon); the state field already says which way it flows.
-power_rate=$(awk -v rate="${power_rate_raw:-0}" 'BEGIN {
-  if (rate < 0) rate = -rate
-  rounded = sprintf("%.1f", rate)
-  sub(/\.0$/, "", rounded)
-  print rounded
-}')
-state=$(awk '/state/ { print $2; exit }' <<<"$battery_info")
-threshold_start=$(awk '/charge-start-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$battery_info")
-threshold_end=$(awk '/charge-end-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$battery_info")
 
 # Read the thresholds from the battery UPower resolved rather than a BAT* glob,
 # which misses every battery with another name.
@@ -101,24 +103,47 @@ threshold_end=$(awk '/charge-end-threshold:/ { gsub(/%/, "", $2); print int($2);
 [[ -n $threshold_start || ! -r $battery_path/charge_control_start_threshold ]] || threshold_start=$(<"$battery_path/charge_control_start_threshold")
 # The time to full counts to this battery's own limit, never another one's.
 charge_limit=${threshold_end:-100}
-[[ -n $threshold_end ]] || threshold_end=$(cat "$power_supply_path"/BAT*/charge_control_end_threshold 2>/dev/null | head -1)
-[[ -n $threshold_start ]] || threshold_start=$(cat "$power_supply_path"/BAT*/charge_control_start_threshold 2>/dev/null | head -1)
+if [[ -z $threshold_end ]]; then
+  for _f in "$power_supply_path"/BAT*/charge_control_end_threshold; do
+    [[ -r $_f ]] && { threshold_end=$(<"$_f"); break; }
+  done
+fi
+if [[ -z $threshold_start ]]; then
+  for _f in "$power_supply_path"/BAT*/charge_control_start_threshold; do
+    [[ -r $_f ]] && { threshold_start=$(<"$_f"); break; }
+  done
+fi
 
-# Time left is the energy left over the draw shown beside it, so the two always
-# agree; charging counts up to the charge limit. UPower's own estimate averages
-# the draw, and stands in only when the readings to do the sum are missing.
-minutes_remaining=$(awk \
-  -v energy="$energy" -v full="$energy_full" -v rate="${power_rate_raw:-0}" \
-  -v state="$state" -v limit="$charge_limit" -v fallback="$upower_hours" 'BEGIN {
-  if (rate < 0) rate = -rate
-  if (energy != "" && full != "" && rate > 0.2) {
-    hours = state == "charging" ? (full * limit / 100 - energy) / rate : energy / rate
-  } else {
-    hours = fallback
-  }
-  if (hours == "" || hours <= 0) exit
-  printf "%d", int(hours * 60 + 0.5)
-}')
+# Single awk pass for power_rate, minutes_remaining, and charge_idle (replaces 4 awk calls).
+IFS=$'\t' read -r power_rate minutes_remaining charge_idle < <(
+  awk \
+    -v raw="${power_rate_raw:-0}" \
+    -v uw="$microwatts" -v ua="$microamps" -v uv="$microvolts" \
+    -v energy="$energy" -v full="$energy_full" \
+    -v state="$state" -v limit="$charge_limit" -v fallback="$upower_hours" 'BEGIN {
+    if (uw != "") rate = uw / 1000000
+    else if (ua != "" && uv != "") rate = ua * uv / 1000000000000
+    else rate = raw + 0
+    if (rate < 0) rate = -rate
+
+    rounded = sprintf("%.1f", rate)
+    sub(/\.0$/, "", rounded)
+
+    idle = (rate <= 0.2) ? "true" : "false"
+
+    mins = ""
+    if (energy != "" && full != "" && rate > 0.2) {
+      hours = state == "charging" ? (full * limit / 100 - energy) / rate : energy / rate
+    } else {
+      hours = fallback
+    }
+    if (hours != "" && hours > 0) {
+      mins = sprintf("%d", int(hours * 60 + 0.5))
+    }
+
+    printf "%s\t%s\t%s\n", rounded, mins, idle
+  }'
+)
 time_remaining=$(format_duration "$minutes_remaining")
 
 ac_online=false
@@ -132,11 +157,6 @@ for supply in "$power_supply_path"/*; do
     break
   fi
 done
-
-charge_idle=false
-if awk -v rate="${power_rate_raw:-0}" 'BEGIN { if (rate < 0) rate = -rate; exit !(rate <= 0.2) }'; then
-  charge_idle=true
-fi
 
 charge_holding=false
 if [[ $ac_online == "true" && -n $threshold_end ]]; then
@@ -162,7 +182,11 @@ if [[ $shell_output == "true" ]]; then
 
   cycles=""
   [[ ! -r $battery_path/cycle_count ]] || cycles=$(<"$battery_path/cycle_count")
-  [[ -n $cycles ]] || cycles=$(cat "$power_supply_path"/BAT*/cycle_count 2>/dev/null | head -1)
+  if [[ -z $cycles ]]; then
+    for _f in "$power_supply_path"/BAT*/cycle_count; do
+      [[ -r $_f ]] && { cycles=$(<"$_f"); break; }
+    done
+  fi
 
   [[ -n $cycles ]] && printf 'cycles\t%s\n' "$cycles"
 

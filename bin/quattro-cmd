@@ -33,10 +33,16 @@ cmd_default_browser() {
   IFS=: read -ra desktops <<<"${XDG_CURRENT_DESKTOP:-}"
 
   installed() {
-    local data_dir cmd
+    local data_dir cmd="" line=""
     for data_dir in "${data_dirs[@]}"; do
       [[ -r $data_dir/applications/$1 ]] || continue
-      cmd=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$data_dir/applications/$1" | head -1)
+      while IFS= read -r line; do
+        if [[ $line == Exec=* ]]; then
+          cmd="${line#Exec=}"
+          cmd="${cmd%% *}"
+          break
+        fi
+      done <"$data_dir/applications/$1"
       [[ -n $cmd ]] && command -v "$cmd" >/dev/null
       return
     done
@@ -81,8 +87,13 @@ cmd_default_browser() {
     cache="$data_dir/applications/mimeinfo.cache"
     [[ -r $cache ]] || continue
 
-    local raw_entries
-    raw_entries=$(sed -n 's|^x-scheme-handler/https=||p' "$cache")
+    local raw_entries="" cache_line=""
+    while IFS= read -r cache_line; do
+      if [[ $cache_line == "x-scheme-handler/https="* ]]; then
+        raw_entries="${cache_line#x-scheme-handler/https=}"
+        break
+      fi
+    done <"$cache"
     IFS=';' read -ra entries <<<"$raw_entries"
     for entry in "${entries[@]}"; do
       if [[ -n $entry && $entry != "quattro-browser.desktop" ]] && installed "$entry"; then

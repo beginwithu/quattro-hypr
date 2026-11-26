@@ -46,56 +46,66 @@ function entryAcronym(entry) {
   return result
 }
 
-function termMatches(entry, term) {
-  if (!term) return true
-
-  var name = entryName(entry).toLowerCase()
-  var id = String((entry && entry.id) || "").toLowerCase()
-  var haystack = entrySearchText(entry)
-
-  if (name.indexOf(term) >= 0) return true
-  if (id.indexOf(term) >= 0) return true
-  if (haystack.indexOf(term) >= 0) return true
-
-  return term.length <= 5 && entryAcronym(entry).indexOf(term) >= 0
+function splitTerms(queryLower) {
+  if (!queryLower) return []
+  var raw = queryLower.split(/\s+/)
+  var out = []
+  for (var i = 0; i < raw.length; i++) {
+    if (raw[i]) out.push(raw[i])
+  }
+  return out
 }
 
-function allTermsMatch(entry, query) {
-  var terms = String(query || "").toLowerCase().trim().split(/\s+/)
+function scoreEntry(entry, nameLower, q, terms) {
+  if (!q) return 0
+
+  var idLower = null
+  var haystack = null
+  var acronym = null
+
   for (var i = 0; i < terms.length; i++) {
-    if (terms[i] && !termMatches(entry, terms[i])) return false
+    var term = terms[i]
+    if (nameLower.indexOf(term) >= 0) continue
+    if (idLower === null) idLower = String((entry && entry.id) || "").toLowerCase()
+    if (idLower.indexOf(term) >= 0) continue
+    if (haystack === null) haystack = entrySearchText(entry)
+    if (haystack.indexOf(term) >= 0) continue
+    if (term.length <= 5) {
+      if (acronym === null) acronym = entryAcronym(entry)
+      if (acronym.indexOf(term) >= 0) continue
+    }
+    return -1
   }
-  return true
+
+  if (idLower === null) idLower = String((entry && entry.id) || "").toLowerCase()
+  var directName = nameLower.indexOf(q)
+  var directId = idLower.indexOf(q)
+  if (directName === 0) return 10000 - nameLower.length
+  if (directId === 0) return 9500 - idLower.length
+  if (directName > 0) return 8000 - directName * 10 - nameLower.length
+  if (directId > 0) return 7600 - directId * 10 - idLower.length
+
+  if (haystack === null) haystack = entrySearchText(entry)
+  var hayIndex = haystack.indexOf(q)
+  if (hayIndex >= 0) return 6000 - hayIndex
+
+  if (acronym === null) acronym = entryAcronym(entry)
+  var acronymIndex = acronym.indexOf(q)
+  if (acronymIndex === 0) return 5000 - acronym.length
+  if (acronymIndex > 0) return 4600 - acronymIndex * 10 - acronym.length
+
+  return 4000 - nameLower.length
 }
 
 function fuzzyScore(entry, query) {
   var q = String(query || "").trim().toLowerCase()
   if (!q) return 0
-  if (!allTermsMatch(entry, q)) return -1
-
-  var name = entryName(entry).toLowerCase()
-  var id = String((entry && entry.id) || "").toLowerCase()
-  var haystack = entrySearchText(entry)
-  var directName = name.indexOf(q)
-  var directId = id.indexOf(q)
-  if (directName === 0) return 10000 - name.length
-  if (directId === 0) return 9500 - id.length
-  if (directName > 0) return 8000 - directName * 10 - name.length
-  if (directId > 0) return 7600 - directId * 10 - id.length
-
-  var hayIndex = haystack.indexOf(q)
-  if (hayIndex >= 0) return 6000 - hayIndex
-
-  var acronym = entryAcronym(entry)
-  var acronymIndex = acronym.indexOf(q)
-  if (acronymIndex === 0) return 5000 - acronym.length
-  if (acronymIndex > 0) return 4600 - acronymIndex * 10 - acronym.length
-
-  return 4000 - name.length
+  return scoreEntry(entry, entryName(entry).toLowerCase(), q, splitTerms(q))
 }
 
 function sortedEntries(values, query, hiddenCallback) {
-  var q = String(query || "").trim()
+  var q = String(query || "").trim().toLowerCase()
+  var terms = splitTerms(q)
   var rows = []
 
   for (var i = 0; i < values.length; i++) {
@@ -104,9 +114,10 @@ function sortedEntries(values, query, hiddenCallback) {
     if (hiddenCallback && hiddenCallback(entry)) continue
     var name = entryName(entry)
     if (!name) continue
-    var score = fuzzyScore(entry, q)
+    var nameLower = name.toLowerCase()
+    var score = q ? scoreEntry(entry, nameLower, q, terms) : 0
     if (score < 0) continue
-    rows.push({ entry: entry, score: score, key: entrySortKey(entry), name: name.toLowerCase() })
+    rows.push({ entry: entry, score: score, key: nameLower, name: nameLower })
   }
 
   rows.sort(function(a, b) {

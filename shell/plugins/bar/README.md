@@ -14,7 +14,7 @@ the shell for its whole session.
 
 ## Customizing
 
-The bar config lives under the `bar:` key of [`~/.config/quattro/shell.json`](../../../docs/quattro-shell.md#shelljson). Out of the box the shell uses [`config/quattro/shell.json`](../../../config/quattro/shell.json). Once you customize anything via the bar gestures, `quattro bar ...`, or by editing shell.json directly, your file is canonical — there is no deep-merge.
+The bar config lives under the `bar:` key of `~/.config/quattro/shell.json` (see [`shell/README.md`](../../README.md)). Out of the box the shell uses [`config/quattro/shell.json`](../../../config/quattro/shell.json). Once you customize anything via the bar gestures, `quattro bar ...`, or by editing `shell.json` directly, your file is canonical — there is no deep-merge.
 
 The bar is configured directly on the bar itself: drag empty bar space (or click-and-hold) to move the bar to another screen edge, double-left-click empty center-bar space to cycle the bar background from clear to glassy to opaque, and drag widgets to reorder them. The `quattro bar position`, `quattro bar background`, `quattro bar put`, `quattro bar move`, and `quattro bar set` commands do the same from scripts.
 
@@ -58,13 +58,15 @@ Example `shell.json` (bar subtree only shown):
 |---|---|---|
 | `quattro.menu` | Quattro menu launcher | left = menu · right = terminal |
 | `quattro.workspaces` | Hyprland workspace switcher; the focused workspace shows its layout | left = focus workspace, or cycle the focused one's layout |
+| `quattro.active-window` | Title of the focused window | display-only |
 | `quattro.clock` | Date/time label + popup with a month grid, ISO week numbers, and month stepping | left = popup · right = cycle label format · middle = timezone selector |
 | `quattro.media` | MPRIS now-playing — scrolling track + artist, cover-art popup | left = play/pause · middle = next · scroll = prev/next · right = popup |
-| `quattro.indicators` | Manual state indicators | left = indicator action |
+| `quattro.indicators` | Manual state indicators (`Dnd`, `NightLight`, `PasswordlessSudo`, `Reminder`, `ScreenRecording`, `StayAwake`) | left = indicator action |
 | `quattro.system-update` | Available update indicator | left = update |
 | `quattro.tray` | System tray | hover = reveal drawer · right on chevron = manage |
+| `quattro.keyboard-layout` | Current keyboard layout and input language | left = cycle layout |
 | `quattro.microphone` | Mic icon + scroll volume | left = mute toggle · middle = audio panel · scroll = source volume |
-
+| `quattro.spacer` | Configurable blank space (`size` in logical px) | layout spacer |
 | `quattro.audio` | Volume icon + popup with master slider, output-device picker, per-app mixer | left = popup · right = mute · middle = popup · scroll = volume |
 | `quattro.network` | Wi-Fi/Ethernet icon + popup with Wi-Fi scan, signal, connect, DNS provider selection | left = popup |
 | `quattro.power` | Battery/AC icon + popup with battery stats, power profiles, and system info | left = popup · right = toggle percentage |

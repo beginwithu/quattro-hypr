@@ -1,16 +1,22 @@
 # Quattro environment (QUATTRO_PATH + PATH), needed even for non-interactive shells
 if [[ -r ${QUATTRO_PATH:-$HOME/.local/share/quattro}/default/bash/env-bootstrap ]]; then
   source "${QUATTRO_PATH:-$HOME/.local/share/quattro}/default/bash/env-bootstrap"
+  _quattro_env_bootstrapped=1
 elif [[ -r /usr/share/quattro/default/bash/env-bootstrap ]]; then
   source /usr/share/quattro/default/bash/env-bootstrap
+  _quattro_env_bootstrapped=1
 fi
 
 # If not running interactively, don't do anything else (leave this above the rc source)
-[[ $- != *i* ]] && return
+if [[ $- != *i* ]]; then
+  unset _quattro_env_bootstrapped
+  return
+fi
 
 # All the default Quattro aliases and functions
 # (don't mess with these directly, just overwrite them here!)
 source "$QUATTRO_PATH/default/bash/rc"
+unset _quattro_env_bootstrapped
 
 # Add your own exports, aliases, and functions here.
 #

@@ -16,7 +16,7 @@ fi
 qt6ct_colors="$state_home/quattro/current/theme/qt6ct.colors"
 qt6ct_conf="$config_home/qt6ct/qt6ct.conf"
 if [[ -f $qt6ct_colors ]] && { command -v qt6ct >/dev/null 2>&1 || [[ -f $qt6ct_conf || -f /usr/lib/qt6/plugins/platformthemes/libqt6ct.so ]]; }; then
-  mkdir -p "$(dirname "$qt6ct_conf")"
+  mkdir -p "${qt6ct_conf%/*}"
   if [[ ! -f $qt6ct_conf ]]; then
     cat >"$qt6ct_conf" <<EOF
 [Appearance]
@@ -26,7 +26,15 @@ icon_theme=$icon_theme
 style=Fusion
 EOF
   else
-    python3 - "$qt6ct_conf" "$qt6ct_colors" "$icon_theme" <<'PY'
+    # Skip spawning Python when qt6ct.conf already holds the target values.
+    _cur_conf=$(<"$qt6ct_conf")
+    if [[ $_cur_conf == *$'\n'"color_scheme_path=$qt6ct_colors"$'\n'* &&
+          $_cur_conf == *$'\n'"custom_palette=true"$'\n'* &&
+          $_cur_conf == *$'\n'"icon_theme=$icon_theme"$'\n'* &&
+          $_cur_conf == *$'\n'"style="* ]]; then
+      exit 0
+    fi
+    python3 -B - "$qt6ct_conf" "$qt6ct_colors" "$icon_theme" <<'PY'
 import configparser, os, sys
 
 conf_path, colors_path, icon_theme = sys.argv[1:4]

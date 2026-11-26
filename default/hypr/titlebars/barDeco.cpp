@@ -380,9 +380,9 @@ bool CQuattroFloatingHyprBar::doButtonPress(Config::INTEGER barPadding, Config::
                                             const bool BUTTONSRIGHT) {
   // check if on a button
   float offset = barPadding;
+  const auto BARBUF = Vector2D{static_cast<int>(assignedBoxGlobal().w), static_cast<int>(barHeight)};
 
   for (auto &b : g_pQuattroFloatingGlobalState->buttons) {
-    const auto BARBUF = Vector2D{static_cast<int>(assignedBoxGlobal().w), static_cast<int>(barHeight)};
     Vector2D currentPos = Vector2D{(BUTTONSRIGHT ? BARBUF.x - barButtonPadding - b.size - offset : offset), (BARBUF.y - b.size) / 2.0}.floor();
 
     if (VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + b.size + barButtonPadding, currentPos.y + b.size)) {
@@ -509,6 +509,8 @@ void CQuattroFloatingHyprBar::renderBarButtonsText(Render::CRenderContext &ctx, 
   const bool BUTTONSRIGHT = ALIGNBUTTONS != "left";
   const auto visibleCount = getVisibleButtonCount(BARBUTTONPADDING, BARPADDING, Vector2D{barBox->w, barBox->h}, scale);
   const auto COORDS = cursorRelativeToBar();
+  // Loop-invariant: the bar's global box is resolved once per draw, not once per button.
+  const auto BARBUF = Vector2D{static_cast<int>(assignedBoxGlobal().w), static_cast<int>(HEIGHT)};
 
   int offset = BARPADDING * scale;
   float noScaleOffset = BARPADDING;
@@ -519,7 +521,6 @@ void CQuattroFloatingHyprBar::renderBarButtonsText(Render::CRenderContext &ctx, 
     const auto scaledButtonsPad = BARBUTTONPADDING * scale;
 
     // check if hovering here
-    const auto BARBUF = Vector2D{static_cast<int>(assignedBoxGlobal().w), static_cast<int>(HEIGHT)};
     Vector2D currentPos =
         Vector2D{(BUTTONSRIGHT ? BARBUF.x - BARBUTTONPADDING - button.size - noScaleOffset : noScaleOffset), (BARBUF.y - button.size) / 2.0}.floor();
     bool hovering = VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + button.size + BARBUTTONPADDING, currentPos.y + button.size);
@@ -671,16 +672,26 @@ void CQuattroFloatingHyprBar::renderPass(Render::CRenderContext &ctx, PHLMONITOR
   // render title
   // The app's name is steadier than a window title, which for a web app is often
   // just its domain or the page it is on. Windows no launcher claims keep theirs.
-  std::string title = quattroAppName(PWINDOW->metadata().appID());
-  if (title.empty())
-    title = PWINDOW->metadata().title();
-  // The title is rendered at the monitor's scale. A window dragged between
-  // monitors of different scales is drawn on each, so one texture is kept per
-  // scale; otherwise the title shows at the other monitor's size.
-  if (m_szLastTitle != title || m_bWindowSizeChanged || m_bTitleColorChanged)
-    m_titleTexByScale.clear();
   if (ENABLETITLE) {
-    m_szLastTitle = title;
+    const auto &appID = PWINDOW->metadata().appID();
+    const auto &rawTitle = PWINDOW->metadata().title();
+    const auto now = Time::steadyNow();
+    if (m_szLastAppID != appID || m_szLastRawTitle != rawTitle ||
+        std::chrono::duration_cast<std::chrono::seconds>(now - m_lastAppNameCheck).count() >= 2) {
+      m_lastAppNameCheck = now;
+      m_szLastAppID = appID;
+      m_szLastRawTitle = rawTitle;
+      std::string title = quattroAppName(appID);
+      if (title.empty())
+        title = rawTitle;
+      if (m_szLastTitle != title) {
+        m_szLastTitle = std::move(title);
+        m_titleTexByScale.clear();
+      }
+    }
+    if (m_bWindowSizeChanged || m_bTitleColorChanged)
+      m_titleTexByScale.clear();
+
     auto &tex = m_titleTexByScale[static_cast<int>(std::round(pMonitor->m_scale * 100))];
     if (!tex || tex->m_texID == 0) {
       renderBarTitle(BARBUF, pMonitor->m_scale);
@@ -749,6 +760,7 @@ void CQuattroFloatingHyprBar::onConfigReloaded() {
   m_bTitleColorChanged = true;
   m_pTextTex = nullptr;
   m_titleTexByScale.clear();
+  m_lastAppNameCheck = {};
 
   g_pDecorationPositioner->repositionDeco(this);
 
@@ -824,20 +836,44 @@ void CQuattroFloatingHyprBar::updateRules() {
 }
 
 void CQuattroFloatingHyprBar::damageOnButtonHover() {
+  // Runs for every bar on every pointer motion event, so bail out as early and
+  // cheaply as possible: hidden/disabled/unmapped bars draw no buttons.
+  const auto &BUTTONS = g_pQuattroFloatingGlobalState->buttons;
+  if (m_hidden || BUTTONS.empty() || !g_pQuattroFloatingGlobalState->config.enabled->value() || !validMapped(m_pWindow)) {
+    if (m_iButtonHoverState != 0) {
+      m_iButtonHoverState = 0;
+      damageEntire();
+    }
+    return;
+  }
+
   const auto BARPADDING = g_pQuattroFloatingGlobalState->config.barPadding->value();
   const auto BARBUTTONPADDING = g_pQuattroFloatingGlobalState->config.barButtonPadding->value();
   const auto HEIGHT = g_pQuattroFloatingGlobalState->config.barHeight->value();
+
+  const auto BOX = assignedBoxGlobal();
+  const auto COORDS = g_pInputManager->getMouseCoordsInternal() - BOX.pos();
+
+  // Pointer nowhere near this bar's row and nothing hovered: no button can
+  // change state. The band is padded by the largest button so oversized
+  // buttons that overhang the bar still register.
+  if (m_iButtonHoverState == 0) {
+    float maxSize = 0;
+    for (const auto &b : BUTTONS)
+      maxSize = std::max(maxSize, b.size);
+    if (COORDS.y < -maxSize || COORDS.y > HEIGHT + maxSize)
+      return;
+  }
+
   const auto ALIGNBUTTONS = g_pQuattroFloatingGlobalState->config.barButtonsAlignment->value();
   const bool BUTTONSRIGHT = ALIGNBUTTONS != "left";
+  const auto BARBUF = Vector2D{static_cast<int>(BOX.w), static_cast<int>(HEIGHT)};
 
   float offset = BARPADDING;
 
-  const auto COORDS = cursorRelativeToBar();
-
   unsigned int hoverState = 0;
-  for (size_t i = 0; i < g_pQuattroFloatingGlobalState->buttons.size(); ++i) {
-    const auto &b = g_pQuattroFloatingGlobalState->buttons[i];
-    const auto BARBUF = Vector2D{static_cast<int>(assignedBoxGlobal().w), static_cast<int>(HEIGHT)};
+  for (size_t i = 0; i < BUTTONS.size(); ++i) {
+    const auto &b = BUTTONS[i];
     Vector2D currentPos = Vector2D{(BUTTONSRIGHT ? BARBUF.x - BARBUTTONPADDING - b.size - offset : offset), (BARBUF.y - b.size) / 2.0}.floor();
 
     if (VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + b.size + BARBUTTONPADDING, currentPos.y + b.size))

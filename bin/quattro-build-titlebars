@@ -85,7 +85,11 @@ DEPS=(hyprland libdrm libinput libudev pixman-1 wayland-server xkbcommon)
 read -r -a CFLAGS <<<"$(pkg-config --cflags "${DEPS[@]}")"
 read -r -a LIBS <<<"$(pkg-config --libs "${DEPS[@]}")"
 
-OPT_FLAG="${QUATTRO_TITLEBARS_OPT:--O1}"
+# -O2: the plugin runs inside the compositor's render loop on every frame with
+# a floating window, so runtime speed matters more than the few extra seconds
+# of (cached, fingerprinted, parallel) build time. Override with
+# QUATTRO_TITLEBARS_OPT=-O1 for faster rebuilds on slow machines.
+OPT_FLAG="${QUATTRO_TITLEBARS_OPT:--O2}"
 
 SOURCES=(
   "$SRC_DIR/main.cpp"

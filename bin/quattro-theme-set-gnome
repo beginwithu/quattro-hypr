@@ -47,16 +47,11 @@ sync_gtk_css() {
 # flashing back to blue Adwaita icons.
 sync_folder_icons() {
   local mode="$1"
-  local accent
+  local accent="$2"
 
-  [[ -f $COLORS_FILE ]] || return 0
-  accent=$(quattro-theme-color --file "$COLORS_FILE" folder_color 2>/dev/null || true)
-  if [[ ! $accent =~ ^#[0-9A-Fa-f]{6}$ ]]; then
-    accent=$(quattro-theme-color --file "$COLORS_FILE" accent 2>/dev/null || true)
-  fi
   [[ $accent =~ ^#[0-9A-Fa-f]{6}$ ]] || return 0
 
-  python3 - "$accent" "$mode" "$STATE_HOME/quattro/current" "$DATA_HOME/icons" <<'PY'
+  python3 -B - "$accent" "$mode" "$STATE_HOME/quattro/current" "$DATA_HOME/icons" <<'PY'
 import colorsys
 import os
 import re
@@ -238,13 +233,20 @@ except Exception:
 PY
 }
 
-# quattro-theme-color resolves mode from colors.toml (`mode = "light"`), a
-# legacy light.mode marker beside it, or background luminance for user themes.
-mode=$(quattro-theme-color --file "$COLORS_FILE" mode)
+# Resolve mode and folder/accent colors in a single quattro-theme-color run.
+declare -A _gnome_palette=()
+if [[ -f $COLORS_FILE ]]; then
+  while IFS=$'\t' read -r _k _v; do
+    _gnome_palette[$_k]="$_v"
+  done < <(quattro-theme-color --file "$COLORS_FILE" --all 2>/dev/null || true)
+fi
+mode="${_gnome_palette[mode]:-dark}"
+folder_accent="${_gnome_palette[folder_color]:-}"
+[[ $folder_accent =~ ^#[0-9A-Fa-f]{6}$ ]] || folder_accent="${_gnome_palette[accent]:-}"
 
 sync_gtk_css "$CONFIG_HOME/gtk-4.0/gtk.css"
 sync_gtk_css "$CONFIG_HOME/gtk-3.0/gtk.css"
-gnome_accent=$(sync_folder_icons "$mode" || true)
+gnome_accent=$(sync_folder_icons "$mode" "$folder_accent" || true)
 
 # gsettings needs a user DBus session. During headless/chroot installs, defer
 # until the user has a real session instead of emitting dconf warnings.

@@ -6,7 +6,7 @@ set -euo pipefail
 source_path=$1
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/quattro/lock-poster"
 signature=$(stat -Lc '%s:%y:%z' "$source_path")
-key=$(printf '%s\n%s' "$source_path" "$signature" | sha256sum | cut -d ' ' -f 1)
+read -r key _ < <(printf '%s\n%s' "$source_path" "$signature" | sha256sum)
 poster="$cache_dir/poster-$key.jpg"
 mkdir -p "$cache_dir"
 exec {lock_fd}>"$cache_dir/.lock"

@@ -43,16 +43,28 @@ def atomic_write(path, text):
   return True
 
 
-def keyboard_catalog():
-  # Read the shared keyboard layout list and convert console keymaps through
-  # systemd's mapping, just as localectl does during install.
-  choices = run([
+def _read_keyboard_layouts_file():
+  layouts_file = ROOT / "default/input-methods/keyboard-layouts.sh"
+  text = layouts_file.read_text(encoding="utf-8")
+  marker = "QUATTRO_KEYBOARD_LAYOUTS=$'"
+  start = text.find(marker)
+  if start != -1:
+    end = text.rfind("'")
+    if end > start + len(marker):
+      return text[start + len(marker) : end]
+  return run([
     "bash",
     "-c",
     'source "$1"; printf "%s\\n" "$QUATTRO_KEYBOARD_LAYOUTS"',
     "bash",
-    str(ROOT / "default/input-methods/keyboard-layouts.sh"),
+    str(layouts_file),
   ])
+
+
+def keyboard_catalog():
+  # Read the shared keyboard layout list and convert console keymaps through
+  # systemd's mapping, just as localectl does during install.
+  choices = _read_keyboard_layouts_file()
   mappings = {}
   kbd_map = Path("/usr/share/systemd/kbd-model-map")
   if kbd_map.exists():
@@ -83,8 +95,20 @@ def keyboard_catalog():
 
 
 def keyboard_selection():
-  raw_layouts = json.loads(run(["hyprctl", "-j", "getoption", "input:kb_layout"]))["str"]
-  raw_variants = json.loads(run(["hyprctl", "-j", "getoption", "input:kb_variant"]))["str"]
+  batch = run(["hyprctl", "--batch", "-j", "getoption input:kb_layout;getoption input:kb_variant"])
+  decoder = json.JSONDecoder()
+  parsed = []
+  idx = 0
+  length = len(batch)
+  while idx < length:
+    while idx < length and batch[idx].isspace():
+      idx += 1
+    if idx >= length:
+      break
+    obj, idx = decoder.raw_decode(batch, idx)
+    parsed.append(obj)
+  raw_layouts = parsed[0]["str"] if len(parsed) > 0 else ""
+  raw_variants = parsed[1]["str"] if len(parsed) > 1 else ""
   layouts = [item.strip() for item in raw_layouts.split(",") if item.strip()]
   variants = [item.strip() for item in raw_variants.split(",")]
   if not layouts:
@@ -113,6 +137,7 @@ def choose(title, catalog, selected, kind):
   args = ["quattro-menu-select", title] + list(rows.values())
   on_change = [
     "/usr/bin/python3",
+    "-B",
     str(ROOT / "default/input-methods/typing_setup.py"),
     "apply",
     kind,

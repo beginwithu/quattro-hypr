@@ -28,11 +28,17 @@ window_close_all() {
     fi
   fi
 
+  local batch_lua="" batch_legacy=""
   while read -r addr; do
     [[ -n $addr ]] || continue
-    hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })" >/dev/null 2>&1 ||
-      hyprctl dispatch closewindow "address:$addr" >/dev/null 2>&1 || true
+    batch_lua+="dispatch hl.dsp.window.close({ window = \"address:$addr\" });"
+    batch_legacy+="dispatch closewindow address:$addr;"
   done < <(jq -r ".[].address" <<<"$clients")
+
+  if [[ -n $batch_lua ]]; then
+    hyprctl --batch "$batch_lua" >/dev/null 2>&1 ||
+      hyprctl --batch "$batch_legacy" >/dev/null 2>&1 || true
+  fi
 
   hyprctl dispatch 'o.workspaces.focus(1)' >/dev/null 2>&1 || hyprctl dispatch workspace 1 >/dev/null 2>&1 || true
 
@@ -42,10 +48,11 @@ window_close_all() {
 }
 
 window_minimize() {
-  local address="" workspace=""
+  local address="" workspace="" clients=""
   if [[ -n ${1:-} ]]; then
     address="$1"
-    workspace=$(hyprctl clients -j | jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .workspace.id) // empty')
+    clients=$(hyprctl clients -j) || exit 1
+    workspace=$(jq -r --arg address "$address" 'first(.[] | select(.address == $address) | .workspace.id) // empty' <<<"$clients")
   else
     read -r address workspace < <(hyprctl activewindow -j | jq -r '"\(.address // "") \(.workspace.id // "")"') || true
   fi
@@ -53,16 +60,17 @@ window_minimize() {
   [[ -n $address && $workspace =~ ^[0-9]+$ ]] || exit 1
   [[ $(quattro-hyprland-workspace-layout current "$workspace") == "floating" ]] || exit 0
 
-  local clients tag
-  if clients=$(hyprctl clients -j); then
+  local tag batch=""
+  if [[ -n $clients ]] || clients=$(hyprctl clients -j); then
     while read -r tag; do
       [[ $tag =~ ^quattro-minimized-from-[0-9]+$ && $tag != "quattro-minimized-from-$workspace" ]] || continue
-      hyprctl dispatch "hl.dsp.window.tag({ tag = \"-$tag\", window = \"address:$address\" })" >/dev/null
+      batch+="dispatch hl.dsp.window.tag({ tag = \"-$tag\", window = \"address:$address\" });"
     done < <(jq -r --arg address "$address" '.[] | select(.address == $address) | (.tags // [])[]' <<<"$clients")
   fi
-  hyprctl dispatch "hl.dsp.window.tag({ tag = \"+quattro-minimized-from-$workspace\", window = \"address:$address\" })" >/dev/null
-  hyprctl dispatch "hl.dsp.window.move({ workspace = \"special:minimized\", follow = false, window = \"address:$address\" })" >/dev/null
-  hyprctl dispatch "hl.dsp.focus({ workspace = \"$workspace\" })" >/dev/null
+  batch+="dispatch hl.dsp.window.tag({ tag = \"+quattro-minimized-from-$workspace\", window = \"address:$address\" });"
+  batch+="dispatch hl.dsp.window.move({ workspace = \"special:minimized\", follow = false, window = \"address:$address\" });"
+  batch+="dispatch hl.dsp.focus({ workspace = \"$workspace\" })"
+  hyprctl --batch "$batch" >/dev/null
 }
 
 window_pop() {
@@ -71,27 +79,32 @@ window_pop() {
   local x=${3:-}
   local y=${4:-}
 
-  local active pinned addr window
+  local active pinned="" addr="" window
   active=$(hyprctl activewindow -j)
-  pinned=$(jq -r ".pinned" <<<"$active")
-  addr=$(jq -r ".address // empty" <<<"$active")
+  read -r pinned addr < <(jq -r '"\(.pinned // false) \(.address // "")"' <<<"$active") || true
   window="address:$addr"
 
   if [[ $pinned == "true" ]]; then
-    hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
-    hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
-    hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"-pop\" })" tagwindow -pop "$window"
-  elif [[ -n $addr ]]; then
-    hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
-    hypr_dispatch "hl.dsp.window.resize({ window = \"$window\", x = $width, y = $height })" resizeactive exact "$width" "$height" "$window"
-    if [[ -n $x && -n $y ]]; then
-      hypr_dispatch "hl.dsp.window.move({ window = \"$window\", x = $x, y = $y })" moveactive "$x" "$y" "$window"
-    else
-      hypr_dispatch "hl.dsp.window.center({ window = \"$window\" })" centerwindow "$window"
+    if ! hyprctl --batch "dispatch hl.dsp.window.pin({ window = \"$window\" });dispatch hl.dsp.window.float({ window = \"$window\", action = \"toggle\" });dispatch hl.dsp.window.tag({ window = \"$window\", tag = \"-pop\" })" >/dev/null 2>&1; then
+      hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
+      hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
+      hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"-pop\" })" tagwindow -pop "$window"
     fi
-    hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
-    hypr_dispatch "hl.dsp.window.alter_zorder({ window = \"$window\", mode = \"top\" })" alterzorder top "$window"
-    hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"+pop\" })" tagwindow +pop "$window"
+  elif [[ -n $addr ]]; then
+    local move_lua="dispatch hl.dsp.window.center({ window = \"$window\" })"
+    [[ -n $x && -n $y ]] && move_lua="dispatch hl.dsp.window.move({ window = \"$window\", x = $x, y = $y })"
+    if ! hyprctl --batch "dispatch hl.dsp.window.float({ window = \"$window\", action = \"toggle\" });dispatch hl.dsp.window.resize({ window = \"$window\", x = $width, y = $height });${move_lua};dispatch hl.dsp.window.pin({ window = \"$window\" });dispatch hl.dsp.window.alter_zorder({ window = \"$window\", mode = \"top\" });dispatch hl.dsp.window.tag({ window = \"$window\", tag = \"+pop\" })" >/dev/null 2>&1; then
+      hypr_dispatch "hl.dsp.window.float({ window = \"$window\", action = \"toggle\" })" togglefloating "$window"
+      hypr_dispatch "hl.dsp.window.resize({ window = \"$window\", x = $width, y = $height })" resizeactive exact "$width" "$height" "$window"
+      if [[ -n $x && -n $y ]]; then
+        hypr_dispatch "hl.dsp.window.move({ window = \"$window\", x = $x, y = $y })" moveactive "$x" "$y" "$window"
+      else
+        hypr_dispatch "hl.dsp.window.center({ window = \"$window\" })" centerwindow "$window"
+      fi
+      hypr_dispatch "hl.dsp.window.pin({ window = \"$window\" })" pin "$window"
+      hypr_dispatch "hl.dsp.window.alter_zorder({ window = \"$window\", mode = \"top\" })" alterzorder top "$window"
+      hypr_dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"+pop\" })" tagwindow +pop "$window"
+    fi
   fi
 }
 
@@ -170,8 +183,7 @@ window_transparency_toggle() {
   inactive_opacity=$(hyprctl getprop "$window" opacity_inactive)
 
   if [[ $opacity == "1" && $inactive_opacity == "1" ]]; then
-    hyprctl dispatch "hl.dsp.window.tag({ window = \"$window\", tag = \"+transparent\" })" >/dev/null
-    hyprctl dispatch "hl.dsp.window.set_prop({ window = \"$window\", prop = \"opaque\", value = \"false\" })" >/dev/null
+    hyprctl --batch "dispatch hl.dsp.window.tag({ window = \"$window\", tag = \"+transparent\" });dispatch hl.dsp.window.set_prop({ window = \"$window\", prop = \"opaque\", value = \"false\" })" >/dev/null
   else
     hyprctl dispatch "hl.dsp.window.set_prop({ window = \"$window\", prop = \"opaque\", value = \"toggle\" })" >/dev/null
   fi
@@ -185,12 +197,12 @@ window_width_cmd() {
     exit 1
   }
 
-  local active key workspace filename state_file
+  local active key="" workspace="" active_width="" address="" filename state_file
   active=$(hyprctl activewindow -j 2>/dev/null)
-  key=$(jq -r '[.class, .initialClass, .title] | map(select(. != null and . != "")) | first // empty' <<<"$active")
-  [[ -n $key ]] || exit 1
-  workspace=$(jq -r '.workspace.id // .workspace.name // empty' <<<"$active")
-  [[ -n $workspace ]] || exit 1
+  IFS=$'\t' read -r key workspace active_width address < <(
+    jq -r '[([.class, .initialClass, .title] | map(select(. != null and . != "")) | first // ""), (.workspace.id // .workspace.name // ""), (.size[0] // ""), (.address // "")] | @tsv' <<<"$active"
+  ) || true
+  [[ -n $key && -n $workspace ]] || exit 1
 
   filename="workspace-${workspace}-${key}"
   filename="${filename//\//_}"
@@ -206,8 +218,8 @@ window_width_cmd() {
   }
 
   if [[ $action == "save" ]]; then
-    local width tmp
-    width=$(jq -er '.size[0]' <<<"$active")
+    local width="$active_width" tmp
+    [[ $width =~ ^[0-9]+$ ]] || exit 1
     mkdir -p "$state_dir"
     tmp=$(mktemp "$state_dir/.width.XXXXXX")
     printf '%s\n' "$width" >"$tmp"
@@ -219,11 +231,9 @@ window_width_cmd() {
       quattro-notification-send -g  "$(quattro-i18n window.noSavedWidth "$key" "$workspace")" "$(quattro-i18n window.saveWidthHint)"
       exit 1
     fi
-    local width address window current_width next_width probe direction="" delta probe_delta _
+    local width window current_width next_width probe direction="" delta probe_delta _
     width=$(<"$state_file")
-    [[ $width =~ ^[0-9]+$ ]] || exit 1
-    address=$(jq -r '.address // empty' <<<"$active")
-    [[ -n $address ]] || exit 1
+    [[ $width =~ ^[0-9]+$ && -n $address ]] || exit 1
     window="address:$address"
     current_width=$(get_width "$address")
     (( current_width == width )) && return 0

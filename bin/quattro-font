@@ -48,7 +48,7 @@ font_set() {
   xml_font_name="${font_name//&/&amp;}"
   xml_font_name="${xml_font_name//</&lt;}"
   xml_font_name="${xml_font_name//>/&gt;}"
-  mkdir -p "$(dirname "$fontconfig_file")"
+  mkdir -p "${fontconfig_file%/*}"
   cat >"$fontconfig_file" <<XML
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">

@@ -375,9 +375,10 @@ remove_user_data_assets() {
     fcitx5-wayland-launcher.desktop \
     org.fcitx.Fcitx5.desktop; do
     target_desktop="$DATA_HOME/applications/$hidden_desktop"
-    if [[ -f $target_desktop ]] && grep -qxF 'NoDisplay=true' "$target_desktop" 2>/dev/null &&
-      (( $(wc -l <"$target_desktop") <= 4 )); then
-      rm -f "$target_desktop"
+    if [[ -f $target_desktop ]] && grep -qxF 'NoDisplay=true' "$target_desktop" 2>/dev/null; then
+      local line_count=0 _line
+      while IFS= read -r _line && (( ++line_count <= 5 )); do :; done <"$target_desktop"
+      (( line_count <= 4 )) && rm -f "$target_desktop"
     fi
   done
 
@@ -658,12 +659,9 @@ remove_packages() {
   fi
 
   local -a installed_pkgs=()
-  local pkg
-  for pkg in "${all_pkgs[@]}"; do
-    if pacman -Qq "$pkg" >/dev/null 2>&1; then
-      installed_pkgs+=("$pkg")
-    fi
-  done
+  if (( ${#all_pkgs[@]} > 0 )); then
+    mapfile -t installed_pkgs < <(pacman -Qq "${all_pkgs[@]}" 2>/dev/null || true)
+  fi
 
   if (( ${#installed_pkgs[@]} == 0 )); then
     echo "No Quattro packages are currently installed."
@@ -677,6 +675,7 @@ remove_packages() {
       local -a remaining=("${installed_pkgs[@]}")
       local -a next_remaining=()
       local removed_in_pass=1
+      local pkg
 
       while (( removed_in_pass > 0 && ${#remaining[@]} > 0 )); do
         removed_in_pass=0

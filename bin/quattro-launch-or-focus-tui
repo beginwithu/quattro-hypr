@@ -9,7 +9,7 @@ set -uo pipefail
 if [[ ${1:-} == --app-id=* ]]; then
   APP_ID="${1#--app-id=}"
 else
-  APP_ID="org.quattro.$(basename "$1")"
+  APP_ID="org.quattro.${1##*/}"
 fi
 
 LAUNCH_COMMAND="quattro-launch-tui $@"

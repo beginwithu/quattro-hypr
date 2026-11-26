@@ -28,14 +28,20 @@ clipboard_open() {
   [[ $history_index =~ ^[0-9]+$ ]] || exit 1
   [[ -r $history_path ]] || exit 1
 
-  local entry_type
-  entry_type=$(jq -er --argjson index "$history_index" '.[$index].type' "$history_path") || exit 1
+  local entry_type="" entry_val=""
+  {
+    IFS= read -r entry_type
+    entry_val=$(cat)
+  } < <(jq -er --argjson index "$history_index" '
+    .[$index] // empty
+    | (.type // ""),
+      (if .type == "image" then (.path // "") elif .type == "text" then (.text // "") else "" end)
+  ' "$history_path") || exit 1
 
   case "$entry_type" in
     image)
-      local path
-      path=$(jq -er --argjson index "$history_index" '.[$index].path' "$history_path") || exit 1
-      [[ -r $path ]] || exit 1
+      local path="$entry_val"
+      [[ -n $path && -r $path ]] || exit 1
       if command -v imv >/dev/null 2>&1; then
         exec setsid uwsm-app -- imv "$path"
       elif command -v satty >/dev/null 2>&1; then
@@ -45,10 +51,10 @@ clipboard_open() {
       fi
       ;;
     text)
-      local text url="" open_dir open_file
-      text=$(jq -er --argjson index "$history_index" '.[$index].text' "$history_path") || exit 1
-      url=$(grep -Eom1 'https?://[^[:space:]"'\''<>]+' <<<"$text" || true)
-      if [[ -z $url && $text =~ ^[[:space:]]*([[:alnum:]][[:alnum:].-]+\.[[:alpha:]]{2,})(/[^[:space:]]*)?[[:space:]]*$ ]]; then
+      local text="$entry_val" url="" open_dir open_file
+      if [[ $text =~ (https?://[^[:space:]\"\'$'\x3c'$'\x3e']+) ]]; then
+        url="${BASH_REMATCH[1]}"
+      elif [[ $text =~ ^[[:space:]]*([[:alnum:]][[:alnum:].-]+\.[[:alpha:]]{2,})(/[^[:space:]]*)?[[:space:]]*$ ]]; then
         url="https://${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
       fi
       if [[ -n $url ]]; then
@@ -110,9 +116,10 @@ clipboard_paste_text() {
 
   if [[ -n $history_index ]]; then
     local history_path="$HOME/.local/state/quattro/clipboard-history.json"
-    [[ $history_index =~ ^[0-9]+$ ]] || return 0
-    jq -e --argjson index "$history_index" '.[$index].type == "text" and (.[$index].text | type == "string")' "$history_path" >/dev/null || return 0
-    jq -j --argjson index "$history_index" '.[$index].text' "$history_path" | wl-copy
+    [[ $history_index =~ ^[0-9]+$ && -r $history_path ]] || return 0
+    local extracted=""
+    extracted=$(jq -er --argjson index "$history_index" '.[$index] | select(.type == "text" and (.text | type == "string")) | .text + "X"' "$history_path" 2>/dev/null) || return 0
+    printf '%s' "${extracted%X}" | wl-copy
     if [[ $copy_only != "true" && $use_shift_insert != "true" ]]; then
       use_universal=true
     fi

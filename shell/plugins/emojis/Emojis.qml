@@ -48,7 +48,7 @@ Item {
     root.filterText = ""
     root.selectedIndex = 0
     root.cursorActive = true
-    root.rebuildDisplay()
+    if (root.emojis.length > 0) root.rebuildDisplay()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -155,7 +155,7 @@ Item {
   ListModel { id: displayModel }
 
   FileView {
-    path: root.quattroPath + "/shell/plugins/emojis/emojis.json"
+    path: (root.opened || root.emojis.length > 0) ? root.quattroPath + "/shell/plugins/emojis/emojis.json" : ""
     onLoaded: root.loadEmojis(text())
   }
   OverlayWindow {
@@ -312,7 +312,7 @@ Item {
             anchors.centerIn: parent
             width: parent.width - 2 * root.contentMargin
             spacing: Style.space(8)
-            visible: displayModel.count === 0
+            visible: displayModel.count === 0 && root.emojis.length > 0
 
             Text {
               text: "󰈉"

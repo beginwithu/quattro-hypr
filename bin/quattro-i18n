@@ -65,25 +65,88 @@ english_catalog=$i18n/en/cli.json
 registry=$i18n/locales.json
 [[ -f $registry ]] || registry=/dev/null
 
+# Fast path for English (decimal ".", ASCII digits, standard 1/-1 singular rule):
+# resolves plain and plural strings directly in Bash without forking jq (~0.4ms vs ~12ms),
+# falling back to jq if an entry contains JSON backslash escapes.
+lookup_en_fast() {
+  local line prefix="  \"$key\": " val="" in_obj=0 one_val="" other_val="" found_key=0
+  [[ -f $english_catalog ]] || return 1
+
+  while IFS= read -r line; do
+    if (( in_obj )); then
+      if [[ $line == "  }"* ]]; then
+        break
+      elif [[ $line =~ ^[[:space:]]*\"one\":[[:space:]]*\"(.*)\",?$ ]]; then
+        one_val="${BASH_REMATCH[1]}"
+      elif [[ $line =~ ^[[:space:]]*\"other\":[[:space:]]*\"(.*)\",?$ ]]; then
+        other_val="${BASH_REMATCH[1]}"
+      fi
+    elif [[ $line == "$prefix"* ]]; then
+      found_key=1
+      val="${line#"$prefix"}"
+      if [[ $val == "{"* ]]; then
+        in_obj=1
+      elif [[ $val =~ ^\"(.*)\",?$ ]]; then
+        val="${BASH_REMATCH[1]}"
+        [[ $val == *\\* ]] && return 1
+        EN_RESULT="$val"
+        return 0
+      else
+        return 1
+      fi
+    elif [[ $line == *"\"$key\""* ]]; then
+      return 1
+    fi
+  done <"$english_catalog"
+
+  if (( in_obj )); then
+    [[ $one_val == *\\* || $other_val == *\\* ]] && return 1
+    if [[ $count != "null" ]] && (( count == 1 || count == -1 )); then
+      EN_RESULT="${one_val:-$other_val}"
+    else
+      EN_RESULT="$other_val"
+    fi
+    [[ -n $EN_RESULT ]] || EN_RESULT="$key"
+    return 0
+  fi
+
+  (( found_key == 0 )) || return 1
+  EN_RESULT="$key"
+  return 0
+}
+
+parts=()
+if [[ $language == "en" ]]; then
+  if (( number_only )); then
+    printf '%s' "$1"
+    exit 0
+  elif lookup_en_fast; then
+    parts=("$EN_RESULT" "$@")
+  fi
+fi
+
 # One jq run picks the string and localizes the arguments; the results come
 # back NUL-separated so a string may itself span lines. The -- after --args
 # keeps an argument that starts with a dash (a label like "-work") from being
 # read as a jq option.
-parts=()
-mapfile -d '' parts < <(jq -j -n -L "$i18n" \
-  --arg key "$key" --arg language "$language" --argjson count "$count" \
-  --slurpfile lang "$language_catalog" --slurpfile en "$english_catalog" --slurpfile registry "$registry" '
-  include "plural";
-  def present: . != null and . != "";
-  ($lang[0] // {}) as $l | ($en[0] // {}) as $e | ($registry[0][$language] // {}) as $r
-  | (if ($l[$key] | present) then [$l[$key], $language]
-     elif ($e[$key] | present) then [$e[$key], "en"]
-     else [$key, "en"] end) as [$entry, $from]
-  | (if $count == null then (if ($entry | type) == "object" then $entry.other else $entry end)
-     else ($entry | plural_pick($from; $count)) end) as $string
-  | [$string // $key] + ($ARGS.positional | map(localize_number($r.decimal // "."; $r.zeroDigit // "0")))
-  | map(tostring + "\u0000") | add
-' --args -- "$@" 2>/dev/null) || true
+if (( ${#parts[@]} == 0 )); then
+  jq_lang_args=(--slurpfile lang "$language_catalog")
+  [[ $language == "en" ]] && jq_lang_args=(--argjson lang '[{}]')
+  mapfile -d '' parts < <(jq -j -n -L "$i18n" \
+    --arg key "$key" --arg language "$language" --argjson count "$count" \
+    "${jq_lang_args[@]}" --slurpfile en "$english_catalog" --slurpfile registry "$registry" '
+    include "plural";
+    def present: . != null and . != "";
+    ($lang[0] // {}) as $l | ($en[0] // {}) as $e | ($registry[0][$language] // {}) as $r
+    | (if ($l[$key] | present) then [$l[$key], $language]
+       elif ($e[$key] | present) then [$e[$key], "en"]
+       else [$key, "en"] end) as [$entry, $from]
+    | (if $count == null then (if ($entry | type) == "object" then $entry.other else $entry end)
+       else ($entry | plural_pick($from; $count)) end) as $string
+    | [$string // $key] + ($ARGS.positional | map(localize_number($r.decimal // "."; $r.zeroDigit // "0")))
+    | map(tostring + "\u0000") | add
+  ' --args -- "$@" 2>/dev/null) || true
+fi
 
 if (( ${#parts[@]} == 0 )); then
   parts=("$key" "$@")

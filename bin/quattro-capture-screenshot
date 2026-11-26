@@ -24,7 +24,8 @@ for arg in "$@"; do
   esac
 done
 
-out_file="$SCREENSHOT_DIR/screenshot-$(date +'%Y-%m-%d_%H-%M-%S').png"
+printf -v ts '%(%Y-%m-%d_%H-%M-%S)T' -1
+out_file="$SCREENSHOT_DIR/screenshot-$ts.png"
 
 freeze_pid=""
 cleanup_freeze() {

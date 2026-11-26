@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -B
 
 # quattro:summary=Interactive screen, window, workspace, and region share picker with previews
 
@@ -85,13 +85,6 @@ def _parse_len_prefixed_outputs(raw: str):
 
 
 def parse_outputs(raw: str) -> list:
-    hypr_monitors = hyprctl_json("monitors")
-    hypr_by_name = {
-        str(mon.get("name")): mon
-        for mon in hypr_monitors
-        if mon.get("name")
-    }
-
     items = _parse_len_prefixed_outputs(raw) if raw else None
     if items is None:
         items = []
@@ -135,15 +128,27 @@ def parse_outputs(raw: str) -> list:
                 })
 
     if items:
-        for item in items:
-            mon = hypr_by_name.get(item["name"])
-            if mon:
-                if not item["description"]:
-                    item["description"] = str(mon.get("description") or "")
-                if item["width"] <= 0 or item["height"] <= 0:
-                    item["width"] = int(mon.get("width") or item["width"])
-                    item["height"] = int(mon.get("height") or item["height"])
+        needs_hypr = any(
+            not item["description"] or item["width"] <= 0 or item["height"] <= 0
+            for item in items
+        )
+        if needs_hypr:
+            hypr_by_name = {
+                str(mon.get("name")): mon
+                for mon in hyprctl_json("monitors")
+                if mon.get("name")
+            }
+            for item in items:
+                mon = hypr_by_name.get(item["name"])
+                if mon:
+                    if not item["description"]:
+                        item["description"] = str(mon.get("description") or "")
+                    if item["width"] <= 0 or item["height"] <= 0:
+                        item["width"] = int(mon.get("width") or item["width"])
+                        item["height"] = int(mon.get("height") or item["height"])
         return items
+
+    hypr_monitors = hyprctl_json("monitors")
 
     for mon in hypr_monitors:
         name = str(mon.get("name") or "")

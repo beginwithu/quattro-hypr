@@ -12,15 +12,17 @@
 namespace fs = std::filesystem;
 
 namespace {
-  struct SEntry {
-    std::string id, name, wmClass;
-  };
-
-  std::vector<SEntry>                          g_entries;
+  std::unordered_map<std::string, std::string> g_byWmClass;
+  std::unordered_map<std::string, std::string> g_byLowerId;
   std::unordered_map<std::string, std::string> g_resolved;
   std::vector<fs::file_time_type>              g_stamps;
   std::chrono::steady_clock::time_point        g_lastCheck;
   bool                                         g_loaded = false;
+
+  std::string lower(std::string text) {
+    std::ranges::transform(text, text.begin(), [](unsigned char c) { return std::tolower(c); });
+    return text;
+  }
 
   std::vector<fs::path> applicationDirs() {
     std::vector<fs::path> dirs;
@@ -51,6 +53,7 @@ namespace {
   // an installed web app reaches this cache without a Hyprland reload.
   std::vector<fs::file_time_type> stamps(const std::vector<fs::path>& dirs) {
     std::vector<fs::file_time_type> result;
+    result.reserve(dirs.size());
     for (const auto& dir : dirs) {
       std::error_code ec;
       const auto      time = fs::last_write_time(dir, ec);
@@ -59,30 +62,39 @@ namespace {
     return result;
   }
 
-  SEntry readEntry(const fs::path& path) {
-    SEntry        entry{.id = path.stem().string()};
+  void readAndIndexEntry(const fs::path& path) {
     std::ifstream file(path);
-    std::string   line;
+    std::string   line, name, wmClass;
     bool          inEntry = false;
 
     while (std::getline(file, line)) {
       if (line.starts_with('[')) {
+        if (inEntry)
+          break;
         inEntry = line == "[Desktop Entry]";
         continue;
       }
       if (!inEntry)
         continue;
-      if (line.starts_with("Name="))
-        entry.name = line.substr(5);
-      else if (line.starts_with("StartupWMClass="))
-        entry.wmClass = line.substr(15);
+      if (name.empty() && line.starts_with("Name="))
+        name = line.substr(5);
+      else if (wmClass.empty() && line.starts_with("StartupWMClass="))
+        wmClass = line.substr(15);
+      if (!name.empty() && !wmClass.empty())
+        break;
     }
 
-    return entry;
+    if (name.empty())
+      return;
+
+    if (!wmClass.empty())
+      g_byWmClass.try_emplace(wmClass, name);
+    g_byLowerId.try_emplace(lower(path.stem().string()), std::move(name));
   }
 
   void load(const std::vector<fs::path>& dirs) {
-    g_entries.clear();
+    g_byWmClass.clear();
+    g_byLowerId.clear();
     g_resolved.clear();
 
     // Earlier directories win, so a user's own entry overrides the system one.
@@ -92,16 +104,9 @@ namespace {
       for (const auto& file : fs::directory_iterator(dir, ec)) {
         if (file.path().extension() != ".desktop" || !seen.insert(file.path().filename().string()).second)
           continue;
-        auto entry = readEntry(file.path());
-        if (!entry.name.empty())
-          g_entries.push_back(std::move(entry));
+        readAndIndexEntry(file.path());
       }
     }
-  }
-
-  std::string lower(std::string text) {
-    std::ranges::transform(text, text.begin(), [](unsigned char c) { return std::tolower(c); });
-    return text;
   }
 }
 
@@ -125,22 +130,11 @@ std::string quattroAppName(const std::string& windowClass) {
     return cached->second;
 
   std::string name;
-  for (const auto& entry : g_entries) {
-    if (entry.wmClass == windowClass) {
-      name = entry.name;
-      break;
-    }
-  }
-  if (name.empty()) {
-    const auto wanted = lower(windowClass);
-    for (const auto& entry : g_entries) {
-      if (lower(entry.id) == wanted) {
-        name = entry.name;
-        break;
-      }
-    }
-  }
+  if (const auto it = g_byWmClass.find(windowClass); it != g_byWmClass.end())
+    name = it->second;
+  else if (const auto it = g_byLowerId.find(lower(windowClass)); it != g_byLowerId.end())
+    name = it->second;
 
-  g_resolved[windowClass] = name;
+  g_resolved.emplace(windowClass, name);
   return name;
 }

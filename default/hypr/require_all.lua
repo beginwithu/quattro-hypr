@@ -15,7 +15,12 @@ end
 
 function M.files(dir, module_prefix, options)
   local exclude = options and options.exclude or {}
-  local handle = io.popen("find " .. shell_quote(dir) .. " -maxdepth 1 -type f -name '*.lua' -printf '%f\\n' 2>/dev/null | sort")
+  -- Shell builtins only (glob + test + printf): one process per directory on
+  -- every config load/reload instead of sh + find + sort. The glob expands in
+  -- the same collation order sort used, and [ -f ] && [ ! -L ] keeps find's
+  -- -type f semantics (regular files, symlinks skipped).
+  local handle = io.popen("for f in " .. shell_quote(dir) .. "/*.lua; do "
+    .. "[ -f \"$f\" ] && [ ! -L \"$f\" ] && printf '%s\\n' \"${f##*/}\"; done 2>/dev/null")
   if handle then
     for filename in handle:lines() do
       local name = filename:gsub("%.lua$", "")

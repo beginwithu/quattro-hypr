@@ -48,17 +48,24 @@ active_workspace() {
 # one rectangle: slurp cannot tell them apart, and duplicates would stall the
 # Tab cycle on the first copy.
 window_rects() {
-  hyprctl clients -j | jq -r --arg ws "$(active_workspace)" \
-    '[.[] | select(.workspace.id == ($ws | tonumber) and .hidden != true) | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"] | unique[]'
+  hyprctl --batch -j "monitors;clients" | jq -rs '
+    (.[0][] | select(.focused == true) | .activeWorkspace.id) as $ws
+    | [.[1][] | select(.workspace.id == $ws and .hidden != true) | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"]
+    | unique[]
+  '
 }
 
 monitor_rects() {
-  hyprctl monitors -j | jq -r --arg ws "$(active_workspace)" "${JQ_MONITOR_GEO} .[] | select(.activeWorkspace.id == (\$ws | tonumber)) | format_geo"
+  hyprctl monitors -j | jq -r "${JQ_MONITOR_GEO} (.[] | select(.focused == true) | .activeWorkspace.id) as \$ws | .[] | select(.activeWorkspace.id == \$ws) | format_geo"
 }
 
 get_rectangles() {
-  monitor_rects
-  window_rects
+  hyprctl --batch -j "monitors;clients" | jq -rs "${JQ_MONITOR_GEO}
+    (.[0][] | select(.focused == true) | .activeWorkspace.id) as \$ws
+    | ([.[0][] | select(.activeWorkspace.id == \$ws) | format_geo])
+    + ([.[1][] | select(.workspace.id == \$ws and .hidden != true) | \"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])\"] | unique)
+    | .[]
+  "
 }
 
 focused_monitor_geo() {
@@ -163,14 +170,19 @@ if [[ ${1:-} == "--select-window" ]]; then
 
   candidates=$(window_rects)
 
-  # Eighth fractions of a rectangle's width and height, ordered by distance
+  # Eighth fractions of a rectangle's width and height, pre-ordered by distance
   # from its center so warp_point_in prefers the most central point it can use.
-  mapfile -t WARP_PROBES < <(
-    for fx in {1..7}; do
-      for fy in {1..7}; do
-        printf '%d %d %d\n' $(((fx - 4) * (fx - 4) + (fy - 4) * (fy - 4))) "$fx" "$fy"
-      done
-    done | sort -n | cut -d' ' -f2-
+  WARP_PROBES=(
+    "4 4"
+    "3 4" "4 3" "4 5" "5 4"
+    "3 3" "3 5" "5 3" "5 5"
+    "2 4" "4 2" "4 6" "6 4"
+    "2 3" "2 5" "3 2" "3 6" "5 2" "5 6" "6 3" "6 5"
+    "2 2" "2 6" "6 2" "6 6"
+    "1 4" "4 1" "4 7" "7 4"
+    "1 3" "1 5" "3 1" "3 7" "5 1" "5 7" "7 3" "7 5"
+    "1 2" "1 6" "2 1" "2 7" "6 1" "6 7" "7 2" "7 6"
+    "1 1" "1 7" "7 1" "7 7"
   )
 
   # Only rectangles that hovering could actually reach take part in navigation,

@@ -57,7 +57,7 @@ current_base_size() {
 # sections and keys in the user override are left untouched.
 set_base_size() {
   local size="$1"
-  mkdir -p "$(dirname "$shell_config")"
+  mkdir -p "${shell_config%/*}"
 
   if [[ ! -f $shell_config ]]; then
     printf '[font]\nbase-size = %s\n' "$size" >"$shell_config"
@@ -128,8 +128,7 @@ set_factor() {
 
 # px base-size -> terminal point size, rounded to the nearest integer.
 term_pt_for() {
-  awk -v s="$1" -v p="$TERM_DEFAULT_PT" -v b="$SHELL_DEFAULT_PX" \
-    'BEGIN { printf "%d", int(s * p / b + 0.5) }'
+  printf '%d' $(( ($1 * TERM_DEFAULT_PT + SHELL_DEFAULT_PX / 2) / SHELL_DEFAULT_PX ))
 }
 
 # Set the font point size in foot.ini. Family is left untouched — that is
@@ -160,8 +159,14 @@ set_terminal_size() {
 
 # Report the current terminal point size from foot.ini.
 term_current_pt() {
+  local line=""
   if [[ -f ~/.config/foot/foot.ini ]]; then
-    grep -oP ':size=\K[0-9.]+' ~/.config/foot/foot.ini | head -1
+    while IFS= read -r line; do
+      if [[ $line =~ :size=([0-9.]+) ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+        return
+      fi
+    done < ~/.config/foot/foot.ini
   fi
 }
 

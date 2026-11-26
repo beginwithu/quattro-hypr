@@ -24,12 +24,12 @@ flag_toggle() {
       if [[ -f $flag ]]; then
         rm -f "$flag"
       else
-        mkdir -p "$(dirname "$flag")"
+        mkdir -p "${flag%/*}"
         touch "$flag"
       fi
       ;;
     on)
-      mkdir -p "$(dirname "$flag")"
+      mkdir -p "${flag%/*}"
       touch "$flag"
       ;;
     off)
@@ -198,7 +198,7 @@ toggle_input_device() {
   disable_dev() {
     require_device
     apply_device false
-    mkdir -p "$(dirname "$name_file")"
+    mkdir -p "${name_file%/*}"
     printf '%s\n' "$device" >"$name_file"
     if [[ $kind == "touchpad" ]]; then
       quattro-osd -i "$icon" -m "$(quattro-i18n input.touchpadDisabled)"
@@ -233,27 +233,30 @@ toggle_nightlight() {
   current_temp() {
     local output
     output=$(hyprctl hyprsunset temperature 2>/dev/null) || return 0
-    grep -oE '[0-9]+' <<<"$output" | head -n1 || true
+    if [[ $output =~ ([0-9]+) ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+    fi
   }
 
   if [[ ${1:-} == "--status" || ${1:-} == "status" ]]; then
-    local temp enabled
+    local temp enabled temp_json="null"
     temp=$(current_temp)
     if [[ -n $temp ]] && (( temp < IDENTITY_TEMP )); then
       enabled=true
     else
       enabled=false
     fi
-    jq -cn --argjson enabled "$enabled" --arg temp "$temp" \
-      '{enabled:$enabled, temperature:(($temp | tonumber?) // null)}'
+    [[ $temp =~ ^[0-9]+$ ]] && temp_json="$temp"
+    printf '{"enabled":%s,"temperature":%s}\n' "$enabled" "$temp_json"
     return 0
   fi
 
-  local starting=false
-  if ! pgrep -x hyprsunset >/dev/null 2>&1; then
+  local starting=false sunset_pid=""
+  sunset_pid=$(pgrep -nx hyprsunset 2>/dev/null || true)
+  if [[ -z $sunset_pid ]]; then
     setsid uwsm-app -- hyprsunset >/dev/null 2>&1 &
     starting=true
-  elif (( $(ps -o etimes= -p "$(pgrep -nx hyprsunset)" 2>/dev/null || echo 0) < 3 )); then
+  elif (( $(ps -o etimes= -p "$sunset_pid" 2>/dev/null || echo 0) < 3 )); then
     starting=true
   fi
 

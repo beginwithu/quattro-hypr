@@ -17,14 +17,34 @@ foot_ini=$HOME/.local/state/quattro/current/theme/foot.ini
 # once; each terminal's shells come from the kernel's list of its children.
 foot_pids=$(pgrep -x foot) || exit 0
 
-foot_osc=$(quattro_theme_osc "$colors_toml")
+declare -A _foot_colors=()
+while IFS=$'\t' read -r _k _v; do
+  _foot_colors[$_k]="$_v"
+done < <(quattro-theme-color --file "$colors_toml" --all 2>/dev/null)
+
+foot_osc=""
+[[ -n ${_foot_colors[foreground]:-} ]] && foot_osc+=$(printf '\033]10;%s\007' "${_foot_colors[foreground]}")
+[[ -n ${_foot_colors[background]:-} ]] && foot_osc+=$(printf '\033]11;%s\007' "${_foot_colors[background]}")
+[[ -n ${_foot_colors[cursor]:-} ]] && foot_osc+=$(printf '\033]12;%s\007' "${_foot_colors[cursor]}")
+[[ -n ${_foot_colors[selection_background]:-} ]] && foot_osc+=$(printf '\033]17;%s\007' "${_foot_colors[selection_background]}")
+[[ -n ${_foot_colors[selection_foreground]:-} ]] && foot_osc+=$(printf '\033]19;%s\007' "${_foot_colors[selection_foreground]}")
+for _i in {0..15}; do
+  [[ -n ${_foot_colors[color$_i]:-} ]] && foot_osc+=$(printf '\033]4;%d;%s\007' "$_i" "${_foot_colors[color$_i]}")
+done
 [[ -n $foot_osc ]] || exit 0
 
 # foot takes a background alpha as an urxvt-style [percent] prefix, so a theme
 # going see-through or back, as with Glassy windows, reaches running terminals.
 # The last alpha in the theme's foot.ini wins, as it does when foot reads it.
-alpha=$(sed -n 's/^[[:space:]]*alpha[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' "$foot_ini" 2>/dev/null | tail -n 1)
-background=$(quattro-theme-color --file "$colors_toml" background 2>/dev/null)
+alpha=""
+if [[ -r $foot_ini ]]; then
+  while IFS= read -r _line; do
+    if [[ $_line =~ ^[[:space:]]*alpha[[:space:]]*=[[:space:]]*([0-9.]+) ]]; then
+      alpha="${BASH_REMATCH[1]}"
+    fi
+  done <"$foot_ini"
+fi
+background="${_foot_colors[background]:-}"
 if [[ -n $background ]]; then
   percent=$(awk -v alpha="${alpha:-1}" 'BEGIN { printf "%d", alpha * 100 + 0.5 }')
   foot_osc+=$(printf '\033]11;[%d]%s\007' "$percent" "$background")
@@ -43,7 +63,15 @@ for foot_pid in $foot_pids; do
   for fd_link in "/proc/$foot_pid/fd"/*; do
     [[ $(readlink "$fd_link" 2>/dev/null) == "/dev/ptmx" ]] || continue
     fd_num=${fd_link##*/}
-    tty_index=$(awk '/^tty-index:[[:space:]]*/ { print $2; exit }' "/proc/$foot_pid/fdinfo/$fd_num" 2>/dev/null)
+    tty_index=""
+    if [[ -r /proc/$foot_pid/fdinfo/$fd_num ]]; then
+      while IFS= read -r _fline; do
+        if [[ $_fline =~ ^tty-index:[[:space:]]*([0-9]+) ]]; then
+          tty_index="${BASH_REMATCH[1]}"
+          break
+        fi
+      done <"/proc/$foot_pid/fdinfo/$fd_num"
+    fi
     if [[ $tty_index =~ ^[0-9]+$ ]]; then
       tty="/dev/pts/$tty_index"
       found_pty=1

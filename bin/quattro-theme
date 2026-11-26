@@ -70,9 +70,13 @@ theme_install() {
   check_git_url "$repo_url" || exit 1
 
   local themes_dir="$HOME/.config/quattro/themes"
-  local repo_path="$repo_url" theme_name theme_path
+  local repo_path="${repo_url%/}" theme_name theme_path
   [[ $repo_path != *"://"* && $repo_path == *:* && ${repo_path%%:*} != */* ]] && repo_path="${repo_path#*:}"
-  theme_name=$(basename -- "$repo_path" .git | sed -E 's/^quattro-//; s/-theme$//' | tr '[:upper:]' '[:lower:]')
+  theme_name="${repo_path##*/}"
+  theme_name="${theme_name%.git}"
+  theme_name="${theme_name,,}"
+  theme_name="${theme_name#quattro-}"
+  theme_name="${theme_name%-theme}"
   theme_path="$themes_dir/$theme_name"
 
   if ! (LC_ALL=C; [[ $theme_name =~ ^[a-z0-9_][a-z0-9._+-]*$ ]]); then
@@ -128,7 +132,7 @@ theme_update() {
   mapfile -t themes < <(theme_extras || true)
   for theme in "${themes[@]}"; do
     [[ -n $theme ]] || continue
-    echo "Updating: $(basename "$theme")"
+    echo "Updating: ${theme##*/}"
     git -C "$theme" pull
   done
 }

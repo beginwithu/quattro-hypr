@@ -157,6 +157,7 @@ install_runtime() {
       rm -rf "${INSTALL_DIR:?}/$item"
       mkdir -p "$INSTALL_DIR/$item"
       cp -a "$PROJECT_DIR/$item/." "$INSTALL_DIR/$item/"
+      rm -rf "$INSTALL_DIR/$item/__pycache__"
     elif [[ -e $PROJECT_DIR/$item ]]; then
       cp -a "$PROJECT_DIR/$item" "$INSTALL_DIR/$item"
     fi
@@ -168,6 +169,7 @@ install_runtime() {
     [[ -L $link && ! -e $link ]] && rm -f "$link"
   done
   for bin_file in "$PROJECT_DIR"/bin/*; do
+    [[ -f $bin_file && -x $bin_file ]] || continue
     local name="${bin_file##*/}"
     ln -snf "$INSTALL_DIR/bin/$name" "$BIN_LINK_DIR/$name"
   done
@@ -319,7 +321,7 @@ EOF
 
   # Refresh font cache
   if command -v fc-cache >/dev/null 2>&1; then
-    fc-cache -f "$HOME/.local/share/fonts" || true
+    fc-cache "$HOME/.local/share/fonts" || true
   fi
 }
 
@@ -397,8 +399,7 @@ EOF
 
   # Prevent SDDM PAM logins from creating an encrypted keyring that prompts on login
   if [[ -f /etc/pam.d/sddm ]]; then
-    sudo sed -i '/-auth.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm
-    sudo sed -i '/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm
+    sudo sed -i -e '/-auth.*pam_gnome_keyring\.so/d' -e '/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm
   fi
   if command -v faillock >/dev/null 2>&1; then
     sudo faillock --user "$USER" --reset 2>/dev/null || true

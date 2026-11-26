@@ -82,8 +82,6 @@ monitor_internal() {
   local TOGGLE="internal-monitor-disable"
   local TOGGLE_FLAG="$HOME/.local/state/quattro/toggles/hypr/$TOGGLE.lua"
   local MIRROR_TOGGLE="internal-monitor-mirror"
-  local INTERNAL
-  INTERNAL=$(monitor_laptop)
 
   wake() {
     hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1 || true
@@ -98,6 +96,8 @@ monitor_internal() {
   }
 
   off() {
+    local INTERNAL
+    INTERNAL=$(monitor_laptop)
     if [[ -z $INTERNAL ]]; then
       quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.noLaptopDisplay)"
       exit 1
@@ -111,7 +111,7 @@ monitor_internal() {
       exit 1
     fi
     if quattro-hyprland-toggle --disabled "$TOGGLE" && quattro-hyprland-toggle --disabled "$MIRROR_TOGGLE"; then
-      mkdir -p "$(dirname "$TOGGLE_FLAG")"
+      mkdir -p "${TOGGLE_FLAG%/*}"
       printf 'hl.monitor({ output = "%s", disabled = true })\n' "$INTERNAL" >"$TOGGLE_FLAG"
       quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.laptopDisabled)"
       quattro-restart hyprctl
@@ -119,8 +119,8 @@ monitor_internal() {
   }
 
   recover() {
-    monitor_external_active && return 0
     quattro-hyprland-toggle --enabled "$TOGGLE" || return 0
+    monitor_external_active && return 0
     quattro-hyprland-toggle "$TOGGLE" off
     wake
   }
@@ -143,12 +143,12 @@ monitor_internal_mirror() {
   local TOGGLE="internal-monitor-mirror"
   local TOGGLE_FLAG="$HOME/.local/state/quattro/toggles/hypr/$TOGGLE.lua"
   local DISABLE_TOGGLE="internal-monitor-disable"
-  local INTERNAL
-  INTERNAL=$(monitor_laptop)
-  local -a EXTERNALS=()
-  mapfile -t EXTERNALS < <(hyprctl monitors -j | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)-") | not).name')
 
   on() {
+    local INTERNAL
+    local -a EXTERNALS=()
+    INTERNAL=$(monitor_laptop)
+    mapfile -t EXTERNALS < <(hyprctl monitors -j | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)-") | not).name')
     if (( ${#EXTERNALS[@]} == 0 )); then
       quattro-notification-send -g 󰍹 "$(quattro-i18n monitor.noExternalForMirror)"
       exit 1
@@ -166,7 +166,7 @@ monitor_internal_mirror() {
     done
     quattro-hyprland-toggle "$DISABLE_TOGGLE" off
     if quattro-hyprland-toggle --disabled "$TOGGLE"; then
-      mkdir -p "$(dirname "$TOGGLE_FLAG")"
+      mkdir -p "${TOGGLE_FLAG%/*}"
       for external in "${EXTERNALS[@]}"; do
         printf 'hl.monitor({ output = "%s", mode = "preferred", position = "auto", scale = 1, mirror = "%s" })\n' "$external" "$INTERNAL"
       done >"$TOGGLE_FLAG"
@@ -187,7 +187,7 @@ monitor_internal_mirror() {
       if quattro-hyprland-toggle --enabled "$TOGGLE"; then off; else on; fi
       ;;
     recover)
-      if ! monitor_external_active && quattro-hyprland-toggle --enabled "$TOGGLE"; then
+      if quattro-hyprland-toggle --enabled "$TOGGLE" && ! monitor_external_active; then
         quattro-hyprland-toggle "$TOGGLE" off
       fi
       ;;
@@ -249,29 +249,33 @@ monitor_resolution() {
   fi
   local size="${BASH_REMATCH[1]}"
   local rate="${BASH_REMATCH[3]}"
-  local active_monitor mode old_scale old_size scale others
-  active_monitor=$(jq -r '.name' <<<"$monitor_info")
+  local active_monitor="" mode="" old_scale="" old_size="" scale others
+  IFS=$'\t' read -r active_monitor old_scale old_size mode < <(
+    jq -r --arg size "$size" --arg rate "$rate" '
+      [
+        .name,
+        (.scale | tostring),
+        "\(.width)x\(.height)",
+        ([.availableModes[]
+          | capture("^(?<size>[0-9]+x[0-9]+)@(?<rate>[0-9.]+)Hz$")
+          | select(.size == $size)
+          | select($rate == "" or ((.rate | tonumber) - ($rate | tonumber) | fabs) < 0.01)]
+         | max_by(.rate | tonumber) // null
+         | if . then "\(.size)@\(.rate | tonumber | . * 100 | round / 100)" else "" end)
+      ] | @tsv
+    ' <<<"$monitor_info"
+  )
 
   if [[ ! $active_monitor =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "Refusing unsafe monitor name" >&2
     exit 1
   fi
 
-  mode=$(jq -r --arg size "$size" --arg rate "$rate" '
-    [.availableModes[]
-      | capture("^(?<size>[0-9]+x[0-9]+)@(?<rate>[0-9.]+)Hz$")
-      | select(.size == $size)
-      | select($rate == "" or ((.rate | tonumber) - ($rate | tonumber) | fabs) < 0.01)]
-    | max_by(.rate | tonumber) // empty
-    | "\(.size)@\(.rate | tonumber | . * 100 | round / 100)"' <<<"$monitor_info")
-
   if [[ -z $mode ]]; then
     echo "$active_monitor does not support $1" >&2
     exit 1
   fi
 
-  old_scale=$(jq -r '.scale' <<<"$monitor_info")
-  old_size=$(jq -r '"\(.width)x\(.height)"' <<<"$monitor_info")
   scale=$(clean_scale "$old_scale" "${size%x*}" "${size#*x}")
 
   monitor_persist "$active_monitor" "$scale" "$mode"
@@ -307,8 +311,10 @@ monitor_rotate() {
     exit 1
   fi
 
-  local old_transform
-  old_transform=$(jq -r '.transform // 0' <<<"$monitor_info")
+  local old_transform active_monitor scale width height mode new_size others
+  IFS=$'\t' read -r old_transform active_monitor scale width height mode < <(
+    jq -r '[(.transform // 0 | tostring), .name, (.scale | tostring), (.width | tostring), (.height | tostring), "\(.width)x\(.height)@\(.refreshRate)"] | @tsv' <<<"$monitor_info"
+  )
 
   if [[ -z ${1:-} ]]; then
     if (( old_transform < 4 )); then
@@ -333,17 +339,10 @@ monitor_rotate() {
     *) usage_rot >&2; exit 1 ;;
   esac
 
-  local active_monitor scale width height mode new_size others
-  active_monitor=$(jq -r '.name' <<<"$monitor_info")
   if [[ ! $active_monitor =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "Refusing unsafe monitor name" >&2
     exit 1
   fi
-
-  scale=$(jq -r '.scale' <<<"$monitor_info")
-  width=$(jq -r '.width' <<<"$monitor_info")
-  height=$(jq -r '.height' <<<"$monitor_info")
-  mode=$(jq -r '"\(.width)x\(.height)@\(.refreshRate)"' <<<"$monitor_info")
 
   monitor_persist "$active_monitor" "$scale" "" "" "$transform"
 

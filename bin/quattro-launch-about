@@ -89,13 +89,13 @@ display_columns() {
 # A section heading as the config draws it: the title centred in the 52 columns
 # between the box corners.
 about_heading() {
-  local title=$1 width left right
+  local title=$1 width left right bar="────────────────────────────────────────────────────"
   width=$(printf '%s' "$title" | display_columns)
   left=$(( (52 - width + 1) / 2 ))
   right=$(( 52 - width - left ))
   (( left > 0 )) || left=1
   (( right > 0 )) || right=1
-  printf '\e[90m┌%s%s%s┐' "$(printf '─%.0s' $(seq "$left"))" "$title" "$(printf '─%.0s' $(seq "$right"))"
+  printf '\e[90m┌%s%s%s┐' "${bar:0:left}" "$title" "${bar:0:right}"
 }
 
 # fastfetch has no translations of its own, so the About box runs from a copy of
@@ -176,8 +176,7 @@ hypr_dispatch() {
 }
 
 remember_fit() {
-  local directory tmp
-  directory=$(dirname "$FIT_FILE")
+  local directory="${FIT_FILE%/*}" tmp
   mkdir -p "$directory"
   tmp=$(mktemp "$directory/.about.fit.XXXXXX")
   printf '%s %s %s\n' "$1" "$2" "$3" >"$tmp"

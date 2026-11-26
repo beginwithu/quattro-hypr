@@ -35,13 +35,14 @@ usb_device_for_card() {
 
   path=$(readlink -f "/sys/class/sound/card$card" 2>/dev/null) || return 1
 
-  while [[ $path != "/" ]]; do
+  while [[ -n $path && $path != "/" ]]; do
     if [[ -f $path/idVendor && -f $path/idProduct && -f $path/busnum && -f $path/devnum ]]; then
-      basename "$path"
+      printf '%s\n' "${path##*/}"
       return 0
     fi
 
-    path=$(dirname "$path")
+    path="${path%/*}"
+    [[ -n $path ]] || path="/"
   done
 
   return 1
@@ -69,10 +70,12 @@ audio_process_blocked_on_usb() {
   for pid in /proc/[0-9]*; do
     [[ -r $pid/comm && -r $pid/wchan ]] || continue
 
-    name=$(cat "$pid/comm" 2>/dev/null || true)
+    name=""
+    IFS= read -r name <"$pid/comm" 2>/dev/null || continue
     [[ $name == "wireplumber" || $name == "pipewire" ]] || continue
 
-    wchan=$(cat "$pid/wchan" 2>/dev/null || true)
+    wchan=""
+    { wchan=$(<"$pid/wchan"); } 2>/dev/null || continue
     [[ $wchan == usb_* || $wchan == *usb* ]] && return 0
   done
 
@@ -128,13 +131,15 @@ stuck_usb_audio_devices() {
   for status in /proc/asound/card*/pcm*p/sub*/status; do
     [[ -e $status ]] || continue
 
-    state=$(awk '/^state:/ { print $2; exit }' "$status")
-    [[ $state == "SETUP" ]] || continue
+    state=""
+    owner_pid=""
+    read -r state owner_pid < <(
+      awk '/^state:/ { s = $2 } /^owner_pid[[:space:]]*:/ { p = $3 } END { if (s == "SETUP" && p != "") print s, p }' "$status"
+    ) || true
+    [[ $state == "SETUP" && -n $owner_pid && -r /proc/$owner_pid/comm ]] || continue
 
-    owner_pid=$(awk '/^owner_pid[[:space:]]*:/ { print $3; exit }' "$status")
-    [[ -n $owner_pid && -r /proc/$owner_pid/comm ]] || continue
-
-    owner_name=$(cat "/proc/$owner_pid/comm" 2>/dev/null || true)
+    owner_name=""
+    IFS= read -r owner_name <"/proc/$owner_pid/comm" 2>/dev/null || continue
     [[ $owner_name == "wireplumber" || $owner_name == "pipewire" ]] || continue
     [[ $status =~ /card([0-9]+)/ ]] || continue
 
@@ -162,9 +167,10 @@ reset_usb_audio_device() {
     return 1
   fi
 
-  busnum=$(cat "$sysfs/busnum" 2>/dev/null) || return 1
-  devnum=$(cat "$sysfs/devnum" 2>/dev/null) || return 1
-  product=$(cat "$sysfs/product" 2>/dev/null || echo "$device")
+  { busnum=$(<"$sysfs/busnum"); } 2>/dev/null || return 1
+  { devnum=$(<"$sysfs/devnum"); } 2>/dev/null || return 1
+  product="$device"
+  [[ -r $sysfs/product ]] && { product=$(<"$sysfs/product"); } 2>/dev/null || true
   bus_device=$(printf '%03d/%03d' "$busnum" "$devnum")
 
   echo -e "\nResetting stuck USB audio device: $product ($bus_device)..."

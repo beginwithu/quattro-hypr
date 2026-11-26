@@ -26,16 +26,26 @@ done
 
 if [[ -n $progress ]]; then
   # Shown as given, so the number takes the language's digits here.
-  progress_text="$(quattro-i18n --number "$progress" 2>/dev/null || printf '%s' "$progress")%"
+  lang_file=${QUATTRO_LANGUAGE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/quattro/language}
+  if [[ ! -f $lang_file && $progress =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
+    progress_text="${progress}%"
+  else
+    progress_text="$(quattro-i18n --number "$progress" 2>/dev/null || printf '%s' "$progress")%"
+  fi
 fi
 
-payload=$(jq -cn \
-  --arg icon "$icon" \
-  --arg message "$message" \
-  --arg value "$progress" \
-  --arg progressText "$progress_text" \
-  --arg max "$max" \
-  --arg duration "$duration" \
-  '{icon:$icon,message:$message,value:$value,progressText:$progressText,max:$max,duration:$duration}')
+if [[ "$icon$message$progress$progress_text$duration" != *[\"\\$'\x01'-$'\x1f']* ]]; then
+  printf -v payload '{"icon":"%s","message":"%s","value":"%s","progressText":"%s","max":"%s","duration":"%s"}' \
+    "$icon" "$message" "$progress" "$progress_text" "$max" "$duration"
+else
+  payload=$(jq -cn \
+    --arg icon "$icon" \
+    --arg message "$message" \
+    --arg value "$progress" \
+    --arg progressText "$progress_text" \
+    --arg max "$max" \
+    --arg duration "$duration" \
+    '{icon:$icon,message:$message,value:$value,progressText:$progressText,max:$max,duration:$duration}')
+fi
 
-quattro-shell -q osd show "$payload"
+exec quattro-shell -q osd show "$payload"

@@ -24,7 +24,8 @@ known_language() {
 current_language() {
   local code=""
   if [[ -f $language_file ]]; then
-    code=$(head -n 1 "$language_file" | tr -d '[:space:]')
+    IFS= read -r code <"$language_file" || true
+    code="${code//[[:space:]]/}"
   fi
 
   if [[ -n $code ]] && known_language "$code"; then
@@ -57,10 +58,13 @@ list_languages() {
 
 locale_generated() {
   # locale -a normalizes punctuation away (en_US.utf8), so compare squashed.
-  local want available
-  want=$(echo "$1" | tr -cd 'a-zA-Z0-9' | tr '[:upper:]' '[:lower:]')
-  available=" $(locale -a 2>/dev/null | tr -cd 'a-zA-Z0-9\n' | tr '[:upper:]' '[:lower:]' | tr '\n' ' ') "
-  [[ $available == *" $want "* ]]
+  local want="${1//[!a-zA-Z0-9]/}" available="" line=""
+  want="${want,,}"
+  while IFS= read -r line; do
+    line="${line//[!a-zA-Z0-9]/}"
+    [[ ${line,,} == "$want" ]] && return 0
+  done < <(locale -a 2>/dev/null)
+  return 1
 }
 
 # The session's LANG lives with the user, beside the language choice:
@@ -108,7 +112,7 @@ generate_locale() {
 # to inherit it. Apps already running keep the language they started with.
 apply_session_locale() {
   local locale=$1
-  mkdir -p "$(dirname "$session_env")"
+  mkdir -p "${session_env%/*}"
   printf '# The session language, set by quattro-language (Setup > Language).\nexport LANG=%s\n' "$locale" >"$session_env"
 
   if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && hyprctl eval "hl.env(\"LANG\", \"$locale\", true)" >/dev/null 2>&1; then
@@ -117,23 +121,21 @@ apply_session_locale() {
 }
 
 set_language() {
-  local code=$1
-  if ! known_language "$code"; then
+  local code=$1 locale="" name=""
+  IFS=$'\t' read -r locale name < <(
+    jq -er --arg code "$code" '.[$code] // empty | [(.locale // ""), (.name // "")] | @tsv' "$locales_json" 2>/dev/null
+  ) || {
     echo "Usage: quattro-language [<code>|list|locale [<code>]]" >&2
     echo "Unknown language code: $code" >&2
     echo "Run 'quattro-language list' to see the available codes." >&2
     exit 1
-  fi
-
-  local locale name
-  locale=$(locale_for "$code")
-  name=$(name_for "$code")
+  }
 
   generate_locale "$code" "$locale"
 
   # The choice is only persisted once the locale exists, so a cancelled
   # password prompt cannot leave the interface switched with LANG behind it.
-  mkdir -p "$(dirname "$language_file")"
+  mkdir -p "${language_file%/*}"
   echo "$code" >"$language_file"
   apply_session_locale "$locale"
 
@@ -157,7 +159,7 @@ seed)
     exit 1
   fi
   [[ -s $language_file ]] && exit 0
-  mkdir -p "$(dirname "$session_env")" "$(dirname "$language_file")"
+  mkdir -p "${session_env%/*}" "${language_file%/*}"
   printf '# The session language, set by quattro-language (Setup > Language).\nexport LANG=%s\n' "$(locale_for "$code")" >"$session_env"
   echo "$code" >"$language_file"
   ;;

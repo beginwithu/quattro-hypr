@@ -182,7 +182,8 @@ choose_theme_background() {
   fi
 
   state_file=$(theme_background_state_file "$THEME_NAME" 2>/dev/null || true)
-  remembered_background=$(cat "$state_file" 2>/dev/null || true)
+  remembered_background=""
+  [[ -n $state_file && -f $state_file && -r $state_file ]] && remembered_background=$(<"$state_file")
   if [[ $theme_path != $CURRENT_THEME_PATH && ${remembered_background%/*} == $current_theme_backgrounds ]]; then
     remembered_background="$theme_path/backgrounds/${remembered_background##*/}"
   fi
@@ -327,7 +328,14 @@ report_ignored_theme_files() {
   echo "A theme installed from a git repo cannot supply Lua, a terminal config, or vscode.json." >&2
 }
 
-THEME_NAME=$(echo "$1" | sed -E 's/<[^>]+>//g' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+# Strip <markup> tags, lowercase, and dash spaces with builtins only (this used
+# to be a four-process echo|sed|tr|tr pipeline on every theme switch).
+THEME_NAME=$1
+while [[ $THEME_NAME =~ \<[^\>]+\> ]]; do
+  THEME_NAME=${THEME_NAME/"${BASH_REMATCH[0]}"/}
+done
+THEME_NAME=${THEME_NAME,,}
+THEME_NAME=${THEME_NAME// /-}
 THEME_HEADLESS=0
 if [[ ${QUATTRO_THEME_HEADLESS:-} == "1" || ${QUATTRO_THEME_OFFLINE:-} == "1" ]]; then
   THEME_HEADLESS=1
@@ -355,7 +363,8 @@ if [[ $THEME_HEADLESS != "1" && ${QUATTRO_THEME_SKIP_BACKGROUND:-} != "1" ]]; th
   wait_for_theme_intro pending themeIntroBusy
 fi
 
-PREVIOUS_THEME_NAME=$(cat "$CURRENT_THEME_NAME_PATH" 2>/dev/null || true)
+PREVIOUS_THEME_NAME=""
+[[ -f $CURRENT_THEME_NAME_PATH && -r $CURRENT_THEME_NAME_PATH ]] && PREVIOUS_THEME_NAME=$(<"$CURRENT_THEME_NAME_PATH")
 remember_current_theme_background
 
 # Setup clean next theme directory (for atomic theme config swapping)

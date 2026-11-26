@@ -712,18 +712,26 @@ Item {
     var query = root.filterText.trim()
     root.searchDivider = false
 
+    var childrenMap = MenuModel.childrenByParent(root.items, root.itemOrder)
+    var visibilityMemo = Object.create(null)
+
     if (query) {
       var currentRows = []
       var drilldownRows = []
+      var needle = query.toLowerCase()
+      var queryTerms = needle.split(/\s+/)
 
       for (var i = 0; i < root.itemOrder.length; i++) {
         var entry = root.item(root.itemOrder[i])
         if (!entry || entry.id === "root") continue
         if (!root.isDescendantOf(entry.id, active)) continue
-        if (!root.matchesQuery(entry, query)) continue
+        if (root.isDisabled(entry)) continue
+        var visible = MenuModel.isVisibleWithChildren(childrenMap, root.whenResults, entry, 0, visibilityMemo)
+        if (!MenuModel.matchesQueryTerms(entry, queryTerms, visible)) continue
 
         var detail = root.parentPathFor(entry.id)
-        var row = root.displayRow(entry, detail, root.searchScore(entry, query))
+        var score = MenuModel.searchScorePrepared(root.items, entry, needle, queryTerms)
+        var row = MenuModel.displayRowWithChildren(root.items, childrenMap, root.checkedResults, root.disabledResults, entry, detail, score)
         if (entry.parent === active) currentRows.push(row)
         else drilldownRows.push(row)
       }
@@ -741,11 +749,11 @@ Item {
       }
       rows = currentRows.concat(drilldownRows)
     } else {
-      for (var j = 0; j < root.itemOrder.length; j++) {
-        var child = root.item(root.itemOrder[j])
-        if (!child || child.parent !== active) continue
-        if (!root.isVisible(child)) continue
-        rows.push(root.displayRow(child, child.description, child.order))
+      var activeChildren = childrenMap[active] || []
+      for (var j = 0; j < activeChildren.length; j++) {
+        var child = activeChildren[j]
+        if (!MenuModel.isVisibleWithChildren(childrenMap, root.whenResults, child, 0, visibilityMemo)) continue
+        rows.push(MenuModel.displayRowWithChildren(root.items, childrenMap, root.checkedResults, root.disabledResults, child, child.description, child.order))
       }
 
       // DesktopEntries can reorder its values when an application starts.

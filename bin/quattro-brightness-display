@@ -27,7 +27,12 @@ while (( $# > 0 )); do
 done
 
 backlight_brightness() {
-  brightnessctl -d "$1" -m 2>/dev/null | awk -F, '{ gsub("%", "", $4); print $4; found=1 } END{ exit !found }'
+  local out pct=""
+  out=$(brightnessctl -d "$1" -m 2>/dev/null) || return 1
+  IFS=, read -r _ _ _ pct _ <<<"$out"
+  pct="${pct%\%}"
+  [[ -n $pct ]] || return 1
+  printf '%s\n' "$pct"
 }
 
 ddc_brightness() {
@@ -42,8 +47,10 @@ ddc_brightness() {
   local range_cache_seconds=10
 
   cache_unavailable() {
+    local ts
+    printf -v ts '%(%s)T' -1
     mkdir -p "$cache_dir" 2>/dev/null || true
-    printf 'unavailable %s\n' "$(date +%s)" >"$cache_file" 2>/dev/null || true
+    printf 'unavailable %s\n' "$ts" >"$cache_file" 2>/dev/null || true
   }
 
   detect_bus() {
@@ -70,7 +77,7 @@ ddc_brightness() {
       read -r bus cached_value <"$cache_file" || true
     fi
     if [[ $bus == "unavailable" ]]; then
-      now=$(date +%s)
+      printf -v now '%(%s)T' -1
       if [[ $cached_value =~ ^[0-9]+$ ]] && (( now - cached_value < unavailable_cache_seconds )); then
         return 1
       fi
@@ -114,7 +121,7 @@ ddc_brightness() {
       fi
       return 1
     }
-    now=$(date +%s)
+    printf -v now '%(%s)T' -1
     mkdir -p "$cache_dir" 2>/dev/null || true
     printf '%s %s %s\n' "$bus" "${values##* }" "$now" >"$cache_file" 2>/dev/null || true
     printf '%s %s\n' "$bus" "$values"
@@ -136,7 +143,7 @@ ddc_brightness() {
       read -r bus maximum range_cached_at <"$cache_file" || true
     fi
     if [[ $bus =~ ^[0-9]+$ && $maximum =~ ^[0-9]+$ && $range_cached_at =~ ^[0-9]+$ ]] && (( maximum > 0 )); then
-      now=$(date +%s)
+      printf -v now '%(%s)T' -1
       if (( range_cached_at <= now && now - range_cached_at < range_cache_seconds )); then
         range_cache_fresh=1
       fi
@@ -248,6 +255,11 @@ else
     step="$target%"
   fi
 
-  brightnessctl -d "$device" set "$step" >/dev/null
-  (( no_osd )) || quattro-osd -i brightness -p "$(backlight_brightness "$device")"
+  set_out=$(brightnessctl -m -d "$device" set "$step")
+  if (( ! no_osd )); then
+    IFS=, read -r _ _ _ new_pct _ <<<"$set_out"
+    new_pct="${new_pct%\%}"
+    [[ -n $new_pct ]] || new_pct=$(backlight_brightness "$device")
+    exec quattro-osd -i brightness -p "$new_pct"
+  fi
 fi

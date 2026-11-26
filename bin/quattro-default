@@ -24,7 +24,7 @@ sync_editor_mimetypes() {
   local types list older aliases updated desktop_list cleared
   types=$(sed -n 's/^MimeType=//p' "$QUATTRO_PATH/applications/$handler" | tr ';' '\n' | sed '/^$/d')
   list="${XDG_CONFIG_HOME:-$HOME/.config}/mimeapps.list"
-  mkdir -p "$(dirname "$list")"
+  mkdir -p "${list%/*}"
   [[ -f $list ]] || printf '[Default Applications]\n' >"$list"
   tr -d '\r' <"$list" | grep -qE '^[[:space:]]*\[Default Applications\][[:space:]]*$' ||
     printf '\n[Default Applications]\n' >>"$list"
@@ -218,7 +218,7 @@ default_editor() {
     fi
   fi
 
-  mkdir -p "$(dirname "$editor_file")"
+  mkdir -p "${editor_file%/*}"
   printf '%s\n' "$editor" >"$editor_file"
   sync_editor_mimetypes
   quattro-notification-send -g "$glyph" "$(quattro-i18n default.editorSet "$name")"

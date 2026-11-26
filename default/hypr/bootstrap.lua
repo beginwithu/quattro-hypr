@@ -56,10 +56,12 @@ if not config_home or config_home == "" then
   config_home = (home or "") .. "/.config"
 end
 
-package.path = state_home
-  .. "/?.lua;"
-  .. config_home
-  .. "/?.lua;"
-  .. resolve_quattro_path()
-  .. "/?.lua;"
-  .. package.path
+local function ensure_package_path(entry)
+  if not (";" .. package.path .. ";"):find(";" .. entry .. ";", 1, true) then
+    package.path = entry .. ";" .. package.path
+  end
+end
+
+ensure_package_path(resolve_quattro_path() .. "/?.lua")
+ensure_package_path(config_home .. "/?.lua")
+ensure_package_path(state_home .. "/?.lua")

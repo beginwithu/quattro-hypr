@@ -12,12 +12,14 @@ export BAT_THEME=ansi
 export MANROFFOPT="-c"
 export MANPAGER="sh -c 'col -bx | bat -l man -p'"
 
-# Idempotent — already sourced by ~/.bashrc; re-source here so SSH and
-# other non-interactive non-login bash sessions still get QUATTRO_PATH.
-if [ -r "${QUATTRO_PATH:-$HOME/.local/share/quattro}/default/bash/env-bootstrap" ]; then
-  . "${QUATTRO_PATH:-$HOME/.local/share/quattro}/default/bash/env-bootstrap"
-elif [ -r /usr/share/quattro/default/bash/env-bootstrap ]; then
-  . /usr/share/quattro/default/bash/env-bootstrap
+# Idempotent — already sourced by ~/.bashrc; re-source here only when not
+# already run in this shell invocation (e.g. SSH / non-interactive rc source).
+if [ -z "${_quattro_env_bootstrapped:-}" ]; then
+  if [ -r "${QUATTRO_PATH:-$HOME/.local/share/quattro}/default/bash/env-bootstrap" ]; then
+    . "${QUATTRO_PATH:-$HOME/.local/share/quattro}/default/bash/env-bootstrap"
+  elif [ -r /usr/share/quattro/default/bash/env-bootstrap ]; then
+    . /usr/share/quattro/default/bash/env-bootstrap
+  fi
 fi
 
 # /etc/profile.d/locale.sh is what puts /etc/locale.conf into the environment,

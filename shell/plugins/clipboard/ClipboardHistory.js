@@ -135,13 +135,24 @@ function translator(tr) {
   return typeof tr === "function" ? tr : function(key, english) { return english }
 }
 
-function fileEntryText(entry, tr, trn, fmt) {
-  var tn = typeof trn === "function" ? trn : function(key, count, english) { return count === 1 ? english.one : english.other }
-  var number = typeof fmt === "function" ? fmt : function(v) { return String(v) }
-  var paths = filePaths(entry)
+function defaultPlural(key, count, english) {
+  return count === 1 ? english.one : english.other
+}
+
+function defaultNumber(v) {
+  return String(v)
+}
+
+function fileEntryTextFromPaths(paths, trn, fmt) {
   if (paths.length === 0) return ""
   if (paths.length === 1) return fileName(paths[0])
+  var tn = typeof trn === "function" ? trn : defaultPlural
+  var number = typeof fmt === "function" ? fmt : defaultNumber
   return tn("clipboard.files", paths.length, { one: "%1 file", other: "%1 files" }).replace("%1", number(paths.length))
+}
+
+function fileEntryText(entry, tr, trn, fmt) {
+  return fileEntryTextFromPaths(filePaths(entry), trn, fmt)
 }
 
 function imagePreviewText(entry, tr) {
@@ -156,12 +167,18 @@ function imagePreviewText(entry, tr) {
   return pattern.replace("%1", timestamp)
 }
 
+function previewTextFromPaths(entry, paths, tr, trn, fmt) {
+  if (!entry) return ""
+  if (entry.type === "image") return imagePreviewText(entry, tr)
+  var fileText = fileEntryTextFromPaths(paths, trn, fmt)
+  if (fileText) return fileText
+  return String(entry.text || "").replace(/\s+/g, " ")
+}
+
 function previewText(entry, tr, trn, fmt) {
   if (!entry) return ""
   if (entry.type === "image") return imagePreviewText(entry, tr)
-  var fileText = fileEntryText(entry, tr, trn, fmt)
-  if (fileText) return fileText
-  return String(entry.text || "").replace(/\s+/g, " ")
+  return previewTextFromPaths(entry, filePaths(entry), tr, trn, fmt)
 }
 
 function fullText(entry) {
@@ -198,16 +215,21 @@ function displayRows(history, query, limit, tr, trn, fmt) {
   for (var i = 0; i < values.length; i++) {
     var entry = cappedEntry(normalizeEntry(values[i]))
     if (!entry) continue
-    if (needle && searchableText(entry).toLowerCase().indexOf(needle) < 0) continue
-
-    var paths = filePaths(entry)
-    var isFile = paths.length > 0
     var isImage = entry.type === "image"
+    var paths = isImage ? [] : filePaths(entry)
+    if (needle) {
+      var searchable = isImage
+        ? "image screenshot " + String(entry.mime || "") + " " + String(entry.capturedAt || "")
+        : String(entry.text || "") + " " + fileEntryTextFromPaths(paths)
+      if (searchable.toLowerCase().indexOf(needle) < 0) continue
+    }
+
+    var isFile = paths.length > 0
     var previewPath = isImage ? String(entry.path || "") : (isFile && paths.length === 1 && isImagePath(paths[0]) ? paths[0] : "")
     rows.push({
       entryType: isFile ? "file" : entry.type,
-      fullText: isImage ? "" : fullText(entry),
-      previewText: previewText(entry, tr, trn, fmt),
+      fullText: isImage ? "" : (isFile ? paths.join("\n") : String(entry.text || "")),
+      previewText: previewTextFromPaths(entry, paths, tr, trn, fmt),
       previewImage: previewPath,
       path: isImage ? String(entry.path || "") : (isFile && paths.length === 1 ? paths[0] : ""),
       mime: isImage ? String(entry.mime || "image/png") : "text/plain",

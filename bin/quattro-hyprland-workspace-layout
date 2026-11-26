@@ -16,13 +16,25 @@ notify_layout() {
   local last="" id=""
   [[ -r $state ]] && read -r last <"$state" || true
   if id=$(quattro-notification-send -p -r "${last:-0}" -g 󱂬 "$1" || true) && [[ $id =~ ^[0-9]+$ ]]; then
-    mkdir -p "$(dirname "$state")" && printf '%s\n' "$id" >"$state"
+    mkdir -p "${state%/*}" && printf '%s\n' "$id" >"$state"
   fi
+}
+
+read_mode_field() {
+  local file="$1" field="$2" line=""
+  [[ -r $file ]] || return 1
+  while IFS= read -r line; do
+    if [[ $line =~ $field[[:space:]]*=[[:space:]]*\"([a-z]+)\" ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      return 0
+    fi
+  done <"$file"
+  return 1
 }
 
 layout_default_get() {
   local mode=""
-  mode=$(sed -n 's/.*default = "\([a-z]*\)".*/\1/p' "$DEFAULT_FILE" 2>/dev/null || true)
+  mode=$(read_mode_field "$DEFAULT_FILE" default || true)
   [[ -n $mode ]] || mode=$(hyprctl getoption general.layout -j 2>/dev/null | jq -r '.str // empty' || true)
   echo "${mode:-dwindle}"
 }
@@ -37,7 +49,7 @@ layout_current() {
   fi
 
   if [[ $workspace_id =~ ^[0-9]+$ ]] && (( workspace_id >= 1 )); then
-    mode=$(sed -n 's/.*mode = "\([a-z]*\)".*/\1/p' "$MODES_DIR/$workspace_id.lua" 2>/dev/null || true)
+    mode=$(read_mode_field "$MODES_DIR/$workspace_id.lua" mode || true)
     if [[ -z $mode && -f $DEFAULT_FILE ]]; then
       mode=$(layout_default_get)
     fi
@@ -104,8 +116,9 @@ layout_default() {
 
   for mode_file in "$MODES_DIR"/[0-9]*.lua; do
     [[ -f $mode_file ]] || continue
-    workspace=$(basename "$mode_file" .lua)
-    grep -qx -- "$workspace" <<<"$busy" || rm -f "$mode_file"
+    workspace="${mode_file##*/}"
+    workspace="${workspace%.lua}"
+    [[ $'\n'"$busy"$'\n' == *$'\n'"$workspace"$'\n'* ]] || rm -f "$mode_file"
   done
 
   printf 'o.workspace_mode({ default = "%s" })\n' "$1" >"$DEFAULT_FILE"
@@ -123,12 +136,18 @@ layout_toggle() {
     exit 1
   fi
 
-  local active_workspace
-  active_workspace=$(hyprctl activeworkspace -j | jq -r '.id')
+  local active_workspace="" tiled_layout="" current_mode="" new_mode
+  read -r active_workspace tiled_layout < <(hyprctl activeworkspace -j | jq -r '"\(.id) \(.tiledLayout // "")"') || true
   [[ $active_workspace =~ ^[0-9]+$ ]] || exit 1
   local mode_file="$MODES_DIR/$active_workspace.lua"
-  local current_mode new_mode
-  current_mode=$(layout_current)
+  if (( active_workspace >= 1 )); then
+    current_mode=$(read_mode_field "$mode_file" mode || true)
+    if [[ -z $current_mode && -f $DEFAULT_FILE ]]; then
+      current_mode=$(layout_default_get)
+    fi
+  fi
+  current_mode=${current_mode:-$tiled_layout}
+  current_mode=${current_mode:-dwindle}
 
   if [[ $direction == "back" ]]; then
     case "$current_mode" in

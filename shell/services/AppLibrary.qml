@@ -204,10 +204,8 @@ Item {
       root.pendingIconIndex[name] = value
   }
 
-  function hiddenEntryScanCommand() {
-    var desktop = [Quickshell.env("XDG_CURRENT_DESKTOP"), Quickshell.env("XDG_SESSION_DESKTOP"), Quickshell.env("DESKTOP_SESSION")].filter(function(v) { return String(v || "").length > 0 }).join(":")
-    var script = root.quattroPath + "/shell/services/hidden-entries.sh"
-    return Util.shellQuote(script) + " " + Util.shellQuote(desktop)
+  function hiddenEntryDesktopNames() {
+    return [Quickshell.env("XDG_CURRENT_DESKTOP"), Quickshell.env("XDG_SESSION_DESKTOP"), Quickshell.env("DESKTOP_SESSION")].filter(function(v) { return String(v || "").length > 0 }).join(":")
   }
 
   function toplevelCount() {
@@ -250,7 +248,7 @@ Item {
   // trigger the next one, pinning a core at idle.
   Process {
     id: hiddenEntryScan
-    command: ["bash", "-c", root.hiddenEntryScanCommand()]
+    command: ["bash", root.quattroPath + "/shell/services/hidden-entries.sh", root.hiddenEntryDesktopNames()]
     stdout: SplitParser { onRead: function(line) { hiddenEntryOutput.text += line + "\n" } }
     onStarted: hiddenEntryOutput.text = ""
     onExited: root.loadDesktopHiddenEntries(hiddenEntryOutput.text)

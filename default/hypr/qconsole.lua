@@ -68,13 +68,19 @@ end
 -- windows count: the gaps are what size the panel, and a floating window on top
 -- of the console is not laid out by them.
 local function alone()
+  if not hl.get_workspace(CONSOLE) then
+    return true
+  end
   local tiled = 0
   for _, window in ipairs(hl.get_workspace_windows(CONSOLE)) do
     if not window.floating then
       tiled = tiled + 1
+      if tiled > 1 then
+        return false
+      end
     end
   end
-  return tiled <= 1
+  return true
 end
 
 -- Sizing the console with a window rule would freeze it at whatever the screen

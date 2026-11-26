@@ -12,12 +12,26 @@ mkdir -p "$IMAGE_DIR"
 
 types=$(timeout 2s wl-paste --list-types 2>/dev/null || true)
 
-if [[ ${CLIPBOARD_STATE:-} == "sensitive" ]] || grep -qx 'x-kde-passwordManagerHint' <<<"$types"; then
+has_mime() {
+  [[ $'\n'"$types"$'\n' == *$'\n'"$1"$'\n'* ]]
+}
+
+if [[ ${CLIPBOARD_STATE:-} == "sensitive" ]] || has_mime 'x-kde-passwordManagerHint'; then
   exit 0
 fi
 
 tmp=
 trap 'rm -f -- "$tmp"' EXIT
+
+json_escape() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/\\r}
+  s=${s//$'\t'/\\t}
+  REPLY=$s
+}
 
 # The clipboard owner streams the copy and can stall without closing its end, so
 # every read is bounded, and a copy cut off at the deadline is dropped, not kept.
@@ -27,7 +41,7 @@ read_copy() {
 
 emit_image() {
   local mime="$1"
-  local ext hash file
+  local ext hash file captured_at esc_mime esc_path esc_captured
   shift
 
   ext=${mime#image/}
@@ -36,7 +50,7 @@ emit_image() {
   tmp=$(mktemp --tmpdir="$IMAGE_DIR" clipboard.XXXXXX) || return 0
   read_copy "$@" || return
 
-  hash=$(sha256sum "$tmp" | awk '{print $1}')
+  read -r hash _ < <(sha256sum "$tmp")
   file="$IMAGE_DIR/$hash.$ext"
   if [[ -e $file ]]; then
     rm -f "$tmp"
@@ -44,8 +58,12 @@ emit_image() {
     mv "$tmp" "$file"
   fi
 
-  jq -cn --arg mime "$mime" --arg path "$file" --arg captured_at "$(LC_TIME="$(quattro-language locale 2>/dev/null)" date +'%A %H:%M')" \
-    '{type:"image", mime:$mime, path:$path, capturedAt:$captured_at}'
+  captured_at=$(LC_TIME="$(quattro-language locale 2>/dev/null)" date +'%A %H:%M')
+  json_escape "$mime"; esc_mime=$REPLY
+  json_escape "$file"; esc_path=$REPLY
+  json_escape "$captured_at"; esc_captured=$REPLY
+  printf '{"type":"image","mime":"%s","path":"%s","capturedAt":"%s"}\n' \
+    "$esc_mime" "$esc_path" "$esc_captured"
 }
 
 emit_text() {
@@ -104,12 +122,12 @@ image/*) emit_image "$1" cat; exit 0 ;;
 esac
 
 for mime in image/png image/jpeg image/webp image/gif image/bmp image/tiff; do
-  if grep -qx "$mime" <<<"$types"; then
+  if has_mime "$mime"; then
     emit_image "$mime" wl-paste --type "$mime"
     exit 0
   fi
 done
 
-if grep -q '^text/' <<<"$types" || grep -qx 'UTF8_STRING' <<<"$types" || grep -qx 'STRING' <<<"$types"; then
+if [[ $'\n'"$types" == *$'\ntext/'* ]] || has_mime 'UTF8_STRING' || has_mime 'STRING'; then
   emit_text wl-paste --type text --no-newline
 fi

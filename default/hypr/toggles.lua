@@ -2,7 +2,10 @@ local paths = require("default.hypr.paths")
 local require_all = require("default.hypr.require_all")
 
 local toggles_dir = paths.state_home .. "/quattro/toggles/hypr"
-package.path = toggles_dir .. "/?.lua;" .. package.path
+local toggles_pattern = toggles_dir .. "/?.lua"
+if not (";" .. package.path .. ";"):find(";" .. toggles_pattern .. ";", 1, true) then
+  package.path = toggles_pattern .. ";" .. package.path
+end
 
 -- touchpad-disabled.lua / touchscreen-disabled.lua were generated Lua in older
 -- versions and could carry an injected USB device name. They must never be loaded

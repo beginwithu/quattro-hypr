@@ -95,6 +95,12 @@ append_pipe_value() {
   fi
 }
 
+# Same as append_pipe_value, but appends in place (no subshell fork).
+append_pipe_var() {
+  local -n __pipe_target="$1"
+  __pipe_target="${__pipe_target:+$__pipe_target|}${2:-}"
+}
+
 # A route can resolve to a binary before all args are consumed (`update aur` only matches the `update` binary, leaving `aur` and `--help` as leftovers)
 # --help must never be lost among those leftovers and get forwarded into the real command, so this checks the whole remainder rather than just the first token.
 # A `--` marks everything after it as belonging to the command itself, so scanning stops there.
@@ -203,11 +209,11 @@ register_command() {
         ;;
       requires-sudo)
         requires_sudo="$metadata_value"
-        [[ $metadata_value == "true" ]] || metadata_errors=$(append_pipe_value "$metadata_errors" "requires-sudo must be omitted or true")
+        [[ $metadata_value == "true" ]] || append_pipe_var metadata_errors "requires-sudo must be omitted or true"
         ;;
       hidden)
         hidden="$metadata_value"
-        [[ $metadata_value == "true" ]] || metadata_errors=$(append_pipe_value "$metadata_errors" "hidden must be omitted or true")
+        [[ $metadata_value == "true" ]] || append_pipe_var metadata_errors "hidden must be omitted or true"
         ;;
       *)
         ;;
@@ -279,7 +285,7 @@ register_command() {
     alias_route="${alias_route% }"
     [[ -z $alias_route || $alias_route == "$route" ]] && continue
     register_route "$alias_route" "$key" true
-    COMMAND_ALIASES["$key"]=$(append_pipe_value "${COMMAND_ALIASES[$key]:-}" "$alias_route")
+    COMMAND_ALIASES["$key"]="${COMMAND_ALIASES[$key]:+${COMMAND_ALIASES[$key]}|}$alias_route"
   done
   IFS="$old_ifs"
 }
@@ -430,11 +436,18 @@ resolve_direct_route() {
   local route=""
   local binary=""
   local candidate=""
+  local -a slice=()
+  local IFS=' '
 
+  # Joins use "${slice[*]}" with IFS rather than $(join_words ...): this runs
+  # on every `quattro ...` dispatch, and each subshell was a fork.
   for (( prefix_count = argc; prefix_count >= 1; prefix_count-- )); do
-    route="quattro $(join_words " " "${args[@]:0:prefix_count}")"
+    slice=("${args[@]:0:prefix_count}")
+    route="quattro ${slice[*]}"
 
-    binary="quattro-$(join_words "-" "${args[@]:0:prefix_count}")"
+    IFS='-'
+    binary="quattro-${slice[*]}"
+    IFS=' '
     candidate="$QUATTRO_BIN_DIR/$binary"
     if [[ -f $candidate && -x $candidate ]]; then
       DIRECT_RESOLVED_BINARY="$binary"
@@ -464,6 +477,32 @@ fallback_group_for_key() {
   local fallback="${COMMAND_FALLBACK_ROUTE[$key]#quattro }"
 
   printf '%s' "${fallback%% *}"
+}
+
+# REPLY-returning variants of the helpers above/below, used inside loops so a
+# group listing doesn't fork two subshells per command.
+fallback_group_reply() {
+  REPLY="${COMMAND_FALLBACK_ROUTE[$1]#quattro }"
+  REPLY="${REPLY%% *}"
+}
+
+command_route_reply() {
+  local key="${1:-}"
+  local group="${2:-}"
+
+  fallback_group_reply "$key"
+  if [[ $REPLY == "$group" && ${COMMAND_GROUP[$key]:-} != "$group" ]]; then
+    REPLY="${COMMAND_FALLBACK_ROUTE[$key]:-}"
+  else
+    REPLY="${COMMAND_ROUTE[$key]:-}"
+  fi
+}
+
+command_usage_reply() {
+  command_route_reply "$1" "$2"
+  if [[ -n ${COMMAND_ARGS[$1]:-} ]]; then
+    REPLY+=" ${COMMAND_ARGS[$1]:-}"
+  fi
 }
 
 command_route_for_group() {
@@ -502,12 +541,14 @@ sorted_group_keys() {
       continue
     fi
 
-    fallback_group=$(fallback_group_for_key "$key")
+    fallback_group_reply "$key"
+    fallback_group="$REPLY"
     if [[ ${COMMAND_GROUP[$key]:-} != "$group" && $fallback_group != "$group" ]]; then
       continue
     fi
 
-    route=$(command_route_for_group "$key" "$group")
+    command_route_reply "$key" "$group"
+    route="$REPLY"
     printf '%s\t%s\n' "$route" "$key"
   done | sort -u | cut -f2-
 }
@@ -847,7 +888,8 @@ show_group_help() {
 
   while IFS= read -r key; do
     [[ -n $key ]] || continue
-    rows+="$(command_usage_for_group "$key" "$group")"$'\t'$'\t'"${COMMAND_SUMMARY[$key]:-}"$'\n'
+    command_usage_reply "$key" "$group"
+    rows+="$REPLY"$'\t'$'\t'"${COMMAND_SUMMARY[$key]:-}"$'\n'
   done < <(sorted_group_keys "$group" "$include_all")
 
   if [[ -n $rows ]]; then
@@ -886,7 +928,8 @@ show_related_commands() {
 
   while IFS= read -r child_key; do
     [[ -n $child_key && $child_key != "$key" ]] || continue
-    rows+="$(command_usage_for_group "$child_key" "$group")"$'\t'$'\t'"${COMMAND_SUMMARY[$child_key]:-}"$'\n'
+    command_usage_reply "$child_key" "$group"
+    rows+="$REPLY"$'\t'$'\t'"${COMMAND_SUMMARY[$child_key]:-}"$'\n'
   done < <(sorted_group_keys "$group" false)
 
   if [[ -n $rows ]]; then
@@ -951,9 +994,12 @@ resolve_route() {
   local prefix_count=0
   local route=""
   local key=""
+  local -a slice=()
+  local IFS=' '
 
   for (( prefix_count = argc; prefix_count >= 1; prefix_count-- )); do
-    route="quattro $(join_words " " "${args[@]:0:prefix_count}")"
+    slice=("${args[@]:0:prefix_count}")
+    route="quattro ${slice[*]}"
     key="${ROUTE_TO_KEY[$route]:-}"
 
     if [[ -n $key ]]; then

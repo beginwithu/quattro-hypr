@@ -9,9 +9,14 @@
 
 set -euo pipefail
 
+read_current_theme_name() {
+  local f="$HOME/.local/state/quattro/current/theme.name"
+  [[ -r $f ]] && printf '%s' "$(<"$f")" || true
+}
+
 bg_cache() {
   local theme_name
-  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  theme_name=$(read_current_theme_name)
   quattro-menu-images \
     --cache-only \
     "$HOME/.local/state/quattro/current/theme/backgrounds" \
@@ -19,20 +24,29 @@ bg_cache() {
 }
 
 bg_current() {
-  local bg_path
+  local bg_path name word out=""
   bg_path=$(readlink -f "$HOME/.local/state/quattro/current/background" 2>/dev/null || true)
   if [[ -n $bg_path ]]; then
-    basename -- "$bg_path" | perl -pe 's/\.[^.]+$//; s/^\d+-//; s/-/ /g; s/\b(\w)/\U$1/g'
+    name="${bg_path##*/}"
+    name="${name%.*}"
+    [[ $name =~ ^[0-9]+-(.*)$ ]] && name="${BASH_REMATCH[1]}"
+    name="${name//-/ }"
+    for word in $name; do
+      out+="${out:+ }${word^}"
+    done
+    printf '%s\n' "${out:-$name}"
   else
     echo "Unknown"
   fi
 }
 
 bg_install() {
-  local theme_name
-  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  local theme_name target
+  theme_name=$(read_current_theme_name)
   if [[ -z $theme_name && -L $HOME/.local/state/quattro/current/theme ]]; then
-    theme_name=$(basename "$(readlink "$HOME/.local/state/quattro/current/theme")")
+    target=$(readlink "$HOME/.local/state/quattro/current/theme" || true)
+    target="${target%/}"
+    theme_name="${target##*/}"
   fi
   local dir="$HOME/.config/quattro/backgrounds/${theme_name}"
   mkdir -p "$dir"
@@ -63,7 +77,7 @@ bg_set() {
 
 bg_next() {
   local theme_name theme_bg_path user_bg_path current_link
-  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  theme_name=$(read_current_theme_name)
   theme_bg_path="$HOME/.local/state/quattro/current/theme/backgrounds/"
   user_bg_path="$HOME/.config/quattro/backgrounds/$theme_name/"
   current_link="$HOME/.local/state/quattro/current/background"
@@ -104,7 +118,7 @@ bg_next() {
 
 bg_switcher() {
   local theme_name current_background
-  theme_name=$(cat "$HOME/.local/state/quattro/current/theme.name" 2>/dev/null || true)
+  theme_name=$(read_current_theme_name)
   current_background=$(readlink -f "$HOME/.local/state/quattro/current/background" 2>/dev/null || true)
 
   quattro-menu-images \

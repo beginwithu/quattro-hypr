@@ -18,7 +18,7 @@ direction="${1:-up}"
 device=""
 for candidate in /sys/class/leds/*kbd_backlight*; do
   if [[ -e $candidate ]]; then
-    device="$(basename "$candidate")"
+    device="${candidate##*/}"
     break
   fi
 done
@@ -58,9 +58,14 @@ elif [[ $direction == "restore" ]]; then
   exit 0
 fi
 
-# Get current and max brightness to determine step size.
-max_brightness="$(brightnessctl -d "$device" max)"
-current_brightness="$(brightnessctl -d "$device" get)"
+# Get current and max brightness to determine step size (read sysfs directly when possible).
+if [[ -r /sys/class/leds/$device/max_brightness && -r /sys/class/leds/$device/brightness ]]; then
+  max_brightness=$(<"/sys/class/leds/$device/max_brightness")
+  current_brightness=$(<"/sys/class/leds/$device/brightness")
+else
+  max_brightness="$(brightnessctl -d "$device" max)"
+  current_brightness="$(brightnessctl -d "$device" get)"
+fi
 
 # Calculate step as 10% of max brightness. Keyboards with many levels (e.g. 512)
 # need larger steps; keyboards with few levels (e.g. 3) fall back to step=1.

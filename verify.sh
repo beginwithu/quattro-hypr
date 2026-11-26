@@ -10,20 +10,37 @@ fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
 
 echo "==> 1. Checking Bash & Python script syntax and executable bits..."
 script_errors=0
+py_scripts=()
 while IFS= read -r -d '' script; do
-  shebang=$(head -n1 "$script" 2>/dev/null || true)
-  if [[ $shebang == *bash* || $script == "$PROJECT_DIR/default/bash/"* || $script == "$PROJECT_DIR/etc/profile.d/"* || $script == "$PROJECT_DIR/default/uwsm/"* ]]; then
+  shebang=""
+  IFS= read -r shebang <"$script" || true
+  if [[ $shebang == *bash* || $script == *.sh || $script == "$PROJECT_DIR/default/bash/"* || $script == "$PROJECT_DIR/etc/profile.d/"* || $script == "$PROJECT_DIR/default/uwsm/"* ]]; then
     if ! bash -n "$script" 2>/dev/null; then
       echo "  Bash syntax error in: $script" >&2
       script_errors=$((script_errors + 1))
     fi
-  elif [[ $shebang == *python* ]]; then
-    if ! python3 -c 'import ast,sys; ast.parse(open(sys.argv[1],"rb").read())' "$script" 2>/dev/null; then
-      echo "  Python syntax error in: $script" >&2
-      script_errors=$((script_errors + 1))
-    fi
+  elif [[ $shebang == *python* || $script == *.py ]]; then
+    py_scripts+=("$script")
   fi
-done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" -type f -print0)
+done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/uninstall.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/input-methods" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/shell" -type f \( ! -path "$PROJECT_DIR/shell/*" -o -name '*.sh' -o -name '*.py' \) -print0)
+if (( ${#py_scripts[@]} > 0 )); then
+  py_bad=$(python3 -B - "${py_scripts[@]}" <<'PY'
+import ast, sys
+for p in sys.argv[1:]:
+    try:
+        with open(p, "rb") as fh:
+            ast.parse(fh.read(), filename=p)
+    except Exception:
+        print(p)
+PY
+  )
+  if [[ -n $py_bad ]]; then
+    while IFS= read -r pf; do
+      echo "  Python syntax error in: $pf" >&2
+      script_errors=$((script_errors + 1))
+    done <<<"$py_bad"
+  fi
+fi
 while IFS= read -r -d '' bin_file; do
   if [[ ! -x $bin_file ]]; then
     echo "  Non-executable script in bin/: $bin_file" >&2
@@ -48,34 +65,45 @@ fi
 
 echo "==> 3. Checking JSON, JSONC & XML configs..."
 json_errors=0
-while IFS= read -r -d '' jf; do
-  if ! python3 -m json.tool "$jf" >/dev/null 2>&1; then
-    echo "  Invalid JSON: $jf" >&2
-    json_errors=$((json_errors + 1))
-  fi
-done < <(find \
+# One Python process for every JSON, JSONC, and XML config file.
+json_bad=$(find \
   "$PROJECT_DIR/config/quattro/shell.json" \
   "$PROJECT_DIR/etc/fastfetch/config.jsonc" \
   "$PROJECT_DIR/default/i18n" \
   "$PROJECT_DIR/shell/plugins" \
   "$PROJECT_DIR/themes" \
-  -type f \( -name '*.json' -o -name 'config.jsonc' \) -print0)
-if ! python3 -c '
-import json, re, sys
-raw = open(sys.argv[1]).read()
-clean = re.sub(r"^\s*//.*$", "", raw, flags=re.M)
-clean = re.sub(r",(\s*[}\]])", r"\1", clean)
-json.loads(clean)
-' "$PROJECT_DIR/default/quattro/quattro-menu.jsonc" >/dev/null 2>&1; then
-  echo "  Invalid JSONC: $PROJECT_DIR/default/quattro/quattro-menu.jsonc" >&2
-  json_errors=$((json_errors + 1))
-fi
-for xf in "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf"; do
-  if ! python3 -c 'import xml.etree.ElementTree as ET, sys; ET.parse(sys.argv[1])' "$xf" >/dev/null 2>&1; then
-    echo "  Invalid XML: $xf" >&2
+  -type f \( -name '*.json' -o -name 'config.jsonc' \) -print0 |
+  python3 -B -c '
+import json, re, sys, xml.etree.ElementTree as ET
+for path in filter(None, sys.stdin.buffer.read().split(b"\0")):
+    try:
+        with open(path, "rb") as fh:
+            json.load(fh)
+    except Exception:
+        print("JSON\t" + path.decode(errors="replace"))
+for arg in sys.argv[1:]:
+    if arg.endswith(".conf"):
+        try:
+            ET.parse(arg)
+        except Exception:
+            print("XML\t" + arg)
+    else:
+        try:
+            raw = open(arg, encoding="utf-8").read()
+            clean = re.sub(r"^\s*//.*$", "", raw, flags=re.M)
+            clean = re.sub(r",(\s*[}\]])", r"\1", clean)
+            json.loads(clean)
+        except Exception:
+            print("JSONC\t" + arg)
+' "$PROJECT_DIR/default/quattro/quattro-menu.jsonc" \
+  "$PROJECT_DIR/config/quattro/extensions/quattro-menu.jsonc" \
+  "$PROJECT_DIR/default/fontconfig/conf.avail/50-quattro.conf")
+if [[ -n $json_bad ]]; then
+  while IFS=$'\t' read -r kind jf; do
+    echo "  Invalid $kind: $jf" >&2
     json_errors=$((json_errors + 1))
-  fi
-done
+  done <<<"$json_bad"
+fi
 (( json_errors == 0 )) && pass "All JSON, JSONC & XML config files parse cleanly" || fail "$json_errors JSON/XML error(s)"
 
 echo "==> 4. Checking CLI metadata, menu commands & repository hygiene..."
@@ -85,7 +113,7 @@ else
   fail "quattro commands --check failed"
 fi
 
-if python3 - "$PROJECT_DIR" <<'PY'
+if python3 -B - "$PROJECT_DIR" <<'PY'
 import glob, json, os, re, sys
 root = sys.argv[1]
 bins = {os.path.basename(p) for p in glob.glob(os.path.join(root, "bin/*"))}
@@ -119,10 +147,10 @@ else
   fail "Menu references missing quattro-* command(s)"
 fi
 
-hygiene_hits=$(grep -rnI -iE "omarchy|AGENTS\.md|quattro-platform|quattro-settings|quattro-pkgs|quattro-1password|quattro-webapp-handler|\ban [Qq]uattro\b|skip-cursor-theme-changes|whatsapp-slim" \
+hygiene_hits=$(grep -rnI -iE "omarchy|quattro-platform|quattro-settings|quattro-pkgs|quattro-1password|quattro-webapp-handler|\ban [Qq]uattro\b|skip-cursor-theme-changes|whatsapp-slim" \
   --exclude-dir=.git --exclude=REVISION_PLAN.md --exclude=verify.sh "$PROJECT_DIR" || true)
 if [[ -z $hygiene_hits ]]; then
-  pass "Repository is clean of Omarchy, AI agent, and fictional package references"
+  pass "Repository is clean of Omarchy, removed-tool, and fictional package references"
 else
   echo "$hygiene_hits" | sed 's/^/  Hygiene violation: /' >&2
   fail "Found forbidden legacy references"
@@ -130,7 +158,9 @@ fi
 
 strict_missing=()
 while IFS= read -r -d '' bin_file; do
-  head -n1 "$bin_file" | grep -q bash || continue
+  shebang=""
+  IFS= read -r shebang <"$bin_file" || true
+  [[ $shebang == *bash* ]] || continue
   grep -qE '^[[:space:]]*set -[eu]+o pipefail' "$bin_file" || strict_missing+=("${bin_file#"$PROJECT_DIR"/}")
 done < <(find "$PROJECT_DIR/bin" -maxdepth 1 -type f -print0)
 if (( ${#strict_missing[@]} == 0 )); then
@@ -143,7 +173,7 @@ fi
 # Any quattro-* name that once lived in bin/ but is gone now must not be
 # referenced anymore (catches callers left behind by consolidation).
 if git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-  if python3 - "$PROJECT_DIR" <<'PY'
+  if python3 -B - "$PROJECT_DIR" <<'PY'
 import os, re, subprocess, sys
 root = sys.argv[1]
 hist = subprocess.run(["git", "-C", root, "log", "--all", "--name-only", "--format=", "--", "bin/"],

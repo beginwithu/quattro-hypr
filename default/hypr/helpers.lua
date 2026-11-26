@@ -46,18 +46,35 @@ function o.shell_succeeds(command)
   return output:find("OK", 1, true) ~= nil
 end
 
+local cmd_present_cache = {}
+local path_dirs = nil
+
 function o.cmd_present(command)
   if command:find("/", 1, true) then
     return file_exists(command)
   end
 
-  local path = os.getenv("PATH") or "/usr/local/bin:/usr/bin"
-  for directory in (path .. ":"):gmatch("([^:]*):") do
-    if file_exists((directory ~= "" and directory or ".") .. "/" .. command) then
+  local cached = cmd_present_cache[command]
+  if cached ~= nil then
+    return cached
+  end
+
+  if not path_dirs then
+    path_dirs = {}
+    local path = os.getenv("PATH") or "/usr/local/bin:/usr/bin"
+    for directory in (path .. ":"):gmatch("([^:]*):") do
+      path_dirs[#path_dirs + 1] = directory ~= "" and directory or "."
+    end
+  end
+
+  for i = 1, #path_dirs do
+    if file_exists(path_dirs[i] .. "/" .. command) then
+      cmd_present_cache[command] = true
       return true
     end
   end
 
+  cmd_present_cache[command] = false
   return false
 end
 

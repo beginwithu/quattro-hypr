@@ -48,7 +48,13 @@ if [[ -n $default_browser ]]; then
   for data_dir in "${data_dirs[@]}"; do
     entry="$data_dir/applications/$default_browser"
     [[ -f $entry ]] || continue
-    browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$entry" | head -1)
+    while IFS= read -r _line; do
+      if [[ $_line == Exec=* ]]; then
+        browser_exec="${_line#Exec=}"
+        browser_exec="${browser_exec%% *}"
+        break
+      fi
+    done <"$entry"
     break
   done
 fi
@@ -71,7 +77,7 @@ if [[ " $* " == *" --private "* ]]; then
 fi
 
 if ! browser_handoff "$browser_exec" "${@/--private/$private_flag}"; then
-  systemd-run --user --quiet --collect --unit="quattro-browser-$(date +%s%N)" \
+  systemd-run --user --quiet --collect --unit="quattro-browser-$$-${EPOCHREALTIME//[!0-9]/}" \
     --property=StandardOutput=null --property=StandardError=null \
     uwsm-app -- "$browser_exec" "${@/--private/$private_flag}"
 fi
@@ -85,5 +91,6 @@ for argument in "$@"; do
 done
 
 if [[ -n $url && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
-  quattro-hyprland-focus-app "^$(basename "$browser_exec" -stable).*$" || true
+  browser_base="${browser_exec##*/}"
+  quattro-hyprland-focus-app "^${browser_base%-stable}.*$" || true
 fi

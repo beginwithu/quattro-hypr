@@ -45,7 +45,11 @@ local function load_blocks()
     return
   end
 
-  for line in file:lines() do
+  local raw = file:read("*a") or ""
+  file:close()
+  written = raw
+
+  for line in raw:gmatch("[^\n]+") do
     local block, connector, identity = line:match("^(%d+)\t([^\t]*)\t(.+)$")
     if block then
       blocks[identity] = tonumber(block)
@@ -54,8 +58,6 @@ local function load_blocks()
       end
     end
   end
-
-  file:close()
 end
 
 load_blocks()

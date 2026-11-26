@@ -14,6 +14,7 @@ User-installed plugins live alongside these conceptually but on disk under
 | Plugin        | id                        | kinds                   | entry point                           |
 |---------------|---------------------------|-------------------------|---------------------------------------|
 | Bar           | `quattro.bar`             | `bar`                   | `bar/Bar.qml`                         |
+| Background    | `quattro.background`      | `service`               | `background/Background.qml`           |
 | Image picker  | `quattro.image-picker`    | `overlay`               | `image-picker/ImagePicker.qml`        |
 | Share picker  | `quattro.share-picker`    | `overlay`               | `share-picker/SharePicker.qml`        |
 | Screensaver   | `quattro.screensaver`     | `overlay`               | `screensaver/Screensaver.qml`         |
@@ -27,6 +28,8 @@ User-installed plugins live alongside these conceptually but on disk under
 | Monitor       | `quattro.monitor`         | `bar-widget`            | `panels/monitor/Panel.qml`            |
 | Network       | `quattro.network`         | `bar-widget`            | `panels/network/Panel.qml`            |
 | Power         | `quattro.power`           | `bar-widget`            | `panels/power/Panel.qml`              |
+| Speed test    | `quattro.speedtest`       | `panel`                 | `panels/speedtest/Panel.qml`          |
+| Wi-Fi QR      | `quattro.wifiqr`          | `panel`                 | `panels/wifiqr/Panel.qml`             |
 | Media         | `quattro.media`           | `service`, `bar-widget` | `services/media/Service.qml`, `services/media/BarWidget.qml` |
 | Battery       | `quattro.battery`         | `service`               | `services/battery/Service.qml`        |
 | Idle          | `quattro.idle`            | `service`               | `services/idle/Service.qml`           |
@@ -36,9 +39,10 @@ User-installed plugins live alongside these conceptually but on disk under
 | Polkit agent  | `quattro.polkit`          | `service`               | `polkit/PolkitAgent.qml`              |
 | Dock          | `quattro.dock`            | `service`               | `dock/Dock.qml`                       |
 
-First-party bar-only widgets also carry manifests next to their QML files,
-e.g. `bar/widgets/Workspaces.manifest.json`. Rich popup widgets live in their
-own plugin directories, each with its own `manifest.json`.
+First-party bar-only widgets carry sibling manifests next to their QML files in
+`bar/widgets/` (`ActiveWindow`, `Indicators`, `KeyboardLayout`, `Microphone`,
+`Spacer`, `SystemUpdate`, `Tray`, `Workspaces`). Rich popup widgets live in
+their own plugin directories, each with its own `manifest.json`.
 
 ## Bar
 
@@ -115,12 +119,14 @@ The menu definition lives outside the shell host code:
 - user extensions: `~/.config/quattro/extensions/quattro-menu.jsonc`
 
 The shell parses both JSONC files at startup (with `watchChanges: true`
-so edits take effect without a restart), evaluates `when:` / `checked:`
-bash expressions in a single batched subprocess, and executes the
-selected `action:` string directly via `Quickshell.execDetached`. The
-long-running shell process keeps the parsed menu in memory, so the
-keybind → IPC → visible path costs ~30ms cold.
+so edits take effect without a restart), pre-stamps lowercase search tokens on
+normalized items, indexes parent-child edges in `O(1)` (`childrenByParent`),
+evaluates `when:` / `checked:` / `disabled:` bash guards in a parallelized
+batched subprocess (with pacman DB snapshot caching in `$XDG_RUNTIME_DIR`), and
+executes the selected `action:` string directly via `Quickshell.execDetached`
+(or in-process when summoning another shell plugin).
 
-## Coming soon
+## Emojis & Clipboard
 
-- `quattro.theme-switcher` — folds theme switching into the shell.
+- **Emojis (`quattro.emojis`)**: Sets `keepLoaded: true` for instant layer-shell presentation while deferring the `emojis.json` `FileView` read until first open, pre-lowercasing keyword strings once at parse time.
+- **Clipboard (`quattro.clipboard`)**: Watches Wayland selections via `clipboard/capture.sh` (dropping `x-kde-passwordManagerHint` / sensitive copies and deduplicating image hashes under `~/.local/state/quattro/clipboard-images/`) and caps searched/rendered text prefixes so large pastes never stall filtering.

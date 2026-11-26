@@ -10,6 +10,42 @@ function normalizeAliases(value) {
   return []
 }
 
+function searchableToken(value) {
+  return String(value || "").replace(/[._-]+/g, " ")
+}
+
+function leafIdFor(id) {
+  var parts = String(id || "").split(".")
+  return parts.length > 0 ? parts[parts.length - 1] : id
+}
+
+function computeNameSearchText(entry) {
+  if (!entry) return ""
+  var aliases = []
+  var values = (Array.isArray(entry.aliases) ? entry.aliases : []).concat(Array.isArray(entry.searchTerms) ? entry.searchTerms : [])
+  for (var i = 0; i < values.length; i++) aliases.push(searchableToken(values[i]))
+  return [entry.label, searchableToken(leafIdFor(entry.id)), aliases.join(" ")].join(" ").toLowerCase()
+}
+
+function stampSearchFields(entry) {
+  if (!entry || typeof entry !== "object") return entry
+  var label = String(entry.label || "")
+  var desc = String(entry.description || "")
+  var labelLower = label.toLowerCase()
+  var descLower = desc.toLowerCase()
+  entry._stampedId = entry.id
+  entry._stampedLabel = entry.label
+  entry._stampedDesc = entry.description
+  entry._stampedAliases = entry.aliases
+  entry._stampedTerms = entry.searchTerms
+  entry._labelLower = labelLower
+  entry._labelWords = labelLower ? labelLower.split(/\s+/) : []
+  entry._nameSearch = computeNameSearchText(entry)
+  entry._descLower = descLower
+  entry._descWords = descLower ? descLower.split(/\s+/) : []
+  return entry
+}
+
 function normalizeItem(id, raw) {
   var value = raw || {}
   var aliases = normalizeAliases(value.aliases)
@@ -20,7 +56,7 @@ function normalizeItem(id, raw) {
 
   var kind = value.action ? "action" : (value.target ? "link" : "menu")
 
-  return {
+  return stampSearchFields({
     id: id,
     parent: parent,
     kind: kind,
@@ -40,7 +76,7 @@ function normalizeItem(id, raw) {
     when: value.when || "",
     checked: value.checked || "",
     disabled: value.disabled || ""
-  }
+  })
 }
 
 function parseMenuJsonc(raw) {
@@ -105,12 +141,12 @@ function mergeMenuSources(defaultItems, userItems, rootLabel) {
       for (var k in prior) merged[k] = prior[k]
       for (var k2 in entry) merged[k2] = entry[k2]
       merged.id = entry.id
-      nextItems[entry.id] = merged
+      nextItems[entry.id] = stampSearchFields(merged)
     }
   }
 
   if (!nextItems.root) {
-    nextItems.root = { id: "root", parent: "", kind: "menu", icon: "", iconFont: "", label: (typeof rootLabel === "string" && rootLabel) ? rootLabel : "Go", title: "", target: "", description: "", aliases: [], searchTerms: [], when: "", checked: "", disabled: "", action: "", provider: "" }
+    nextItems.root = stampSearchFields({ id: "root", parent: "", kind: "menu", icon: "", iconFont: "", label: (typeof rootLabel === "string" && rootLabel) ? rootLabel : "Go", title: "", target: "", description: "", aliases: [], searchTerms: [], when: "", checked: "", disabled: "", action: "", provider: "" })
     nextOrder.unshift("root")
   }
   for (var k3 = 0; k3 < nextOrder.length; k3++) nextItems[nextOrder[k3]].order = k3
@@ -151,8 +187,10 @@ function mergeAppRows(items, itemOrder, appRows) {
   for (var j = 0; j < rows.length; j++) {
     var row = rows[j]
     if (!row || !row.id || nextItems[row.id]) continue
-    row.order = nextOrder.length
-    nextItems[row.id] = row
+    var appCopy = {}
+    for (var ak in row) appCopy[ak] = row[ak]
+    appCopy.order = nextOrder.length
+    nextItems[row.id] = stampSearchFields(appCopy)
     nextOrder.push(row.id)
   }
 
@@ -181,9 +219,11 @@ function swapProviderRows(items, itemOrder, menuId, rows) {
   for (var j = 0; j < incoming.length; j++) {
     var row = incoming[j]
     if (!row || !row.id || nextItems[row.id]) continue
-    row.providerMenu = menuId
-    row.order = nextOrder.length
-    nextItems[row.id] = row
+    var providerCopy = {}
+    for (var pk in row) providerCopy[pk] = row[pk]
+    providerCopy.providerMenu = menuId
+    providerCopy.order = nextOrder.length
+    nextItems[row.id] = stampSearchFields(providerCopy)
     nextOrder.push(row.id)
   }
 
@@ -268,6 +308,19 @@ function isDescendantOf(items, id, ancestorId) {
   return false
 }
 
+function childrenByParent(items, itemOrder) {
+  var map = Object.create(null)
+  var order = Array.isArray(itemOrder) ? itemOrder : []
+  for (var i = 0; i < order.length; i++) {
+    var entry = item(items, order[i])
+    if (!entry) continue
+    var parentId = entry.parent || ""
+    if (!map[parentId]) map[parentId] = [entry]
+    else map[parentId].push(entry)
+  }
+  return map
+}
+
 function childCount(items, itemOrder, id) {
   var count = 0
   var order = Array.isArray(itemOrder) ? itemOrder : []
@@ -276,6 +329,38 @@ function childCount(items, itemOrder, id) {
     if (entry && entry.parent === id) count += 1
   }
   return count
+}
+
+function isVisibleWithChildren(childrenMap, whenResults, entry, depth, memo) {
+  if (!entry) return false
+  if (memo && memo[entry.id] !== undefined) return memo[entry.id]
+  if (entry.when && whenResults && whenResults[entry.id] === false) {
+    if (memo) memo[entry.id] = false
+    return false
+  }
+  if (entry.kind !== "menu" && entry.kind !== "link") {
+    if (memo) memo[entry.id] = true
+    return true
+  }
+  if (entry.provider) {
+    if (memo) memo[entry.id] = true
+    return true
+  }
+
+  var guard = depth || 0
+  if (guard >= 32) return false
+
+  var target = entry.kind === "link" ? entry.target : entry.id
+  var children = childrenMap[target] || []
+  for (var i = 0; i < children.length; i++) {
+    if (isVisibleWithChildren(childrenMap, whenResults, children[i], guard + 1, memo)) {
+      if (memo && guard === 0) memo[entry.id] = true
+      return true
+    }
+  }
+
+  if (memo && guard === 0) memo[entry.id] = false
+  return false
 }
 
 function isVisible(items, itemOrder, whenResults, entry, depth) {
@@ -313,72 +398,91 @@ function labelFor(entry, checkedResults, disabledResults) {
   return marked ? entry.label + " ✓" : entry.label
 }
 
-function searchableToken(value) {
-  return String(value || "").replace(/[._-]+/g, " ")
-}
-
-function leafIdFor(id) {
-  var parts = String(id || "").split(".")
-  return parts.length > 0 ? parts[parts.length - 1] : id
+function hasValidSearchStamp(entry) {
+  return !!entry
+    && entry._stampedId === entry.id
+    && entry._stampedLabel === entry.label
+    && entry._stampedDesc === entry.description
+    && entry._stampedAliases === entry.aliases
+    && entry._stampedTerms === entry.searchTerms
 }
 
 function nameSearchText(entry) {
   if (!entry) return ""
-  var aliases = []
-  var values = (Array.isArray(entry.aliases) ? entry.aliases : []).concat(Array.isArray(entry.searchTerms) ? entry.searchTerms : [])
-  for (var i = 0; i < values.length; i++) aliases.push(searchableToken(values[i]))
-  return [entry.label, searchableToken(leafIdFor(entry.id)), aliases.join(" ")].join(" ").toLowerCase()
+  if (hasValidSearchStamp(entry) && typeof entry._nameSearch === "string")
+    return entry._nameSearch
+  return computeNameSearchText(entry)
 }
 
-function termInSearchWords(term, text) {
-  var words = String(text || "").toLowerCase().split(/\s+/)
+function termInWordsArray(term, words) {
   for (var i = 0; i < words.length; i++) {
     if (words[i] === term) return true
   }
   return false
 }
 
+function termInSearchWords(term, text) {
+  return termInWordsArray(term, String(text || "").toLowerCase().split(/\s+/))
+}
+
 function descriptionTextMatches(query, text) {
   var terms = String(query || "").toLowerCase().trim().split(/\s+/)
+  var words = String(text || "").toLowerCase().split(/\s+/)
   for (var i = 0; i < terms.length; i++) {
-    if (terms[i] && !termInSearchWords(terms[i], text)) return false
+    if (terms[i] && !termInWordsArray(terms[i], words)) return false
   }
   return true
 }
 
-function matchesQuery(entry, query, visible) {
-  if (!entry || entry.id === "root") return false
-  if (!visible) return false
+function matchesQueryTerms(entry, terms, visible) {
+  if (!entry || entry.id === "root" || !visible) return false
 
-  var nameText = nameSearchText(entry)
-  var descriptionText = String(entry.description || "").toLowerCase()
-  var terms = String(query || "").toLowerCase().trim().split(/\s+/)
+  var stamped = hasValidSearchStamp(entry)
+  var nameText = stamped ? entry._nameSearch : computeNameSearchText(entry)
+  var descWords = null
 
   for (var i = 0; i < terms.length; i++) {
     if (!terms[i]) continue
     if (nameText.indexOf(terms[i]) >= 0) continue
-    if (termInSearchWords(terms[i], descriptionText)) continue
+    if (descWords === null) {
+      descWords = stamped ? entry._descWords : (entry.description ? String(entry.description).toLowerCase().split(/\s+/) : [])
+    }
+    if (termInWordsArray(terms[i], descWords)) continue
     return false
   }
 
   return true
 }
 
-function searchScore(items, entry, query) {
-  var needle = String(query || "").toLowerCase().trim()
-  var label = entry.label.toLowerCase()
-  var nameText = nameSearchText(entry)
-  var descriptionText = String(entry.description || "").toLowerCase()
+function matchesQuery(entry, query, visible) {
+  if (!entry || entry.id === "root") return false
+  if (!visible) return false
+  return matchesQueryTerms(entry, String(query || "").toLowerCase().trim().split(/\s+/), true)
+}
+
+function searchScorePrepared(items, entry, needle, terms) {
+  var stamped = hasValidSearchStamp(entry)
+  var label = stamped ? entry._labelLower : String(entry.label || "").toLowerCase()
   var score = 80
 
   if (label === needle) score = entry.parent === "root" ? 2 : 0
   // An installed app whose name contains the query as a whole word ("zen"
   // for Zen Browser) beats exact-labeled menu entries like Install > Zen.
-  else if (entry.kind === "app" && label.split(/\s+/).indexOf(needle) >= 0) score = 0
+  else if (entry.kind === "app" && (stamped ? entry._labelWords : label.split(/\s+/)).indexOf(needle) >= 0) score = 0
   else if (label.indexOf(needle) === 0) score = 10
   else if (label.indexOf(needle) >= 0) score = 30
-  else if (nameText.indexOf(needle) >= 0) score = 40
-  else if (descriptionTextMatches(needle, descriptionText)) score = 60
+  else if ((stamped ? entry._nameSearch : computeNameSearchText(entry)).indexOf(needle) >= 0) score = 40
+  else {
+    var descWords = stamped ? entry._descWords : (entry.description ? String(entry.description).toLowerCase().split(/\s+/) : [])
+    var matchesDesc = true
+    for (var i = 0; i < terms.length; i++) {
+      if (terms[i] && !termInWordsArray(terms[i], descWords)) {
+        matchesDesc = false
+        break
+      }
+    }
+    if (matchesDesc) score = 60
+  }
 
   if (entry.kind === "menu" || entry.kind === "link") score -= 2
   // App rows sort after all menu items, so they lose the tiebreak below to an
@@ -386,6 +490,33 @@ function searchScore(items, entry, query) {
   if (entry.kind === "app") score -= 5
 
   return score * 1000 + depthFor(items, entry.id) * 25 + entry.order
+}
+
+function searchScore(items, entry, query) {
+  var needle = String(query || "").toLowerCase().trim()
+  return searchScorePrepared(items, entry, needle, needle.split(/\s+/))
+}
+
+function displayRowWithChildren(items, childrenMap, checkedResults, disabledResults, entry, detail, score, section) {
+  var target = entry.kind === "link" ? entry.target : entry.id
+  return {
+    itemId: entry.id,
+    disabled: isDisabled(disabledResults, entry),
+    kind: entry.kind,
+    icon: entry.icon,
+    iconFont: entry.iconFont || "",
+    appIcon: entry.appIcon || "",
+    appId: entry.appId || "",
+    label: labelFor(entry, checkedResults, disabledResults),
+    target: target,
+    detail: detail || "",
+    path: pathFor(items, entry.id),
+    childCount: (entry.kind === "menu" || entry.kind === "link") ? (childrenMap[target] ? childrenMap[target].length : 0) : 0,
+    action: entry.action || "",
+    provider: entry.provider || "",
+    score: score || 0,
+    section: section || ""
+  }
 }
 
 function displayRow(items, itemOrder, checkedResults, disabledResults, entry, detail, score, section) {
@@ -674,7 +805,7 @@ function applyTranslations(items, catalog) {
     }
     if (translated.title) next.title = translated.title
     if (translated.description) next.description = translated.description
-    out.push(next)
+    out.push(stampSearchFields(next))
   }
   return out
 }
@@ -699,7 +830,9 @@ if (typeof module !== "undefined") {
     pathFor: pathFor,
     parentPathFor: parentPathFor,
     isDescendantOf: isDescendantOf,
+    childrenByParent: childrenByParent,
     childCount: childCount,
+    isVisibleWithChildren: isVisibleWithChildren,
     isVisible: isVisible,
     isDisabled: isDisabled,
     labelFor: labelFor,
@@ -708,11 +841,14 @@ if (typeof module !== "undefined") {
     nameSearchText: nameSearchText,
     termInSearchWords: termInSearchWords,
     descriptionTextMatches: descriptionTextMatches,
+    matchesQueryTerms: matchesQueryTerms,
     matchesQuery: matchesQuery,
+    searchScorePrepared: searchScorePrepared,
     searchScore: searchScore,
     dmenuValue: dmenuValue,
     dmenuSelections: dmenuSelections,
     toggleDmenuSelection: toggleDmenuSelection,
+    displayRowWithChildren: displayRowWithChildren,
     displayRow: displayRow,
     applyTranslations: applyTranslations
   }

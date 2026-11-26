@@ -3,13 +3,15 @@
 desktop_names=${1:-}
 
 declare -A seen_ids
+IFS=":" read -ra desktop_parts <<< "$desktop_names"
 
 desktop_matches() {
   local list=$1
   local desktop_name
   local entry
+  local -a entries=()
 
-  IFS=":" read -ra desktop_parts <<< "$desktop_names"
+  (( ${#desktop_parts[@]} > 0 )) || return 1
   IFS=";" read -ra entries <<< "$list"
 
   for desktop_name in "${desktop_parts[@]}"; do
@@ -36,8 +38,13 @@ is_hidden_desktop_file() {
   while IFS= read -r line || [[ -n $line ]]; do
     line=${line%$'\r'}
 
-    if [[ $line =~ ^\[(.*)\]$ ]]; then
-      [[ ${BASH_REMATCH[1]} == "Desktop Entry" ]] && in_desktop_entry=1 || in_desktop_entry=0
+    if [[ $line == \[*\] ]]; then
+      if [[ $line == "[Desktop Entry]" ]]; then
+        in_desktop_entry=1
+        continue
+      elif (( in_desktop_entry )); then
+        break
+      fi
       continue
     fi
 

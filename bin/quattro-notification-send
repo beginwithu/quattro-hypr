@@ -10,10 +10,8 @@ if [[ ${1:-} == "--battery" ]]; then
   exec "$0" -g 󰁹 -u low "$(quattro-battery-status)"
 elif [[ ${1:-} == "--time" ]]; then
   locale=$(quattro-language locale)
-  now=$(date +%s)
-  day_time=$(LC_TIME=$locale date -d "@$now" +"%A %H:%M")
-  day_month_year=$(LC_TIME=$locale date -d "@$now" +"%d %B %Y")
-  exec "$0" -g  -u low "$(quattro-i18n time.now "$day_time" "$day_month_year" "$(date -d "@$now" +%V)")"
+  IFS=$'\t' read -r day_time day_month_year iso_week < <(LC_TIME=$locale date +"%A %H:%M"$'\t'"%d %B %Y"$'\t'"%V")
+  exec "$0" -g  -u low "$(quattro-i18n time.now "$day_time" "$day_month_year" "$iso_week")"
 fi
 
 headline=""

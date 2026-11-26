@@ -109,6 +109,9 @@ private:
   CHyprSignalListener m_pMouseMoveCallback;
 
   std::string m_szLastTitle;
+  std::string m_szLastAppID;
+  std::string m_szLastRawTitle;
+  Time::steady_tp m_lastAppNameCheck{};
 
   bool m_bDraggingThis = false;
   bool m_bTouchEv = false;

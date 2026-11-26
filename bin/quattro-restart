@@ -58,7 +58,7 @@ restart_trackpad() {
   for dev in "$driver"/i2c-*; do
     [[ -e $dev ]] || continue
     is_touchpad "$dev" || continue
-    I2C_DEVICE=$(basename "$dev")
+    I2C_DEVICE="${dev##*/}"
     echo "Resetting $I2C_DEVICE via i2c_hid_acpi unbind/rebind..."
     echo "$I2C_DEVICE" | sudo tee "$driver/unbind" >/dev/null
     sleep 1

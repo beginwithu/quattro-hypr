@@ -139,9 +139,22 @@ pixel=$(MAGICK_MEMORY_LIMIT=512MiB \
 [[ $pixel =~ ^([0-9]+),([0-9]+),([0-9]+)$ ]] || fallback
 
 sample=$(printf '#%02x%02x%02x' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
-text_contrast=$(contrast "$text_color" "$sample")
-background_contrast=$(contrast "$background_color" "$sample")
-
-awk -v text="$text_contrast" -v background="$background_contrast" 'BEGIN { exit !(background > text) }' \
-  && printf '%s\n' "$background_color" \
-  || printf '%s\n' "$text_color"
+awk -v fg="$text_color" -v bg="$background_color" -v sample="$sample" '
+  function hex_val(c) { return index("0123456789abcdef", tolower(c)) - 1 }
+  function channel(hex, start) {
+    return (hex_val(substr(hex, start, 1)) * 16 + hex_val(substr(hex, start + 1, 1))) / 255
+  }
+  function linear(c) {
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ^ 2.4
+  }
+  function luminance(hex) {
+    return 0.2126 * linear(channel(hex, 2)) + 0.7152 * linear(channel(hex, 4)) + 0.0722 * linear(channel(hex, 6))
+  }
+  function ratio(l1, l2) {
+    return l1 >= l2 ? (l1 + 0.05) / (l2 + 0.05) : (l2 + 0.05) / (l1 + 0.05)
+  }
+  BEGIN {
+    ls = luminance(sample)
+    print (ratio(luminance(bg), ls) > ratio(luminance(fg), ls)) ? bg : fg
+  }
+'

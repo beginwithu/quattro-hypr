@@ -45,20 +45,24 @@ quattro_require_args() {
 
 quattro_restart_gum() {
   local gum_env="$HOME/.local/state/quattro/current/theme/gum_env.lua"
-  local key value
-  if [[ -f $gum_env ]]; then
-    while IFS=$'\t' read -r key value; do
-      [[ -n $key && -n $value ]] && export "$key=$value"
-    done < <(awk -F'"' '/hl\.env\("[A-Z0-9_]+", "[^"]+"\)/ { print $2 "\t" $4 }' "$gum_env")
-  fi
+  [[ -f $gum_env ]] || return 0
+  local line key value
+  while IFS= read -r line; do
+    if [[ $line =~ hl\.env\(\"([A-Z0-9_]+)\",[[:space:]]*\"([^\"]+)\"\) ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      export "$key=$value"
+    fi
+  done <"$gum_env"
 }
 
 quattro_show_logo() {
   clear
-  echo -e "\033[32m"
-  [[ -f $QUATTRO_PATH/logo.txt ]] && cat <"$QUATTRO_PATH/logo.txt"
-  echo -e "\033[0m"
-  echo
+  if [[ -f $QUATTRO_PATH/logo.txt ]]; then
+    printf '\033[32m\n%s\n\033[0m\n\n' "$(<"$QUATTRO_PATH/logo.txt")"
+  else
+    printf '\033[32m\n\033[0m\n\n'
+  fi
 }
 
 quattro_show_done() {

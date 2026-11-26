@@ -16,8 +16,13 @@ fi
 
 # Resolve through any DSP sink to the physical one, so the keys always move real
 # loudness and the processing always sees full-scale input. Shared with the audio
-# panel and the output switcher.
-sink="$(quattro-audio output-sink)"
+# panel and the output switcher. Direct alsa_output.* sinks skip spawning quattro-audio.
+default_sink="$(pactl get-default-sink 2>/dev/null || true)"
+if [[ $default_sink == alsa_output.* ]]; then
+  sink="$default_sink"
+else
+  sink="$(quattro-audio output-sink "$default_sink")"
+fi
 if [[ -z $sink ]]; then
   echo "Could not resolve an audio sink to control." >&2
   exit 1
@@ -27,11 +32,11 @@ fi
 # over PA_VOLUME_NORM), so the OSD reads identically either way.
 # pactl translates its labels and yes/no; parse them in the C locale.
 volume_percent() {
-  LC_ALL=C pactl get-sink-volume "$sink" 2>/dev/null |
-    awk 'NR == 1 {
-      for (i = 1; i <= NF; i++)
-        if ($i ~ /%$/) {sub("%", "", $i); print $i; exit}
-    }'
+  local line=""
+  IFS= read -r line < <(LC_ALL=C pactl get-sink-volume "$sink" 2>/dev/null) || true
+  if [[ $line =~ ([0-9]+)% ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  fi
 }
 
 volume_muted() {
@@ -43,10 +48,14 @@ case "$action" in
   lower) action="-5" ;;
 esac
 
+percent=""
+is_muted=0
+
 if [[ $action == "mute-toggle" ]]; then
   runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
   debounce_file="$runtime_dir/quattro-audio-output-volume-mute-toggle.last"
-  now=$(date +%s%3N)
+  er="${EPOCHREALTIME/./}"
+  now="${er:0:13}"
   last=0
   [[ -r $debounce_file ]] && read -r last <"$debounce_file" || true
   if ((now - last < 250)); then
@@ -55,6 +64,8 @@ if [[ $action == "mute-toggle" ]]; then
   printf '%s\n' "$now" >"$debounce_file"
 
   pactl set-sink-mute "$sink" toggle
+  percent=$(volume_percent)
+  volume_muted && is_muted=1
 elif [[ $action =~ ^([+-])([0-9]+)$ ]]; then
   direction="${BASH_REMATCH[1]}"
   step="${BASH_REMATCH[2]}"
@@ -74,17 +85,22 @@ elif [[ $action =~ ^([+-])([0-9]+)$ ]]; then
   fi
 
   pactl set-sink-mute "$sink" 0
-  pactl set-sink-volume "$sink" "${next}%"
+  if pactl set-sink-volume "$sink" "${next}%"; then
+    percent="$next"
+    is_muted=0
+  else
+    percent=$(volume_percent)
+    volume_muted && is_muted=1
+  fi
 else
   echo "Unknown volume action: $action"
   exit 1
 fi
 
-percent=$(volume_percent)
-if volume_muted || ((${percent:-0} == 0)); then
+if (( is_muted || ${percent:-0} == 0 )); then
   icon="volume-muted"
 else
   icon="volume-high"
 fi
 
-quattro-osd -i "$icon" -p "${percent:-0}"
+exec quattro-osd -i "$icon" -p "${percent:-0}"

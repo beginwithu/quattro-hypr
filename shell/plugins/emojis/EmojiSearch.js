@@ -1,7 +1,13 @@
 function parseEmojis(raw) {
   try {
     var data = JSON.parse(String(raw || ""))
-    return Array.isArray(data) ? data : []
+    if (!Array.isArray(data)) return []
+    for (var i = 0; i < data.length; i++) {
+      var item = data[i]
+      if (item && typeof item === "object")
+        item._k = String(item.k || "").toLowerCase()
+    }
+    return data
   } catch (e) {
     return []
   }
@@ -12,7 +18,9 @@ function normalizedQuery(query) {
 }
 
 function keywordText(item) {
-  return String((item && item.k) || "").toLowerCase()
+  if (!item) return ""
+  if (typeof item._k === "string") return item._k
+  return String(item.k || "").toLowerCase()
 }
 
 function filterEmojis(emojis, query, limit) {

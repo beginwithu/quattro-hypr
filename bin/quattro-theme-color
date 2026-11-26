@@ -66,9 +66,27 @@ if [[ -z $OUTPUT && -z $QUERY_KEY ]] || [[ -n $OUTPUT && -n $QUERY_KEY ]]; then
   exit 1
 fi
 
-COLORS_DIR=$(dirname "$COLORS_FILE")
+[[ $COLORS_FILE == */* ]] && COLORS_DIR="${COLORS_FILE%/*}" || COLORS_DIR="."
 
 declare -A THEME_COLORS
+
+# Mix two hex colors into THEME_COLORS[<key>] without forking. Every built-in
+# caller passes valid 6-digit hex colors and an integer percentage, which pure
+# Bash integer math resolves bit-identically to the awk float path; anything
+# else (empty or malformed colors) keeps the original awk semantics.
+mix_into() {
+  local key="$1" start="${2#\#}" end="${3#\#}" amount="$4" pct
+  if [[ $start =~ ^[0-9A-Fa-f]{6}$ && $end =~ ^[0-9A-Fa-f]{6}$ && $amount =~ ^([0-9]{1,3})%$ ]]; then
+    pct=${BASH_REMATCH[1]}
+    (( pct > 100 )) && pct=100
+    printf -v "THEME_COLORS[$key]" '#%02x%02x%02x' \
+      $(( (16#${start:0:2} * (100 - pct) + 16#${end:0:2} * pct + 50) / 100 )) \
+      $(( (16#${start:2:2} * (100 - pct) + 16#${end:2:2} * pct + 50) / 100 )) \
+      $(( (16#${start:4:2} * (100 - pct) + 16#${end:4:2} * pct + 50) / 100 ))
+  else
+    THEME_COLORS[$key]=$(mix_color "$2" "$3" "$4")
+  fi
+}
 
 # Mix two hex colors. Amount may be a fraction (0.30) or percentage (30%).
 mix_color() {
@@ -130,7 +148,7 @@ resolve_theme_mode() {
     THEME_COLORS[mode]="light"
   elif [[ ${THEME_COLORS[background]:-} =~ ^#[0-9A-Fa-f]{6}$ ]]; then
     bg_hex="${THEME_COLORS[background]#\#}"
-    lum=$(( $(printf "%d" "0x${bg_hex:0:2}") + $(printf "%d" "0x${bg_hex:2:2}") + $(printf "%d" "0x${bg_hex:4:2}") ))
+    lum=$(( 16#${bg_hex:0:2} + 16#${bg_hex:2:2} + 16#${bg_hex:4:2} ))
     (( lum > 382 )) && THEME_COLORS[mode]="light" || THEME_COLORS[mode]="dark"
   else
     THEME_COLORS[mode]="dark"
@@ -233,17 +251,17 @@ resolve_theme_colors() {
   [[ -n ${THEME_COLORS[selection_background]:-} ]] || THEME_COLORS[selection_background]="${THEME_COLORS[selection]:-}"
   [[ -n ${THEME_COLORS[selection_foreground]:-} ]] || THEME_COLORS[selection_foreground]="${THEME_COLORS[bright_foreground]:-}"
   [[ -n ${THEME_COLORS[orange]:-} ]]               || THEME_COLORS[orange]="${THEME_COLORS[yellow]:-}"
-  [[ -n ${THEME_COLORS[brown]:-} ]]      || THEME_COLORS[brown]=$(mix_color "${THEME_COLORS[orange]:-}" "#000000" 50%)
+  [[ -n ${THEME_COLORS[brown]:-} ]]      || mix_into brown "${THEME_COLORS[orange]:-}" "#000000" 50%
 
   # Auto-derive shades from base accents when not defined and not aliased from colorN
-  [[ -n ${THEME_COLORS[dark_background]:-} ]]   || THEME_COLORS[dark_background]=$(mix_color "${THEME_COLORS[background]:-}" "#000000" 25%)
-  [[ -n ${THEME_COLORS[darker_background]:-} ]] || THEME_COLORS[darker_background]=$(mix_color "${THEME_COLORS[background]:-}" "#000000" 50%)
-  [[ -n ${THEME_COLORS[bright_red]:-} ]]    || THEME_COLORS[bright_red]=$(mix_color "${THEME_COLORS[red]:-}" "#ffffff" 20%)
-  [[ -n ${THEME_COLORS[bright_yellow]:-} ]] || THEME_COLORS[bright_yellow]=$(mix_color "${THEME_COLORS[yellow]:-}" "#ffffff" 20%)
-  [[ -n ${THEME_COLORS[bright_green]:-} ]]  || THEME_COLORS[bright_green]=$(mix_color "${THEME_COLORS[green]:-}" "#ffffff" 20%)
-  [[ -n ${THEME_COLORS[bright_cyan]:-} ]]   || THEME_COLORS[bright_cyan]=$(mix_color "${THEME_COLORS[cyan]:-}" "#ffffff" 20%)
-  [[ -n ${THEME_COLORS[bright_blue]:-} ]]   || THEME_COLORS[bright_blue]=$(mix_color "${THEME_COLORS[blue]:-}" "#ffffff" 20%)
-  [[ -n ${THEME_COLORS[bright_magenta]:-} ]] || THEME_COLORS[bright_magenta]=$(mix_color "${THEME_COLORS[magenta]:-}" "#ffffff" 20%)
+  [[ -n ${THEME_COLORS[dark_background]:-} ]]   || mix_into dark_background "${THEME_COLORS[background]:-}" "#000000" 25%
+  [[ -n ${THEME_COLORS[darker_background]:-} ]] || mix_into darker_background "${THEME_COLORS[background]:-}" "#000000" 50%
+  [[ -n ${THEME_COLORS[bright_red]:-} ]]    || mix_into bright_red "${THEME_COLORS[red]:-}" "#ffffff" 20%
+  [[ -n ${THEME_COLORS[bright_yellow]:-} ]] || mix_into bright_yellow "${THEME_COLORS[yellow]:-}" "#ffffff" 20%
+  [[ -n ${THEME_COLORS[bright_green]:-} ]]  || mix_into bright_green "${THEME_COLORS[green]:-}" "#ffffff" 20%
+  [[ -n ${THEME_COLORS[bright_cyan]:-} ]]   || mix_into bright_cyan "${THEME_COLORS[cyan]:-}" "#ffffff" 20%
+  [[ -n ${THEME_COLORS[bright_blue]:-} ]]   || mix_into bright_blue "${THEME_COLORS[blue]:-}" "#ffffff" 20%
+  [[ -n ${THEME_COLORS[bright_magenta]:-} ]] || mix_into bright_magenta "${THEME_COLORS[magenta]:-}" "#ffffff" 20%
   alias_theme_color purple magenta
   alias_theme_color bright_purple bright_magenta
 

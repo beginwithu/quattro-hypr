@@ -273,7 +273,7 @@ apply_shell_section_override() {
   [[ -f $NEXT_THEME_DIR/shell.toml ]] || return
   [[ -f $override ]] || return
 
-  section=$(basename "$override")
+  section="${override##*/}"
   section="${section#shell.}"
   section="${section%.toml}"
   [[ $section =~ ^[A-Za-z0-9_-]+$ ]] || return
@@ -322,7 +322,7 @@ apply_shell_section_overrides() {
 
   shopt -s nullglob
   for override in "$NEXT_THEME_DIR"/shell.*.toml; do
-    [[ $(basename "$override") != "shell.toml" ]] || continue
+    [[ ${override##*/} != "shell.toml" ]] || continue
     apply_shell_section_override "$override"
   done
 }

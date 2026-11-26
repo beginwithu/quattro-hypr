@@ -49,7 +49,7 @@ trap cleanup_shell_config_tmp EXIT
 commit() {
   local program="$1"
   shift
-  mkdir -p "$(dirname "$CONFIG_FILE")"
+  mkdir -p "${CONFIG_FILE%/*}"
   _SHELL_CONFIG_TMP=$(mktemp)
   jq -S -e "$@" "$program" "$(source_file)" >"$_SHELL_CONFIG_TMP" || fail "could not update shell config"
   mv "$_SHELL_CONFIG_TMP" "$CONFIG_FILE"
