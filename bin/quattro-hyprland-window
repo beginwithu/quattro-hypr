@@ -199,8 +199,8 @@ window_width_cmd() {
 
   local active key="" workspace="" active_width="" address="" filename state_file
   active=$(hyprctl activewindow -j 2>/dev/null)
-  IFS=$'\t' read -r key workspace active_width address < <(
-    jq -r '[([.class, .initialClass, .title] | map(select(. != null and . != "")) | first // ""), (.workspace.id // .workspace.name // ""), (.size[0] // ""), (.address // "")] | @tsv' <<<"$active"
+  IFS=$'\x1f' read -r key workspace active_width address < <(
+    jq -r '[([.class, .initialClass, .title] | map(select(. != null and . != "")) | first // ""), (.workspace.id // .workspace.name // ""), (.size[0] // ""), (.address // "")] | map(tostring) | join("\u001f")' <<<"$active"
   ) || true
   [[ -n $key && -n $workspace ]] || exit 1
 

@@ -235,6 +235,9 @@ local function not_floating_on_their_own(match)
       match[key] = "negative:" .. table.concat(alternatives, "|")
     end
   end
+  if floating.has_combined and floating.combined_tag then
+    match.tag = "negative:" .. floating.combined_tag
+  end
   return match
 end
 
@@ -300,13 +303,14 @@ local function unmaximize_others(window)
   end
 end
 
--- The workspace is passed in when a window is still on its way to it.
-local function arrange(windows, workspace)
+-- Prefer the window's live workspace; `fallback_id` is only used if the
+-- window is still on its way to it and has no workspace yet.
+local function arrange(windows, fallback_id)
   local floating = {}
   local mine = claimed()
 
   for _, window in ipairs(windows) do
-    local id = tonumber(workspace and workspace.id or (window.workspace and window.workspace.id))
+    local id = tonumber((window.workspace and window.workspace.id) or fallback_id)
 
     if id and id >= 1 then
       if floating_workspace(id) then
@@ -359,16 +363,31 @@ local function watch()
   -- A move is still being committed when this fires, and changing the window's
   -- floating state underneath it loses the move. Let it land first.
   hl.on("window.move_to_workspace", function(window, workspace)
+    local addr = window and window.address
+    local target_id = workspace and workspace.id
+    if not addr then
+      return
+    end
     hl.timer(function()
-      arrange({ window }, workspace)
+      local live = hl.get_window("address:" .. addr)
+      if live then
+        arrange({ live }, target_id)
+      end
     end, { type = "oneshot", timeout = 1 })
   end)
 
   -- A fullscreen window is left as it is, so it is arranged once it comes back
   -- out: a tiled one leaving fullscreen on a floating workspace floats then.
   hl.on("window.fullscreen", function(window)
+    local addr = window and window.address
+    if not addr then
+      return
+    end
     hl.timer(function()
-      arrange({ window })
+      local live = hl.get_window("address:" .. addr)
+      if live then
+        arrange({ live })
+      end
     end, { type = "oneshot", timeout = 1 })
   end)
 
@@ -571,8 +590,11 @@ set_up_floating = function()
   floating_ready = true
 
   -- Overlapping windows need depth to tell apart, and a translucent window over
-  -- another is hard to read.
-  if not hl.get_config("decoration.shadow.enabled") then
+  -- another is hard to read. Respect software rendering and no-animations.
+  local no_animations = io.open(paths.state_home .. "/quattro/toggles/hypr/no-animations.lua", "r")
+  if no_animations then
+    no_animations:close()
+  elseif not o.software_rendering_defaults() and not hl.get_config("decoration.shadow.enabled") then
     hl.config({ decoration = { shadow = { enabled = true, range = 16, render_power = 3, color = "rgba(00000035)" } } })
     o.window(".*", { no_shadow = true })
     o.window({ tag = WORKSPACE_TAG }, { no_shadow = false })

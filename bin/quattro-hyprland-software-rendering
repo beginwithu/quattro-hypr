@@ -15,7 +15,7 @@ if [[ -e $marker ]]; then
 fi
 
 probe_software_rendering() {
-  python3 - <<'PY'
+  python3 -B - <<'PY'
 import ctypes, glob, os, re, sys
 
 SOFTWARE_RENDERERS = ("llvmpipe", "softpipe", "software rasterizer")

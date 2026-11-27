@@ -59,6 +59,12 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+_TMP_FILES=()
+cleanup_tmp_files() {
+  (( ${#_TMP_FILES[@]} > 0 )) && rm -f "${_TMP_FILES[@]}"
+}
+trap cleanup_tmp_files EXIT
+
 # Remove a directory only if it exists and is empty.
 prune_empty_dir() {
   local dir="$1"
@@ -114,7 +120,7 @@ confirm_uninstall() {
   fi
 
   local reply
-  read -r -p "Proceed with complete uninstall? [y/N] " reply
+  read -r -p "Proceed with complete uninstall? [y/N] " reply || reply=""
   if [[ ! $reply =~ ^[Yy]$ ]]; then
     echo "Uninstall cancelled."
     exit 0
@@ -185,6 +191,7 @@ strip_managed_gtk_blocks() {
 
   local tmp
   tmp=$(mktemp)
+  _TMP_FILES+=("$tmp")
   awk '
     /^\/\* quattro-theme begin \*\// { skip = 1; next }
     skip && /^\/\* quattro-theme end \*\// { skip = 0; next }
@@ -213,6 +220,7 @@ clean_vscode_extensions() {
     extensions_file="$ext_base/extensions.json"
     if [[ -f $extensions_file ]] && command -v jq >/dev/null 2>&1; then
       tmp=$(mktemp)
+      _TMP_FILES+=("$tmp")
       if jq 'map(select(.identifier.id != "local.quattro-theme"))' "$extensions_file" >"$tmp" 2>/dev/null; then
         mv -f "$tmp" "$extensions_file"
       else
@@ -223,6 +231,7 @@ clean_vscode_extensions() {
     obsolete_file="$ext_base/.obsolete"
     if [[ -f $obsolete_file ]] && command -v jq >/dev/null 2>&1; then
       tmp=$(mktemp)
+      _TMP_FILES+=("$tmp")
       if jq 'with_entries(select(.key | startswith("local.quattro-theme-") | not))' "$obsolete_file" >"$tmp" 2>/dev/null; then
         mv -f "$tmp" "$obsolete_file"
       else
@@ -292,6 +301,7 @@ remove_user_configs() {
   if [[ -f $gtk_bookmarks ]]; then
     local tmp
     tmp=$(mktemp)
+    _TMP_FILES+=("$tmp")
     awk -v home="$HOME" '
       $0 == "file://" home "/Downloads Downloads" ||
       $0 == "file://" home "/Documents Documents" ||
@@ -611,6 +621,7 @@ remove_cachyos_repos() {
   if [[ -f /etc/pacman.conf ]] && grep -qE '^[[:space:]]*\[cachyos(-[a-z0-9-]+)?\][[:space:]]*$' /etc/pacman.conf; then
     local tmp
     tmp=$(mktemp)
+    _TMP_FILES+=("$tmp")
     awk '
       /^[[:space:]]*\[cachyos(-[a-z0-9-]+)?\][[:space:]]*$/ { skip = 1; next }
       /^[[:space:]]*\[[^]]+\][[:space:]]*$/ { skip = 0; eat_blank = 0; print; next }
@@ -732,7 +743,7 @@ echo -e "${GREEN}Done! Quattro has been completely uninstalled.${NC}"
 
 if ! $SANDBOX && [[ ${QUATTRO_NO_REBOOT:-0} != "1" ]] && [[ -t 0 ]] && ! $ASSUME_YES; then
   echo ""
-  read -r -p "Reboot now to finalize system cleanup? [y/N] " reply
+  read -r -p "Reboot now to finalize system cleanup? [y/N] " reply || reply=""
   if [[ $reply =~ ^[Yy]$ ]]; then
     sudo reboot
   fi

@@ -98,8 +98,8 @@ print_verbose() {
   route_json=$(ip -j route get "$internet_probe" 2>/dev/null)
   [[ -z $route_json ]] && return
 
-  IFS=$'\t' read -r iface gw src < <(
-    jq -r '.[0] | [(.dev // ""), (.gateway // ""), (.prefsrc // "")] | @tsv' <<<"$route_json" 2>/dev/null
+  IFS=$'\x1f' read -r iface gw src < <(
+    jq -r '.[0] | [(.dev // ""), (.gateway // ""), (.prefsrc // "")] | map(tostring) | join("\u001f")' <<<"$route_json" 2>/dev/null
   ) || true
 
   [[ -z $iface ]] && return

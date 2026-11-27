@@ -18,7 +18,7 @@ if [[ -n $client && -x $client ]]; then
   exec "$client" "$1"
 fi
 
-exec python3 - "$1" <<'PY'
+exec python3 -B - "$1" <<'PY'
 import collections
 import http.client
 import signal

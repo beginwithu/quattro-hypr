@@ -77,6 +77,17 @@ poll_clamshell_state() {
 }
 
 poll_pid=""
+cleanup() {
+  if [[ -n $poll_pid ]]; then
+    kill "$poll_pid" 2>/dev/null || true
+    poll_pid=""
+  fi
+}
+trap cleanup EXIT
+trap 'cleanup; exit 143' TERM
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 129' HUP
+
 sync_poll_state() {
   if quattro-hw laptop && quattro-hyprland-monitor external-active; then
     if [[ -z $poll_pid ]] || ! kill -0 "$poll_pid" 2>/dev/null; then

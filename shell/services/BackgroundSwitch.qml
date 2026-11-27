@@ -166,6 +166,9 @@ Item {
         reloadLock.write(go ? "reload\n" : "wait\n")
       }
     }
+    onExited: function(exitCode) {
+      if (exitCode === 0 && root.reloadPending && !root.busy) Qt.callLater(root.settle)
+    }
   }
 
   Process {

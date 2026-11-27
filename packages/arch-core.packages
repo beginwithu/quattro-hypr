@@ -76,6 +76,7 @@ zoxide
 # Capture, audio, network, bluetooth, power
 alsa-utils
 bluez
+bluez-tools
 bluez-utils
 brightnessctl
 ddcutil

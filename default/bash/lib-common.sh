@@ -17,7 +17,7 @@ quattro_resolve_path() {
     fi
   done
 
-  export QUATTRO_PATH="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}")")/.." && pwd)"
+  export QUATTRO_PATH="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.." && pwd)"
 }
 
 quattro_log_info() {
@@ -78,11 +78,28 @@ quattro_show_done() {
   echo >/dev/tty
 }
 
+_quattro_sudo_keepalive_cleanup() {
+  [[ -n ${SUDO_KEEPALIVE_PID:-} ]] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
+}
+
 quattro_sudo_keepalive() {
   sudo -v
-  while true; do sudo -n true; sleep 60; done 2>/dev/null &
+  local parent_pid=$$
+  while kill -0 "$parent_pid" 2>/dev/null; do
+    sudo -n true || break
+    sleep 60
+  done 2>/dev/null &
   SUDO_KEEPALIVE_PID=$!
-  trap "kill $SUDO_KEEPALIVE_PID 2>/dev/null || true" EXIT
+  local existing_exit_trap=""
+  existing_exit_trap=$(trap -p EXIT)
+  if [[ -n $existing_exit_trap ]]; then
+    existing_exit_trap="${existing_exit_trap#trap -- \'}"
+    existing_exit_trap="${existing_exit_trap%\' EXIT}"
+    existing_exit_trap="${existing_exit_trap//\'\\\'\'/\'}"
+    trap '_quattro_sudo_keepalive_cleanup; '"$existing_exit_trap" EXIT
+  else
+    trap '_quattro_sudo_keepalive_cleanup' EXIT
+  fi
 }
 
 quattro_theme_osc() {

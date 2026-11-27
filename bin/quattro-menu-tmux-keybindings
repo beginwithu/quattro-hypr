@@ -12,17 +12,21 @@ while (($#)); do
   case "$1" in
     --print|-p)
       print_only=true
+      shift
       ;;
     --config)
-      shift
-      config_file="${1:-$config_file}"
+      if (( $# < 2 )); then
+        echo "Usage: quattro-menu-tmux-keybindings [--print|-p] [--config <path>]" >&2
+        exit 1
+      fi
+      config_file="$2"
+      shift 2
       ;;
     *)
       config_file="$1"
+      shift
       ;;
   esac
-
-  shift
 done
 
 if [[ ! -f $config_file ]]; then

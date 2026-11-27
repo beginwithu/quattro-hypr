@@ -12,21 +12,23 @@ QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SO
 about_cpu() {
   local WIDTH=47
   local name="" cores="" freq="" details line
-  IFS=$'\t' read -r name cores freq < <(
+  IFS=$'\x1f' read -r name cores freq < <(
     fastfetch --logo none --pipe --structure cpu --format json 2>/dev/null | jq -r '
       .[0].result
       | [
-          .cpu,
-          (if (.coreTypes | length) > 1 then (.coreTypes | map(.count | tostring) | join("+")) else (.cores.online | tostring) end),
-          (if .frequency.max > 0 then .frequency.max else .frequency.base end)
+          (.cpu // ""),
+          (if (.coreTypes | length) > 1 then (.coreTypes | map(.count | tostring) | join("+")) else (.cores.online // "" | tostring) end),
+          ((if (.frequency.max // 0) > 0 then .frequency.max else (.frequency.base // 0) end) | if . > 0 then (round | tostring) else "" end)
         ]
-      | @tsv' || true
+      | join("\u001f")' || true
   ) || true
 
   [[ -n $name ]] || return 0
 
   details="($cores)"
-  (( ${freq:-0} > 0 )) && details+=" @ $(awk -v mhz="$freq" 'BEGIN { printf "%.2f GHz", mhz / 1000 }')"
+  if [[ $freq =~ ^[0-9]+$ ]] && (( freq > 0 )); then
+    details+=" @ $(awk -v mhz="$freq" 'BEGIN { printf "%.2f GHz", mhz / 1000 }')"
+  fi
 
   line="$name $details"
   if (( ${#line} <= WIDTH )); then

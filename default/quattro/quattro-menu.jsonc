@@ -115,8 +115,8 @@
   "appearance.workspace-layout.dwindle": {"icon":"󱓻","label":"Tiling","checked":"[[ $(quattro-hyprland-workspace-layout default) == \"dwindle\" ]]","action":"quattro-hyprland-workspace-layout default dwindle"},
   "appearance.workspace-layout.scrolling": {"icon":"󰝥","label":"Scrolling","checked":"[[ $(quattro-hyprland-workspace-layout default) == \"scrolling\" ]]","action":"quattro-hyprland-workspace-layout default scrolling"},
   "appearance.workspace-layout.floating": {"icon":"󰔶","label":"Floating","checked":"[[ $(quattro-hyprland-workspace-layout default) == \"floating\" ]]","action":"quattro-hyprland-workspace-layout default floating"},
-  "appearance.animations-on": {"icon":"󰗘","label":"Animations On","when":"! quattro-hyprland-toggle --animations-off","action":"quattro-toggle animations"},
-  "appearance.animations-off": {"icon":"󰗘","label":"Animations Off","when":"quattro-hyprland-toggle --animations-off","action":"quattro-toggle animations"},
+  "appearance.animations-on": {"icon":"󰗘","label":"Animations On","when":"quattro-hyprland-toggle --animations-off","action":"quattro-toggle animations"},
+  "appearance.animations-off": {"icon":"󰗘","label":"Animations Off","when":"! quattro-hyprland-toggle --animations-off","action":"quattro-toggle animations"},
 
   // Trigger
   "trigger.toggle": {"icon":"󰔎","label":"Toggle","aliases":["toggle","toggles"]},
@@ -192,8 +192,8 @@
   "setup.security.passwordless-sudo": {"icon":"󰟵","label":"Passwordless Sudo","action":"quattro-launch-floating-terminal-with-presentation quattro-sudo-passwordless"},
   "setup.config.git": {"icon":"","label":"Git","action":"quattro-launch-floating-terminal-with-presentation quattro-setup-git"},
   "setup.config.hyprland": {"icon":"","label":"Hyprland","action":"quattro-launch-editor --notify \"$HOME/.config/hypr/hyprland.lua\""},
-  "setup.config.hyprsunset": {"icon":"","label":"Hyprsunset","action":"quattro-launch-editor --notify ~/.config/hypr/hyprsunset.conf && quattro-restart hyprsunset"},
-  "setup.config.xcompose": {"icon":"󰞅","label":"XCompose","action":"quattro-launch-editor --notify ~/.XCompose && quattro-restart xcompose"},
+  "setup.config.hyprsunset": {"icon":"","label":"Hyprsunset","action":"quattro-launch-editor --wait --notify ~/.config/hypr/hyprsunset.conf && quattro-restart hyprsunset"},
+  "setup.config.xcompose": {"icon":"󰞅","label":"XCompose","action":"quattro-launch-editor --wait --notify ~/.XCompose && quattro-restart xcompose"},
   "setup.keyboard": {"icon":"","label":"Keyboard"},
   "setup.keyboard.keybindings": {"icon":"","label":"Keybindings","when":"[[ -f ~/.config/hypr/bindings.lua ]]","action":"quattro-launch-editor --notify \"$HOME/.config/hypr/bindings.lua\""},
   "setup.keyboard.inputs": {"icon":"","label":"Keyboard Inputs","action":"quattro-setup-keyboard"},

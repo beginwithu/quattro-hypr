@@ -56,13 +56,15 @@ static void onConfigReloaded() {
 
 static void onUpdateWindowRules(PHLWINDOW window) {
   const auto BARIT = std::find_if(g_pQuattroFloatingGlobalState->bars.begin(), g_pQuattroFloatingGlobalState->bars.end(),
-                                  [window](const auto &bar) { return bar->getOwner() == window; });
+                                  [window](const auto &bar) { return bar && bar->getOwner() == window; });
 
   if (BARIT == g_pQuattroFloatingGlobalState->bars.end())
     return;
 
-  (*BARIT)->updateRules();
-  window->updateWindowData();
+  if (const auto BAR = BARIT->lock()) {
+    BAR->updateRules();
+    window->updateWindowData();
+  }
 }
 
 int newQuattroFloatingLuaButton(lua_State *L) {
@@ -134,6 +136,9 @@ int newQuattroFloatingLuaButton(lua_State *L) {
   g_pQuattroFloatingGlobalState->buttons.push_back(std::move(button));
 
   for (auto &b : g_pQuattroFloatingGlobalState->bars) {
+    if (!b)
+      continue;
+
     b->m_bButtonsDirty = true;
   }
 
@@ -158,8 +163,8 @@ static PLUGIN_DESCRIPTION_INFO initializeQuattroFloating(HANDLE handle) {
   g_pQuattroFloatingGlobalState->barColorRuleIdx = Desktop::Rule::windowEffects()->registerEffect("hyprbars:bar_color");
   g_pQuattroFloatingGlobalState->titleColorRuleIdx = Desktop::Rule::windowEffects()->registerEffect("hyprbars:title_color");
 
-  static auto P = Event::bus()->m_events.window.open.listen([&](PHLWINDOW w) { onNewWindow(w); });
-  static auto P3 = Event::bus()->m_events.window.updateRules.listen([&](PHLWINDOW w) { onUpdateWindowRules(w); });
+  g_pQuattroFloatingGlobalState->windowOpenListener = Event::bus()->m_events.window.open.listen([](PHLWINDOW w) { onNewWindow(w); });
+  g_pQuattroFloatingGlobalState->windowUpdateRulesListener = Event::bus()->m_events.window.updateRules.listen([](PHLWINDOW w) { onUpdateWindowRules(w); });
 
   g_pQuattroFloatingGlobalState->config.barColor = makeShared<Config::Values::CColorValue>("plugin:hyprbars:bar_color", "Change the bar color", 0x88333333);
   g_pQuattroFloatingGlobalState->config.textColor = makeShared<Config::Values::CColorValue>("plugin:hyprbars:col.text", "Change the text color", 0xffffffff);
@@ -226,8 +231,8 @@ static PLUGIN_DESCRIPTION_INFO initializeQuattroFloating(HANDLE handle) {
   HyprlandAPI::addConfigValueV2(QUATTRO_FLOATING_PHANDLE, g_pQuattroFloatingGlobalState->config.onDoubleClick);
 
   HyprlandAPI::addLuaFunction(QUATTRO_FLOATING_PHANDLE, "hyprbars", "add_button", ::newQuattroFloatingLuaButton);
-  static auto P4 = Event::bus()->m_events.config.preReload.listen([&] { onPreConfigReload(); });
-  static auto P5 = Event::bus()->m_events.config.reloaded.listen([&] { onConfigReloaded(); });
+  g_pQuattroFloatingGlobalState->configPreReloadListener = Event::bus()->m_events.config.preReload.listen([] { onPreConfigReload(); });
+  g_pQuattroFloatingGlobalState->configReloadedListener = Event::bus()->m_events.config.reloaded.listen([] { onConfigReloaded(); });
 
   // add deco to existing windows
   for (auto &w : Desktop::windowState()->windows()) {
@@ -243,14 +248,23 @@ static PLUGIN_DESCRIPTION_INFO initializeQuattroFloating(HANDLE handle) {
 }
 
 static void exitQuattroFloating() {
+  if (g_pQuattroFloatingGlobalState) {
+    g_pQuattroFloatingGlobalState->windowOpenListener.reset();
+    g_pQuattroFloatingGlobalState->windowUpdateRulesListener.reset();
+    g_pQuattroFloatingGlobalState->configPreReloadListener.reset();
+    g_pQuattroFloatingGlobalState->configReloadedListener.reset();
+  }
+
   for (auto &m : State::monitorState()->monitors())
     m->m_scheduledRecalc = true;
 
   g_pHyprRenderer->context().m_pass.removeAllOfType("CQuattroFloatingBarPassElement");
 
-  Desktop::Rule::windowEffects()->unregisterEffect(g_pQuattroFloatingGlobalState->barColorRuleIdx);
-  Desktop::Rule::windowEffects()->unregisterEffect(g_pQuattroFloatingGlobalState->titleColorRuleIdx);
-  Desktop::Rule::windowEffects()->unregisterEffect(g_pQuattroFloatingGlobalState->nobarRuleIdx);
+  if (g_pQuattroFloatingGlobalState) {
+    Desktop::Rule::windowEffects()->unregisterEffect(g_pQuattroFloatingGlobalState->barColorRuleIdx);
+    Desktop::Rule::windowEffects()->unregisterEffect(g_pQuattroFloatingGlobalState->titleColorRuleIdx);
+    Desktop::Rule::windowEffects()->unregisterEffect(g_pQuattroFloatingGlobalState->nobarRuleIdx);
+  }
 }
 
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) { return initializeQuattroFloating(handle); }

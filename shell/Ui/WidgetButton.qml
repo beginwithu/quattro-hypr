@@ -29,6 +29,8 @@ Item {
   property bool centerFigures: true
   property bool hasVisualContent: text !== ""
   property var revealHost: bar
+  property bool holdingIndicatorHover: false
+  property var indicatorHoverHost: null
   property string tooltipText: ""
   property var registeredBar: null
   // Set by the bar while its own press handler, laid over the widget for
@@ -50,6 +52,24 @@ Item {
     if (root.bar) root.bar.hideTooltip(root)
   }
 
+  function setIndicatorHover(hovered) {
+    if (hovered) {
+      if (holdingIndicatorHover) return
+      if (root.maintainIndicatorReveal && root.revealHost && root.revealHost.setIndicatorItemHovered) {
+        holdingIndicatorHover = true
+        indicatorHoverHost = root.revealHost
+        indicatorHoverHost.setIndicatorItemHovered(true)
+      }
+    } else {
+      if (!holdingIndicatorHover) return
+      holdingIndicatorHover = false
+      var host = indicatorHoverHost || root.revealHost
+      indicatorHoverHost = null
+      if (host && host.setIndicatorItemHovered)
+        host.setIndicatorItemHovered(false)
+    }
+  }
+
   function syncClickRegistration() {
     if (registeredBar && registeredBar.unregisterClickTarget) registeredBar.unregisterClickTarget(root)
     registeredBar = root.bar
@@ -57,11 +77,17 @@ Item {
   }
 
   onBarChanged: syncClickRegistration()
-  onVisibleChanged: if (!visible) hideOwnTooltip()
-  onInteractiveChanged: if (!interactive) hideOwnTooltip()
-  onConcealedChanged: if (concealed) hideOwnTooltip()
+  onVisibleChanged: if (!visible) { hideOwnTooltip(); setIndicatorHover(false) }
+  onInteractiveChanged: if (!interactive) { hideOwnTooltip(); setIndicatorHover(false) }
+  onConcealedChanged: if (concealed) { hideOwnTooltip(); setIndicatorHover(false) }
+  onMaintainIndicatorRevealChanged: if (!maintainIndicatorReveal) setIndicatorHover(false)
+  onRevealHostChanged: if (holdingIndicatorHover && indicatorHoverHost !== revealHost) setIndicatorHover(false)
   Component.onCompleted: syncClickRegistration()
-  Component.onDestruction: if (registeredBar && registeredBar.unregisterClickTarget) registeredBar.unregisterClickTarget(root)
+  Component.onDestruction: {
+    setIndicatorHover(false)
+    hideOwnTooltip()
+    if (registeredBar && registeredBar.unregisterClickTarget) registeredBar.unregisterClickTarget(root)
+  }
 
   readonly property bool vertical: bar ? bar.vertical : false
   readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
@@ -178,15 +204,13 @@ Item {
       if (root.bar) {
         root.bar.showTooltip(root, root.tooltipText)
       }
-      if (root.maintainIndicatorReveal && root.revealHost && root.revealHost.setIndicatorItemHovered)
-        root.revealHost.setIndicatorItemHovered(true)
+      root.setIndicatorHover(true)
     }
     onExited: {
       if (root.bar) {
         root.bar.hideTooltip(root)
       }
-      if (root.maintainIndicatorReveal && root.revealHost && root.revealHost.setIndicatorItemHovered)
-        root.revealHost.setIndicatorItemHovered(false)
+      root.setIndicatorHover(false)
     }
     onClicked: function(mouse) { if (root.pressable) root.triggerPress(mouse.button) }
     onWheel: function(wheel) { root.wheelMoved(wheel.angleDelta.y) }

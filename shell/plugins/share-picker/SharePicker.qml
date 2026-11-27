@@ -638,9 +638,9 @@ Item {
                   required property var modelData
                   required property int index
 
-                  width: (monitorGrid.width - monitorGrid.spacing * (monitorGrid.columns - 1)) / monitorGrid.columns
+                  width: Math.max(1, (monitorGrid.width - monitorGrid.spacing * (monitorGrid.columns - 1)) / monitorGrid.columns)
                   previewHeight: root.monitorEntries.length === 1
-                    ? Math.min(Style.space(340), contentArea.height - Style.space(76))
+                    ? Math.max(0, Math.min(Style.space(340), contentArea.height - Style.space(76)))
                     : Style.space(180)
                   selected: root.selectedMonitorIndex === index
                   captureSource: modelData.screen
@@ -697,7 +697,7 @@ Item {
                   required property var modelData
                   required property int index
 
-                  width: (windowGrid.width - windowGrid.spacing * (windowGrid.columns - 1)) / windowGrid.columns
+                  width: Math.max(1, (windowGrid.width - windowGrid.spacing * (windowGrid.columns - 1)) / windowGrid.columns)
                   previewHeight: Style.space(160)
                   selected: root.selectedWindowIndex === index
                   captureSource: modelData.captureSource
@@ -754,7 +754,7 @@ Item {
                   required property var modelData
                   required property int index
 
-                  width: (workspaceGrid.width - workspaceGrid.spacing * (workspaceGrid.columns - 1)) / workspaceGrid.columns
+                  width: Math.max(1, (workspaceGrid.width - workspaceGrid.spacing * (workspaceGrid.columns - 1)) / workspaceGrid.columns)
                   previewHeight: Style.space(160)
                   selected: root.selectedWorkspaceIndex === index
                   captureSource: modelData.captureSource
@@ -963,8 +963,8 @@ Item {
     Timer {
       interval: 1500
       repeat: true
-      running: !cardRoot.live && !!cardRoot.captureSource && root.opened && !root.hidingForRegion
-      onTriggered: if (screencopy.captureSource) screencopy.captureFrame()
+      running: cardRoot.visible && !cardRoot.live && !!cardRoot.captureSource && root.opened && !root.hidingForRegion
+      onTriggered: if (cardRoot.visible && screencopy.captureSource) screencopy.captureFrame()
     }
 
     Column {

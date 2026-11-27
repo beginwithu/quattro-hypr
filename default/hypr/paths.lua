@@ -32,7 +32,7 @@ end
 
 return {
   home = home,
-  config_home = env_or("XDG_CONFIG_HOME", home .. "/.config"),
-  state_home = env_or("XDG_STATE_HOME", home .. "/.local/state"),
+  config_home = env_or("XDG_CONFIG_HOME", (home or "") .. "/.config"),
+  state_home = env_or("XDG_STATE_HOME", (home or "") .. "/.local/state"),
   quattro_path = resolve_quattro_path(),
 }

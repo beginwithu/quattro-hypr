@@ -92,7 +92,9 @@ Item {
 
   function beginFlow() {
     closeTimer.stop()
+    errorTimer.stop()
     closing = false
+    errorFlash = false
     submitted = false
     passwordInput.text = ""
     refreshLidState()

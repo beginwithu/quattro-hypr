@@ -222,6 +222,8 @@ Item {
 
   function cancel() {
     themeOpenPending = false
+    deleteSelectionPath = ""
+    awaitingDeleteRefresh = false
 
     if (requestActive)
       finishDoneFile(doneFile)
@@ -235,6 +237,8 @@ Item {
   function closeSelector(nextDoneFile) {
     requestSerial += 1
     themeOpenPending = false
+    deleteSelectionPath = ""
+    awaitingDeleteRefresh = false
 
     if (requestActive)
       finishDoneFile(doneFile)
@@ -418,16 +422,25 @@ Item {
 
     if (themeOpenPending) {
       themeOpenPending = false
+      if (!themeRowsProc.queued) {
+        deleteSelectionPath = ""
+        awaitingDeleteRefresh = false
+      }
       if (rows) openThemeRows()
     } else if (changed && rows && themeMode && opened) {
       // A theme was added or removed since the rows were last read. Keep the
       // user's place in the carousel rather than jumping back to the current;
       // a just-deleted selection lands on the theme before it.
       selectedImage = deleteSelectionPath || currentPath() || currentThemePreview()
-      deleteSelectionPath = ""
-      awaitingDeleteRefresh = false
+      if (!themeRowsProc.queued) {
+        deleteSelectionPath = ""
+        awaitingDeleteRefresh = false
+      }
       imageRows = rows
       loadRows(rows, false)
+    } else if (!themeRowsProc.queued) {
+      deleteSelectionPath = ""
+      awaitingDeleteRefresh = false
     }
   }
 
@@ -445,10 +458,17 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: root.updateThemeRows(String(text || "").trim())
     }
-    onExited: {
+    onExited: function(exitCode) {
       if (queued) {
         queued = false
         Qt.callLater(function() { if (!themeRowsProc.running) themeRowsProc.running = true })
+      } else if (exitCode !== 0) {
+        Qt.callLater(function() {
+          if (!themeRowsProc.running && !themeRowsProc.queued) {
+            root.deleteSelectionPath = ""
+            root.awaitingDeleteRefresh = false
+          }
+        })
       }
     }
   }

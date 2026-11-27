@@ -9,15 +9,29 @@
 set -euo pipefail
 
 if (( $# == 0 )); then
-  echo "Usage: quattro-menu-share [clipboard|file|folder]"
+  echo "Usage: quattro-menu-share [clipboard|file|folder]" >&2
   exit 1
 fi
 
 MODE="$1"
 shift
 
+case "$MODE" in
+  clipboard | file | folder) ;;
+  *)
+    echo "Usage: quattro-menu-share [clipboard|file|folder]" >&2
+    exit 1
+    ;;
+esac
+
+TEMP_FILE=""
+cleanup() {
+  [[ -n $TEMP_FILE ]] && rm -f "$TEMP_FILE"
+}
+trap cleanup EXIT
+
 file_select() {
-  python3 - "$@" <<'PY'
+  python3 -B - "$@" <<'PY'
 import argparse, os, subprocess, sys
 import gi
 gi.require_version("Gio", "2.0")
@@ -136,5 +150,9 @@ else
   readarray -t FILE_ARRAY <<<"$picked"
 fi
 
-systemd-run --user --quiet --collect localsend --headless send "${FILE_ARRAY[@]}"
+if [[ $MODE == "clipboard" ]]; then
+  systemd-run --user --quiet --collect --wait localsend --headless send "${FILE_ARRAY[@]}"
+else
+  systemd-run --user --quiet --collect localsend --headless send "${FILE_ARRAY[@]}"
+fi
 exit 0

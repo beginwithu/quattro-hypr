@@ -139,8 +139,22 @@ payload=$(jq -nc \
 
 quattro-shell shell summon quattro.menu "$payload" >/dev/null || exit 2
 
+next_probe=$((SECONDS + 2))
+consecutive_misses=0
 while [[ ! -e $done_file ]]; do
   sleep 0.05
+  [[ -e $done_file ]] && break
+  if (( SECONDS >= next_probe )); then
+    if quattro-shell shell ping >/dev/null 2>&1; then
+      consecutive_misses=0
+      next_probe=$((SECONDS + 1))
+    else
+      [[ -e $done_file ]] && break
+      consecutive_misses=$((consecutive_misses + 1))
+      (( consecutive_misses >= 2 )) && break
+      next_probe=$((SECONDS + 1))
+    fi
+  fi
 done
 
 if [[ -s $selection_file ]]; then

@@ -12,9 +12,10 @@ echo "==> 1. Checking Bash & Python script syntax and executable bits..."
 script_errors=0
 py_scripts=()
 while IFS= read -r -d '' script; do
+  [[ $script == "$PROJECT_DIR/default/bash/inputrc" ]] && continue
   shebang=""
   IFS= read -r shebang <"$script" || true
-  if [[ $shebang == *bash* || $script == *.sh || $script == "$PROJECT_DIR/default/bash/"* || $script == "$PROJECT_DIR/etc/profile.d/"* || $script == "$PROJECT_DIR/default/uwsm/"* ]]; then
+  if [[ $shebang == *bash* || $script == *.sh || $script == "$PROJECT_DIR/default/bash/"* || $script == "$PROJECT_DIR/default/bashrc" || $script == "$PROJECT_DIR/etc/profile.d/"* || $script == "$PROJECT_DIR/default/uwsm/"* ]]; then
     if ! bash -n "$script" 2>/dev/null; then
       echo "  Bash syntax error in: $script" >&2
       script_errors=$((script_errors + 1))
@@ -22,7 +23,7 @@ while IFS= read -r -d '' script; do
   elif [[ $shebang == *python* || $script == *.py ]]; then
     py_scripts+=("$script")
   fi
-done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/uninstall.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/input-methods" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/shell" -type f \( ! -path "$PROJECT_DIR/shell/*" -o -name '*.sh' -o -name '*.py' \) -print0)
+done < <(find "$PROJECT_DIR/install.sh" "$PROJECT_DIR/uninstall.sh" "$PROJECT_DIR/verify.sh" "$PROJECT_DIR/bin" "$PROJECT_DIR/default/bash" "$PROJECT_DIR/default/bashrc" "$PROJECT_DIR/default/input-methods" "$PROJECT_DIR/default/uwsm" "$PROJECT_DIR/etc/profile.d" "$PROJECT_DIR/shell" -type f \( ! -path "$PROJECT_DIR/shell/*" -o -name '*.sh' -o -name '*.py' \) -print0)
 if (( ${#py_scripts[@]} > 0 )); then
   py_bad=$(python3 -B - "${py_scripts[@]}" <<'PY'
 import ast, sys

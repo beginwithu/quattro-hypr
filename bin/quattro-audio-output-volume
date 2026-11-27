@@ -54,7 +54,7 @@ is_muted=0
 if [[ $action == "mute-toggle" ]]; then
   runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
   debounce_file="$runtime_dir/quattro-audio-output-volume-mute-toggle.last"
-  er="${EPOCHREALTIME/./}"
+  er="${EPOCHREALTIME//[!0-9]/}"
   now="${er:0:13}"
   last=0
   [[ -r $debounce_file ]] && read -r last <"$debounce_file" || true

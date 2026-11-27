@@ -6,9 +6,18 @@
 
 set -uo pipefail
 
-if [[ ${1:-} == --app-id=* ]]; then
+if (( $# < 1 )); then
+  echo "Usage: quattro-launch-tui [--app-id=<app-id>] <command> [args...]" >&2
+  exit 1
+fi
+
+if [[ $1 == --app-id=* ]]; then
   APP_ID="${1#--app-id=}"
   shift
+  if (( $# < 1 )); then
+    echo "Usage: quattro-launch-tui [--app-id=<app-id>] <command> [args...]" >&2
+    exit 1
+  fi
 else
   APP_ID="org.quattro.${1##*/}"
 fi

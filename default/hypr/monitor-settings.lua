@@ -19,8 +19,32 @@
 local paths = require("default.hypr.paths")
 
 local STATE_FILE = paths.state_home .. "/quattro/monitors/settings"
+local TOGGLES_DIR = paths.state_home .. "/quattro/toggles/hypr"
 
 local M = {}
+
+-- Outputs controlled by the laptop-disable or mirror toggles. During a config
+-- reload Hyprland has not applied those toggle rules yet, so hl.get_monitors()
+-- still reports the previous state; skip them so saved panel rules neither
+-- clobber the toggle nor count disabled/mirrored outputs toward GDK_SCALE.
+local function overridden_outputs()
+  local outputs = {}
+
+  for _, name in ipairs({ "internal-monitor-disable.lua", "internal-monitor-mirror.lua" }) do
+    local file = io.open(TOGGLES_DIR .. "/" .. name, "r")
+    if file then
+      for line in file:lines() do
+        local output = line:match("output%s*=%s*[\"']([^\"']+)[\"']")
+        if output then
+          outputs[output] = true
+        end
+      end
+      file:close()
+    end
+  end
+
+  return outputs
+end
 
 local function load()
   local settings = {}
@@ -94,12 +118,12 @@ end
 -- monitor scale: XWayland apps end up a little small on denser screens rather
 -- than oversized on the others. GTK only honors integers, so round it. Left to
 -- hypr/monitors.lua until a scale has been chosen here.
-local function set_gdk_scale(settings, identities)
+local function set_gdk_scale(settings, identities, overridden)
   local lowest = nil
   local chosen = false
 
   for _, monitor in ipairs(hl.get_monitors()) do
-    if not monitor.is_mirror then
+    if not monitor.is_mirror and not overridden[monitor.name] then
       local saved = settings[identities[monitor.name]]
       chosen = chosen or (saved ~= nil and saved.scale ~= nil)
       local scale = (saved and saved.scale) or monitor.scale
@@ -125,15 +149,16 @@ function M.apply(loading, only)
   end
 
   local identities = o.workspaces.identities()
+  local overridden = overridden_outputs()
   for _, monitor in ipairs(hl.get_monitors()) do
     local saved = settings[identities[monitor.name]]
-    if not monitor.is_mirror and saved and (not only or monitor.name == only)
+    if not monitor.is_mirror and not overridden[monitor.name] and saved and (not only or monitor.name == only)
         and (loading or not matches(monitor, saved)) then
       hl.monitor(rule(monitor.name, saved))
     end
   end
 
-  set_gdk_scale(settings, identities)
+  set_gdk_scale(settings, identities, overridden)
 end
 
 -- Bring GDK_SCALE up to date after a save, without touching any monitor: the
@@ -141,7 +166,7 @@ end
 function M.update_gdk_scale()
   local settings = load()
   if next(settings) ~= nil then
-    set_gdk_scale(settings, o.workspaces.identities())
+    set_gdk_scale(settings, o.workspaces.identities(), overridden_outputs())
   end
 end
 

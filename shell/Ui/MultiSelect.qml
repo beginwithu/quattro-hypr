@@ -182,20 +182,41 @@ Item {
   property int refreshSeq: 0
   readonly property int refreshTimeoutMs: 6000
 
+  function startOptionsProcess(cmd, cwd, seq) {
+    optionsProcess.seq = seq
+    optionsProcess.command = cmd
+    optionsProcess.workingDirectory = cwd
+    optionsProcess.running = true
+    refreshTimeoutTimer.restart()
+  }
+
   function refresh() {
     var cmd = arrayFrom(optionsCommand)
     if (cmd.length === 0) {
+      optionsProcess.restartPending = false
+      if (optionsProcess.running) {
+        refreshSeq++
+        optionsProcess.running = false
+      }
+      refreshTimeoutTimer.stop()
+      loadingOptions = false
+      optionsError = ""
       rebuildFromStatic()
       return
     }
     refreshSeq++
     loadingOptions = true
     optionsError = ""
-    optionsProcess.command = cmd
-    optionsProcess.workingDirectory = optionsCommandCwd
-    optionsProcess.running = false
-    optionsProcess.running = true
-    refreshTimeoutTimer.restart()
+    if (optionsProcess.running) {
+      optionsProcess.restartPending = true
+      optionsProcess.pendingCmd = cmd
+      optionsProcess.pendingCwd = optionsCommandCwd
+      optionsProcess.running = false
+      refreshTimeoutTimer.restart()
+      return
+    }
+    optionsProcess.restartPending = false
+    startOptionsProcess(cmd, optionsCommandCwd, refreshSeq)
   }
 
   Timer {
@@ -204,6 +225,8 @@ Item {
     repeat: false
     onTriggered: {
       if (!root.loadingOptions) return
+      root.refreshSeq++
+      optionsProcess.restartPending = false
       optionsProcess.running = false
       root.loadingOptions = false
       root.optionsError = Commons.I18n.t("multiSelect.timedOut")
@@ -220,6 +243,9 @@ Item {
     command: []
 
     property int seq: 0
+    property bool restartPending: false
+    property var pendingCmd: []
+    property string pendingCwd: ""
 
     stdout: StdioCollector {
       waitForEnd: true
@@ -240,9 +266,20 @@ Item {
       }
     }
 
-    onRunningChanged: if (running) seq = root.refreshSeq
-
     onExited: function(exitCode, exitStatus) {
+      if (restartPending) {
+        restartPending = false
+        var cmd = pendingCmd
+        var cwd = pendingCwd
+        var nextSeq = root.refreshSeq
+        // Defer one turn so any buffered stdout from the stopped run is
+        // processed while `seq` still belongs to the canceled run.
+        Qt.callLater(function() {
+          if (nextSeq !== root.refreshSeq) return
+          if (!optionsProcess.running) root.startOptionsProcess(cmd, cwd, nextSeq)
+        })
+        return
+      }
       if (seq !== root.refreshSeq) return
       refreshTimeoutTimer.stop()
       if (exitCode !== 0) {
@@ -417,7 +454,7 @@ Item {
 
               TextField {
                 id: searchField
-                width: parent.width - refreshButton.width - parent.spacing
+                width: refreshButton.visible ? (parent.width - refreshButton.width - parent.spacing) : parent.width
                 height: parent.height
                 placeholderText: root.placeholderText
                 foreground: root.foreground
@@ -464,6 +501,7 @@ Item {
                   : Border.controlSpec("normal", root.foreground, root.accent)
 
                 Text {
+                  id: refreshIcon
                   textFormat: Text.PlainText
                   anchors.centerIn: parent
                   text: root.loadingOptions ? "󰦖" : "󰑐"
@@ -476,6 +514,7 @@ Item {
                     from: 0; to: 360
                     duration: Style.duration(800)
                     loops: Animation.Infinite
+                    onRunningChanged: if (!running) refreshIcon.rotation = 0
                   }
                 }
 
@@ -497,7 +536,7 @@ Item {
 
           Item {
             width: parent.width
-            height: popup.height - searchHeader.height - Style.spacing.xxs - 1
+            height: Math.max(0, popup.height - popup.topPadding - popup.bottomPadding - searchHeader.height - 1)
 
             Text {
               textFormat: Text.PlainText

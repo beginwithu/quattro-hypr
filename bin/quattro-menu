@@ -48,7 +48,7 @@ case "$verb" in
     ;;
   timezone)
     timezone=$(timedatectl list-timezones | quattro-menu-select "$(quattro-i18n timezone.setTitle)" -- --width 520 --maxheight 520) || exit 1
-    sudo timedatectl set-timezone "$timezone"
+    timedatectl set-timezone "$timezone"
     quattro-shell -q quattro.clock refresh
     quattro-notification-send "$(quattro-i18n timezone.changed "$timezone")"
     ;;

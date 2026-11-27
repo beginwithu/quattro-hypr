@@ -56,7 +56,8 @@ done < <(upower -e 2>/dev/null)
 [[ -z $battery ]] && exit 0
 
 # Single awk pass over UPower output instead of 10 separate awk invocations.
-IFS=$'\t' read -r percentage capacity energy energy_full upower_hours power_rate_raw native_path state threshold_start threshold_end < <(
+percentage="" capacity="" energy="" energy_full="" upower_hours="" power_rate_raw="" native_path="" state="" threshold_start="" threshold_end=""
+IFS=$'\x1f' read -r percentage capacity energy energy_full upower_hours power_rate_raw native_path state threshold_start threshold_end < <(
   awk '
     /^[[:space:]]*percentage:/ && percentage == "" { percentage = int($2); next }
     /^[[:space:]]*energy-full:/ && energy_full == "" { energy_full = $2; capacity = sprintf("%d", $2); next }
@@ -68,11 +69,11 @@ IFS=$'\t' read -r percentage capacity energy energy_full upower_hours power_rate
     /^[[:space:]]*charge-start-threshold:/ && threshold_start == "" { gsub(/%/, "", $2); threshold_start = int($2); next }
     /^[[:space:]]*charge-end-threshold:/ && threshold_end == "" { gsub(/%/, "", $2); threshold_end = int($2); next }
     END {
-      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+      printf "%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
         percentage, capacity, energy, energy_full, upower_hours, power_rate_raw, native_path, state, threshold_start, threshold_end
     }
   ' <<<"$battery_info"
-)
+) || true
 battery_path="$power_supply_path/$native_path"
 
 # A sysfs reading as a number, or nothing. Firmware that doesn't know the
@@ -115,7 +116,8 @@ if [[ -z $threshold_start ]]; then
 fi
 
 # Single awk pass for power_rate, minutes_remaining, and charge_idle (replaces 4 awk calls).
-IFS=$'\t' read -r power_rate minutes_remaining charge_idle < <(
+power_rate="" minutes_remaining="" charge_idle=""
+IFS=$'\x1f' read -r power_rate minutes_remaining charge_idle < <(
   awk \
     -v raw="${power_rate_raw:-0}" \
     -v uw="$microwatts" -v ua="$microamps" -v uv="$microvolts" \
@@ -141,9 +143,9 @@ IFS=$'\t' read -r power_rate minutes_remaining charge_idle < <(
       mins = sprintf("%d", int(hours * 60 + 0.5))
     }
 
-    printf "%s\t%s\t%s\n", rounded, mins, idle
+    printf "%s\x1f%s\x1f%s\n", rounded, mins, idle
   }'
-)
+) || true
 time_remaining=$(format_duration "$minutes_remaining")
 
 ac_online=false

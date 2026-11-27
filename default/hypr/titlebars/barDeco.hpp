@@ -115,6 +115,8 @@ private:
 
   bool m_bDraggingThis = false;
   bool m_bTouchEv = false;
+  bool m_bTouchPinned = false;
+  bool m_bTouchFloated = false;
   bool m_bDragPending = false;
   bool m_bCancelledDown = false;
   int m_touchId = 0;

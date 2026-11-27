@@ -97,7 +97,7 @@ build_lua_bind_cache() {
 
   quattro-cmd present lua || return 0
 
-  while IFS=$'\t' read -r modmask description key dispatcher arg; do
+  while IFS=$'\x1f' read -r modmask description key dispatcher arg; do
     [[ -z $modmask || -z $description || -z $key ]] && continue
 
     LUA_BIND_KEY_MAP["$modmask,$description"]="$key"
@@ -310,7 +310,7 @@ hl = setmetatable({
         arg = o.bind_expressions[bind_dispatcher]
       end
 
-      print(table.concat({ tostring(modmask), opts.description, key, kind, arg }, "\t"))
+      print(table.concat({ tostring(modmask), opts.description, key, kind, arg }, string.char(31)))
     end
 
     return noop

@@ -68,34 +68,7 @@ GROUP_DESCRIPTIONS[toggle]="Toggle Quattro features"
 GROUP_DESCRIPTIONS[update]="Quattro and system updates"
 GROUP_DESCRIPTIONS[version]="Version information"
 
-join_words() {
-  local separator="${1:-}"
-  shift
-  local joined=""
-
-  for word in "$@"; do
-    if [[ -z $joined ]]; then
-      joined="$word"
-    else
-      joined+="$separator$word"
-    fi
-  done
-
-  printf '%s' "$joined"
-}
-
-append_pipe_value() {
-  local current="${1:-}"
-  local addition="${2:-}"
-
-  if [[ -z $current ]]; then
-    printf '%s' "$addition"
-  else
-    printf '%s|%s' "$current" "$addition"
-  fi
-}
-
-# Same as append_pipe_value, but appends in place (no subshell fork).
+# Append a pipe-delimited value in place (no subshell fork).
 append_pipe_var() {
   local -n __pipe_target="$1"
   __pipe_target="${__pipe_target:+$__pipe_target|}${2:-}"
@@ -472,15 +445,8 @@ sorted_keys() {
   done | sort -u | cut -f2-
 }
 
-fallback_group_for_key() {
-  local key="${1:-}"
-  local fallback="${COMMAND_FALLBACK_ROUTE[$key]#quattro }"
-
-  printf '%s' "${fallback%% *}"
-}
-
-# REPLY-returning variants of the helpers above/below, used inside loops so a
-# group listing doesn't fork two subshells per command.
+# REPLY-returning helpers used inside loops so a group listing doesn't fork
+# subshells per command.
 fallback_group_reply() {
   REPLY="${COMMAND_FALLBACK_ROUTE[$1]#quattro }"
   REPLY="${REPLY%% *}"
@@ -503,30 +469,6 @@ command_usage_reply() {
   if [[ -n ${COMMAND_ARGS[$1]:-} ]]; then
     REPLY+=" ${COMMAND_ARGS[$1]:-}"
   fi
-}
-
-command_route_for_group() {
-  local key="${1:-}"
-  local group="${2:-}"
-
-  if [[ $(fallback_group_for_key "$key") == "$group" && ${COMMAND_GROUP[$key]:-} != "$group" ]]; then
-    printf '%s' "${COMMAND_FALLBACK_ROUTE[$key]:-}"
-  else
-    printf '%s' "${COMMAND_ROUTE[$key]:-}"
-  fi
-}
-
-command_usage_for_group() {
-  local key="${1:-}"
-  local group="${2:-}"
-  local route=""
-
-  route=$(command_route_for_group "$key" "$group")
-  if [[ -n ${COMMAND_ARGS[$key]:-} ]]; then
-    route+=" ${COMMAND_ARGS[$key]:-}"
-  fi
-
-  printf '%s' "$route"
 }
 
 sorted_group_keys() {

@@ -11,6 +11,8 @@ Item {
   id: root
 
   property string quattroPath: Util.quattroPath
+  property var shell: null
+  property var manifest: null
   property bool opened: false
   property string filterText: ""
   property int selectedIndex: 0
@@ -35,10 +37,13 @@ Item {
   property int contentMargin: Style.spacing.panelPadding
   property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)
   property int contentSpacing: Style.spacing.md
-  property int cardWidth: Math.min(Style.space(875), panel.width - Style.gapsOut * 2)
-  property int cardHeight: Math.min(Style.space(600), panel.height - Style.gapsOut * 2)
+  property int cardWidth: Math.max(1, Math.min(Style.space(875), panel.width - Style.gapsOut * 2))
+  property int cardHeight: Math.max(1, Math.min(Style.space(600), panel.height - Style.gapsOut * 2))
   property int rowHeight: Math.max(Style.space(50), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
   property int historyLimit: 500
+  readonly property int watchBackoffMinMs: 1000
+  readonly property int watchBackoffMaxMs: 30000
+  property int watchBackoffMs: watchBackoffMinMs
 
   function open(payloadJson) {
     root.opened = true
@@ -56,8 +61,19 @@ Item {
   }
 
   function toggle() {
-    if (root.opened) root.close()
+    if (root.opened) root.dismiss()
     else root.open("{}")
+  }
+
+  function scheduleWatchRestart() {
+    if (watchRestartTimer.running) return
+    watchRestartTimer.interval = root.watchBackoffMs
+    root.watchBackoffMs = Math.min(root.watchBackoffMaxMs, root.watchBackoffMs * 2)
+    watchRestartTimer.start()
+  }
+
+  function resetWatchBackoff() {
+    root.watchBackoffMs = root.watchBackoffMinMs
   }
 
   function normalizeEntry(value) {
@@ -299,32 +315,47 @@ Item {
   Process {
     id: textWatchProc
     command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "text", "--watch", root.captureScript, "text"]
-    onExited: watchRestartTimer.restart()
+    onExited: root.scheduleWatchRestart()
     stdout: SplitParser {
-      onRead: function(data) { root.addClipboardJson(data) }
+      onRead: function(data) {
+        root.resetWatchBackoff()
+        root.addClipboardJson(data)
+      }
     }
   }
 
   Process {
     id: imageWatchProc
     command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "image/png", "--watch", root.captureScript, "image/png"]
-    onExited: watchRestartTimer.restart()
+    onExited: root.scheduleWatchRestart()
     stdout: SplitParser {
-      onRead: function(data) { root.addClipboardJson(data) }
+      onRead: function(data) {
+        root.resetWatchBackoff()
+        root.addClipboardJson(data)
+      }
     }
   }
 
   // A watcher that dies takes clipboard history with it, silently: copying still
   // works, the picker still opens, and the old entries are all still there, so
-  // nothing recorded until the next shell reload. Bring it back instead.
+  // nothing recorded until the next shell reload. Bring it back instead, with
+  // exponential backoff so a missing/broken wl-paste does not spin.
   Timer {
     id: watchRestartTimer
-    interval: 1000
+    interval: root.watchBackoffMinMs
     repeat: false
     onTriggered: {
       if (!textWatchProc.running) textWatchProc.running = true
       if (!imageWatchProc.running) imageWatchProc.running = true
     }
+  }
+
+  Timer {
+    id: watchStableTimer
+    interval: 10000
+    repeat: false
+    running: (textWatchProc.running || imageWatchProc.running) && root.watchBackoffMs > root.watchBackoffMinMs
+    onTriggered: root.resetWatchBackoff()
   }
 
   OverlayWindow {
@@ -339,7 +370,7 @@ Item {
 
     MouseArea {
       anchors.fill: parent
-      onClicked: root.close()
+      onClicked: root.dismiss()
     }
 
     BorderSurface {
@@ -369,7 +400,7 @@ Item {
 
           if (event.key === Qt.Key_Escape) {
             if (root.filterText) root.setFilter("")
-            else root.close()
+            else root.dismiss()
             event.accepted = true
           } else if (Util.editsFilter(event, root.filterText)) {
             root.setFilter(Util.editedFilter(event, root.filterText))

@@ -131,7 +131,7 @@ ddc_brightness() {
   if [[ -z $ddc_step ]]; then
     read -r bus current maximum < <(read_ddc) || return 1
     [[ -n $bus && -n $current && -n $maximum ]] || return 1
-    (( percent = (current * 100 + maximum / 2) / maximum ))
+    percent=$(( (current * 100 + maximum / 2) / maximum ))
     printf '%s\n' "$percent"
     return 0
   fi
@@ -154,22 +154,22 @@ ddc_brightness() {
   elif [[ $ddc_step =~ ^\+([0-9]+)%$ ]]; then
     read -r bus current maximum < <(read_ddc) || return 1
     [[ -n $bus && -n $current && -n $maximum ]] || return 1
-    (( percent = (current * 100 + maximum / 2) / maximum ))
+    percent=$(( (current * 100 + maximum / 2) / maximum ))
     amount="${BASH_REMATCH[1]}"
     if (( amount == 5 && percent < 5 )); then
-      (( target = percent + 1 ))
+      target=$(( percent + 1 ))
     else
-      (( target = percent + amount ))
+      target=$(( percent + amount ))
     fi
   elif [[ $ddc_step =~ ^([0-9]+)%-$ ]]; then
     read -r bus current maximum < <(read_ddc) || return 1
     [[ -n $bus && -n $current && -n $maximum ]] || return 1
-    (( percent = (current * 100 + maximum / 2) / maximum ))
+    percent=$(( (current * 100 + maximum / 2) / maximum ))
     amount="${BASH_REMATCH[1]}"
     if (( amount == 5 && percent <= 5 )); then
-      (( target = percent - 1 ))
+      target=$(( percent - 1 ))
     else
-      (( target = percent - amount ))
+      target=$(( percent - amount ))
     fi
   else
     return 1
@@ -177,7 +177,7 @@ ddc_brightness() {
 
   (( target < 1 )) && target=1
   (( target > 100 )) && target=100
-  (( raw_target = (target * maximum + 50) / 100 ))
+  raw_target=$(( (target * maximum + 50) / 100 ))
 
   if ! ddcutil --bus "$bus" --skip-ddc-checks --noverify setvcp 10 "$raw_target" >/dev/null 2>&1; then
     rm -f "$cache_file"
@@ -239,17 +239,17 @@ else
 
   if [[ $step == "+5%" ]]; then
     if (( current < 5 )); then
-      (( target = current + 1 ))
+      target=$(( current + 1 ))
     else
-      (( target = current + 5 ))
+      target=$(( current + 5 ))
     fi
     (( target > 100 )) && target=100
     step="$target%"
   elif [[ $step == "5%-" ]]; then
     if (( current <= 5 )); then
-      (( target = current - 1 ))
+      target=$(( current - 1 ))
     else
-      (( target = current - 5 ))
+      target=$(( current - 5 ))
     fi
     (( target < 1 )) && target=1
     step="$target%"

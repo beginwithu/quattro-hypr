@@ -4,6 +4,7 @@
 
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/render/Texture.hpp>
+#include <hyprland/src/helpers/signal/Signal.hpp>
 #include <hyprland/src/config/values/types/BoolValue.hpp>
 #include <hyprland/src/config/values/types/IntValue.hpp>
 #include <hyprland/src/config/values/types/StringValue.hpp>
@@ -32,6 +33,11 @@ struct SQuattroFloatingGlobalState {
   uint32_t nobarRuleIdx = 0;
   uint32_t barColorRuleIdx = 0;
   uint32_t titleColorRuleIdx = 0;
+
+  CHyprSignalListener windowOpenListener;
+  CHyprSignalListener windowUpdateRulesListener;
+  CHyprSignalListener configPreReloadListener;
+  CHyprSignalListener configReloadedListener;
 
   struct {
     SP<Config::Values::CColorValue> barColor, textColor, inactiveBarColor, inactiveButtonColor, buttonBorderColor;

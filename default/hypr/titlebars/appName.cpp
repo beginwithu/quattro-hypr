@@ -68,6 +68,8 @@ namespace {
     bool          inEntry = false;
 
     while (std::getline(file, line)) {
+      if (!line.empty() && line.back() == '\r')
+        line.pop_back();
       if (line.starts_with('[')) {
         if (inEntry)
           break;
@@ -99,9 +101,12 @@ namespace {
 
     // Earlier directories win, so a user's own entry overrides the system one.
     std::unordered_set<std::string> seen;
+    const auto                      end = fs::directory_iterator();
     for (const auto& dir : dirs) {
       std::error_code ec;
-      for (const auto& file : fs::directory_iterator(dir, ec)) {
+      auto            it = fs::directory_iterator(dir, ec);
+      for (; !ec && it != end; it.increment(ec)) {
+        const auto& file = *it;
         if (file.path().extension() != ".desktop" || !seen.insert(file.path().filename().string()).second)
           continue;
         readAndIndexEntry(file.path());
@@ -130,10 +135,10 @@ std::string quattroAppName(const std::string& windowClass) {
     return cached->second;
 
   std::string name;
-  if (const auto it = g_byWmClass.find(windowClass); it != g_byWmClass.end())
-    name = it->second;
-  else if (const auto it = g_byLowerId.find(lower(windowClass)); it != g_byLowerId.end())
-    name = it->second;
+  if (const auto byClass = g_byWmClass.find(windowClass); byClass != g_byWmClass.end())
+    name = byClass->second;
+  else if (const auto byId = g_byLowerId.find(lower(windowClass)); byId != g_byLowerId.end())
+    name = byId->second;
 
   g_resolved.emplace(windowClass, name);
   return name;

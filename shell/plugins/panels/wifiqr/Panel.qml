@@ -185,7 +185,11 @@ Item {
     }
     stderr: StdioCollector {
       waitForEnd: true
-      onStreamFinished: if (!root.expectedStop) root.error = String(text || "").trim()
+      onStreamFinished: {
+        if (root.expectedStop) return
+        var msg = String(text || "").trim()
+        if (msg !== "") root.error = msg
+      }
     }
     onExited: function(exitCode) {
       root.loading = false
@@ -310,22 +314,23 @@ Item {
 
             Grid {
               anchors.fill: parent
-              columns: root.qrSize
+              columns: Math.max(1, root.qrSize)
               // A mirrored QR code does not scan: modules stay left to right
               // in right-to-left languages too.
               LayoutMirroring.enabled: false
 
               Repeater {
-                model: root.qrSize * root.qrSize
+                model: root.qrSize > 0 ? root.qrSize * root.qrSize : 0
 
                 Rectangle {
                   required property int index
-                  readonly property int matrixRow: Math.floor(index / root.qrSize)
-                  readonly property int matrixColumn: index % root.qrSize
+                  readonly property int matrixRow: root.qrSize > 0 ? Math.floor(index / root.qrSize) : -1
+                  readonly property int matrixColumn: root.qrSize > 0 ? (index % root.qrSize) : -1
+                  readonly property string rowData: matrixRow >= 0 && matrixRow < root.qrRows.length ? String(root.qrRows[matrixRow] || "") : ""
 
                   width: qrCanvas.moduleSize
                   height: qrCanvas.moduleSize
-                  color: root.qrRows[matrixRow].charAt(matrixColumn) === "1" ? "#111111" : "transparent"
+                  color: matrixColumn >= 0 && rowData.charAt(matrixColumn) === "1" ? "#111111" : "transparent"
                 }
               }
             }

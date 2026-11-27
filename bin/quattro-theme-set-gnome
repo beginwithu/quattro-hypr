@@ -12,6 +12,12 @@ THEME_DIR="$STATE_HOME/quattro/current/theme"
 COLORS_FILE="$THEME_DIR/colors.toml"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 
+_TMP_FILES=()
+cleanup_tmp_files() {
+  (( ${#_TMP_FILES[@]} > 0 )) && rm -f "${_TMP_FILES[@]}"
+}
+trap cleanup_tmp_files EXIT
+
 # Sync GTK4 (Nautilus / Libadwaita) and GTK3 CSS via a managed import block so
 # quattro-theme-set-glass and user customizations in gtk.css stay intact.
 sync_gtk_css() {
@@ -23,9 +29,10 @@ sync_gtk_css() {
 
   [[ -f $theme_css ]] || return 0
   mkdir -p "${gtk_css%/*}"
-  tmp=$(mktemp)
+  tmp=$(mktemp) || return 1
+  _TMP_FILES+=("$tmp")
 
-  {
+  if {
     printf '%s\n@import url("file://%s");\n%s\n' "$import_line" "$theme_css" "$end_line"
     if [[ -f $gtk_css ]]; then
       awk -v begin="$import_line" -v end="$end_line" '
@@ -35,9 +42,12 @@ sync_gtk_css() {
         { print }
       ' "$gtk_css"
     fi
-  } >"$tmp"
-
-  mv -f "$tmp" "$gtk_css"
+  } >"$tmp"; then
+    mv -f "$tmp" "$gtk_css"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 # Build a lightweight user icon theme inheriting Adwaita with folder SVGs

@@ -52,8 +52,8 @@ static std::string windowCommand(std::string command, const PHLWINDOW &window) {
 CQuattroFloatingHyprBar::CQuattroFloatingHyprBar(PHLWINDOW pWindow) : IHyprWindowDecoration(pWindow) {
   m_pWindow = pWindow;
 
-  const auto PMONITOR = pWindow->m_monitor.lock();
-  PMONITOR->m_scheduledRecalc = true;
+  if (const auto PMONITOR = pWindow->m_monitor.lock(); PMONITOR)
+    PMONITOR->m_scheduledRecalc = true;
 
   // button events
   m_pMouseButtonCallback =
@@ -99,7 +99,11 @@ bool CQuattroFloatingHyprBar::inputIsValid() {
   if (m_hidden || !g_pQuattroFloatingGlobalState->config.enabled->value())
     return false;
 
-  if (g_pSeatManager->m_seatGrab && !g_pSeatManager->m_seatGrab->accepts(m_pWindow->wlSurface()->resource()))
+  const auto PWINDOW = m_pWindow.lock();
+  if (!PWINDOW)
+    return false;
+
+  if (g_pSeatManager->m_seatGrab && (!PWINDOW->wlSurface() || !g_pSeatManager->m_seatGrab->accepts(PWINDOW->wlSurface()->resource())))
     return false;
 
   const auto MOUSE = g_pInputManager->getMouseCoordsInternal();
@@ -117,7 +121,7 @@ bool CQuattroFloatingHyprBar::inputIsValid() {
 
   // The focused window's bar can sit under another window, and a press there
   // belongs to that window.
-  if (WINDOWATCURSOR != m_pWindow && (m_pWindow != window || WINDOWATCURSOR))
+  if (WINDOWATCURSOR != PWINDOW && (PWINDOW != window || WINDOWATCURSOR))
     return false;
 
   PHLLS foundSurface = nullptr;
@@ -142,7 +146,7 @@ void CQuattroFloatingHyprBar::onMouseButton(Event::SCallbackInfo &info, IPointer
 
   if (e.state != WL_POINTER_BUTTON_STATE_PRESSED) {
     // A titlebar drag can finish over a panel or another surface.
-    if (m_bDraggingThis || m_bCancelledDown || m_bDragPending)
+    if (!m_bTouchEv && (m_bDraggingThis || m_bCancelledDown || m_bDragPending))
       handleUpEvent(info);
     return;
   }
@@ -188,34 +192,53 @@ void CQuattroFloatingHyprBar::onTouchMove(Event::SCallbackInfo &info, ITouch::SM
     return;
 
   if (!m_bDraggingThis) {
-    // Initial setup for dragging a window.
-    (void)Config::Actions::floatWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_ENABLE, m_pWindow.lock());
-    // Pin it so you can change workspaces while dragging a window
-    (void)Config::Actions::pinWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_ENABLE, m_pWindow.lock());
+    const auto PWINDOW = m_pWindow.lock();
+    if (!PWINDOW)
+      return;
 
-    g_layoutManager->beginDragTarget(m_pWindow.lock()->layoutTarget(), MBIND_MOVE);
+    m_bDragPending = false;
+
+    // Initial setup for dragging a window: remember whether this gesture
+    // floated or pinned it so release restores only what we changed.
+    m_bTouchFloated = false;
+    if (!PWINDOW->isFloating()) {
+      (void)Config::Actions::floatWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_ENABLE, PWINDOW);
+      m_bTouchFloated = true;
+    }
+    m_bTouchPinned = false;
+    if (!(PWINDOW->m_state & Desktop::View::WINDOW_STATE_PINNED)) {
+      // Pin it so you can change workspaces while dragging a window.
+      (void)Config::Actions::pinWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_ENABLE, PWINDOW);
+      m_bTouchPinned = true;
+    }
+
+    g_layoutManager->beginDragTarget(PWINDOW->layoutTarget(), MBIND_MOVE);
     m_bDraggingThis = true;
   }
 }
 
 void CQuattroFloatingHyprBar::handleDownEvent(Event::SCallbackInfo &info, std::optional<ITouch::SDownEvent> touchEvent) {
-  m_bTouchEv = touchEvent.has_value();
-  if (m_bTouchEv)
-    m_touchId = touchEvent.value().touchID;
-
   const auto PWINDOW = m_pWindow.lock();
+  if (!PWINDOW)
+    return;
+
+  const bool isTouch = touchEvent.has_value();
 
   auto COORDS = cursorRelativeToBar();
-  if (m_bTouchEv) {
+  if (isTouch) {
     ITouch::SDownEvent e = touchEvent.value();
     PHLMONITOR PMONITOR = nullptr;
-    for (auto &m : State::monitorState()->monitors()) {
-      if (m->m_name == (!e.device->m_boundOutput.empty() ? e.device->m_boundOutput : "")) {
-        PMONITOR = m;
-        break;
+    if (e.device && !e.device->m_boundOutput.empty()) {
+      for (auto &m : State::monitorState()->monitors()) {
+        if (m->m_name == e.device->m_boundOutput) {
+          PMONITOR = m;
+          break;
+        }
       }
     }
     PMONITOR = PMONITOR ? PMONITOR : Desktop::focusState()->monitor();
+    if (!PMONITOR)
+      return;
     COORDS = Vector2D(PMONITOR->m_position.x + e.pos.x * PMONITOR->m_size.x, PMONITOR->m_position.y + e.pos.y * PMONITOR->m_size.y) - assignedBoxGlobal().pos();
   }
 
@@ -230,23 +253,33 @@ void CQuattroFloatingHyprBar::handleDownEvent(Event::SCallbackInfo &info, std::o
   // Hyprland measures its border resize band from the window's content, so for
   // a titled window the band sits under the bar and the edge above the bar
   // never resizes. A press in the band above the bar starts that resize here.
-  if (!m_bTouchEv && startTopEdgeResize(info, PWINDOW, COORDS))
+  if (!isTouch && startTopEdgeResize(info, PWINDOW, COORDS)) {
+    m_bTouchEv = false;
+    m_touchId = 0;
     return;
+  }
 
   if (!VECINRECT(COORDS, 0, 0, assignedBoxGlobal().w, HEIGHT - 1)) {
-
     if (m_bDraggingThis) {
-      if (m_bTouchEv)
-        (void)Config::Actions::floatWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_DISABLE);
       g_layoutManager->endDragTarget();
+      if (m_bTouchPinned)
+        (void)Config::Actions::pinWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_DISABLE, PWINDOW);
+      if (m_bTouchFloated)
+        (void)Config::Actions::floatWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_DISABLE, PWINDOW);
       LOG(Log::DEBUG, "[hyprbars] Dragging ended on {:x}", (uintptr_t)PWINDOW.get());
     }
 
     m_bDraggingThis = false;
     m_bDragPending = false;
     m_bTouchEv = false;
+    m_bTouchPinned = false;
+    m_bTouchFloated = false;
+    m_touchId = 0;
     return;
   }
+
+  m_bTouchEv = isTouch;
+  m_touchId = isTouch ? touchEvent.value().touchID : 0;
 
   if (Desktop::focusState()->window() != PWINDOW)
     Desktop::focusState()->fullWindowFocus(PWINDOW, Desktop::FOCUS_REASON_CLICK);
@@ -310,24 +343,35 @@ void CQuattroFloatingHyprBar::handleUpEvent(Event::SCallbackInfo &info) {
   m_bCancelledDown = false;
 
   if (m_bDraggingThis) {
-    const bool MOVING = !m_bTouchEv && g_layoutManager->dragController()->mode() == MBIND_MOVE;
+    const auto PWINDOW = m_pWindow.lock();
+    const bool MOVING = g_layoutManager->dragController()->mode() == MBIND_MOVE;
     g_layoutManager->endDragTarget();
     m_bDraggingThis = false;
-    if (m_bTouchEv)
-      (void)Config::Actions::floatWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_DISABLE);
-    else if (MOVING)
+    if (PWINDOW) {
+      if (m_bTouchPinned)
+        (void)Config::Actions::pinWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_DISABLE, PWINDOW);
+      if (m_bTouchFloated)
+        (void)Config::Actions::floatWindow(Config::Actions::eTogglableAction::TOGGLE_ACTION_DISABLE, PWINDOW);
+    }
+    m_bTouchPinned = false;
+    m_bTouchFloated = false;
+    if (MOVING)
       keepTitlebarReachable();
 
-    LOG(Log::DEBUG, "[hyprbars] Dragging ended on {:x}", (uintptr_t)m_pWindow.lock().get());
+    LOG(Log::DEBUG, "[hyprbars] Dragging ended on {:x}", (uintptr_t)PWINDOW.get());
   }
 
   m_bDragPending = false;
   m_bTouchEv = false;
+  m_bTouchPinned = false;
+  m_bTouchFloated = false;
   m_touchId = 0;
 }
 
 void CQuattroFloatingHyprBar::handleMovement() {
   const auto window = m_pWindow.lock();
+  if (!validMapped(window))
+    return;
   const auto cursor = g_pInputManager->getMouseCoordsInternal();
   const auto bar = assignedBoxGlobal();
   const auto anchor = std::clamp((cursor.x - bar.x) / std::max(1.0, bar.w), 0.0, 1.0);
@@ -381,13 +425,16 @@ bool CQuattroFloatingHyprBar::doButtonPress(Config::INTEGER barPadding, Config::
   // check if on a button
   float offset = barPadding;
   const auto BARBUF = Vector2D{static_cast<int>(assignedBoxGlobal().w), static_cast<int>(barHeight)};
+  const auto visibleCount = getVisibleButtonCount(barButtonPadding, barPadding, BARBUF, 1.0f);
 
-  for (auto &b : g_pQuattroFloatingGlobalState->buttons) {
+  for (size_t i = 0; i < visibleCount; ++i) {
+    auto &b = g_pQuattroFloatingGlobalState->buttons[i];
     Vector2D currentPos = Vector2D{(BUTTONSRIGHT ? BARBUF.x - barButtonPadding - b.size - offset : offset), (BARBUF.y - b.size) / 2.0}.floor();
 
     if (VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + b.size + barButtonPadding, currentPos.y + b.size)) {
       // hit on button
-      Config::Supplementary::executor()->spawn(windowCommand(b.cmd, m_pWindow.lock()));
+      if (const auto PWINDOW = m_pWindow.lock())
+        Config::Supplementary::executor()->spawn(windowCommand(b.cmd, PWINDOW));
       return true;
     }
 
@@ -489,7 +536,7 @@ void CQuattroFloatingHyprBar::renderBarButtons(Render::CRenderContext &ctx, CBox
       g_pHyprOpenGL->renderRect(ctx, buttonBox, color, {.round = rounding});
 
     // A hovered button lifts its face in its own icon color, which follows any theme.
-    if (m_iButtonHoverState & (1u << i)) {
+    if (i < 32 && (m_iButtonHoverState & (1u << i))) {
       auto hover = button.userfg ? button.fgcol : (button.bgcol.r + button.bgcol.g + button.bgcol.b < 1) ? CHyprColor(0xFFFFFFFF) : CHyprColor(0xFF000000);
       hover.a = 0.18 * a;
       g_pHyprOpenGL->renderRect(ctx, buttonBox, hover, {.round = rounding});
@@ -509,6 +556,7 @@ void CQuattroFloatingHyprBar::renderBarButtonsText(Render::CRenderContext &ctx, 
   const bool BUTTONSRIGHT = ALIGNBUTTONS != "left";
   const auto visibleCount = getVisibleButtonCount(BARBUTTONPADDING, BARPADDING, Vector2D{barBox->w, barBox->h}, scale);
   const auto COORDS = cursorRelativeToBar();
+  const bool canHover = inputIsValid();
   // Loop-invariant: the bar's global box is resolved once per draw, not once per button.
   const auto BARBUF = Vector2D{static_cast<int>(assignedBoxGlobal().w), static_cast<int>(HEIGHT)};
 
@@ -523,7 +571,7 @@ void CQuattroFloatingHyprBar::renderBarButtonsText(Render::CRenderContext &ctx, 
     // check if hovering here
     Vector2D currentPos =
         Vector2D{(BUTTONSRIGHT ? BARBUF.x - BARBUTTONPADDING - button.size - noScaleOffset : noScaleOffset), (BARBUF.y - button.size) / 2.0}.floor();
-    bool hovering = VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + button.size + BARBUTTONPADDING, currentPos.y + button.size);
+    bool hovering = canHover && VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + button.size + BARBUTTONPADDING, currentPos.y + button.size);
     noScaleOffset += BARBUTTONPADDING + button.size;
 
     auto &iconTex = button.iconTex[static_cast<int>(std::round(scale * 100))];
@@ -534,24 +582,26 @@ void CQuattroFloatingHyprBar::renderBarButtonsText(Render::CRenderContext &ctx, 
       iconTex = g_pHyprRenderer->renderText(button.icon, fgcol, std::round(button.size * 0.62 * scale), false, "sans", scaledButtonSize);
     }
 
-    if (!iconTex || iconTex->m_texID == 0)
-      continue;
+    if (iconTex && iconTex->m_texID != 0) {
+      const auto iconX =
+          barBox->x + (BUTTONSRIGHT ? barBox->width - offset - scaledButtonSize / 2.0 : offset + scaledButtonSize / 2.0) - iconTex->m_size.x / 2.0;
+      const auto iconY = barBox->y + barBox->height / 2.0 - iconTex->m_size.y / 2.0;
+      CBox pos = {iconX, iconY, iconTex->m_size.x, iconTex->m_size.y};
+      pos.round(); // snap to whole pixels, otherwise the icon is sampled at a half-pixel offset and blurs (hyprwm/hyprland-plugins#711)
 
-    const auto iconX =
-        barBox->x + (BUTTONSRIGHT ? barBox->width - offset - scaledButtonSize / 2.0 : offset + scaledButtonSize / 2.0) - iconTex->m_size.x / 2.0;
-    const auto iconY = barBox->y + barBox->height / 2.0 - iconTex->m_size.y / 2.0;
-    CBox pos = {iconX, iconY, iconTex->m_size.x, iconTex->m_size.y};
-    pos.round(); // snap to whole pixels, otherwise the icon is sampled at a half-pixel offset and blurs (hyprwm/hyprland-plugins#711)
+      if (!ICONONHOVER || (ICONONHOVER && m_iButtonHoverState > 0))
+        g_pHyprOpenGL->renderTexture(ctx, iconTex, pos, {.a = a});
+    }
 
-    if (!ICONONHOVER || (ICONONHOVER && m_iButtonHoverState > 0))
-      g_pHyprOpenGL->renderTexture(ctx, iconTex, pos, {.a = a});
     offset += scaledButtonsPad + scaledButtonSize;
 
-    bool currentBit = (m_iButtonHoverState & (1 << i)) != 0;
-    if (hovering != currentBit) {
-      m_iButtonHoverState ^= (1 << i);
-      // damage to get rid of some artifacts when icons are "hidden"
-      damageEntire();
+    if (i < 32) {
+      bool currentBit = (m_iButtonHoverState & (1u << i)) != 0;
+      if (hovering != currentBit) {
+        m_iButtonHoverState ^= (1u << i);
+        // damage to get rid of some artifacts when icons are "hidden"
+        damageEntire();
+      }
     }
   }
 }
@@ -568,6 +618,8 @@ void CQuattroFloatingHyprBar::draw(Render::CRenderContext &ctx, PHLMONITOR pMoni
     return;
 
   const auto PWINDOW = m_pWindow.lock();
+  if (!PWINDOW)
+    return;
 
   if (!PWINDOW->m_ruleApplicator->decorate().valueOrDefault())
     return;
@@ -578,6 +630,8 @@ void CQuattroFloatingHyprBar::draw(Render::CRenderContext &ctx, PHLMONITOR pMoni
 
 void CQuattroFloatingHyprBar::renderPass(Render::CRenderContext &ctx, PHLMONITOR pMonitor, const float &a) {
   const auto PWINDOW = m_pWindow.lock();
+  if (!PWINDOW || !pMonitor)
+    return;
 
   static auto PENABLEBLURGLOBAL = CConfigValue<Config::BOOL>("decoration:blur:enabled");
   const auto BARCOLOR = g_pQuattroFloatingGlobalState->config.barColor->value();
@@ -642,8 +696,10 @@ void CQuattroFloatingHyprBar::renderPass(Render::CRenderContext &ctx, PHLMONITOR
                       PWINDOW->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT).y + PWINDOW->presentation().floatingOffset().y - pMonitor->m_position.y + 1,
                       PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT).x - 2, PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT).y - 2};
 
-    if (windowBox.w < 1 || windowBox.h < 1)
+    if (windowBox.w < 1 || windowBox.h < 1) {
+      g_pHyprOpenGL->scissor(ctx, nullptr);
       return;
+    }
 
     // Hyprland's stencil pass for blurred surfaces that discard by alpha leaves
     // the write mask at 0, and a masked clear clears nothing: the bar would be
@@ -660,7 +716,7 @@ void CQuattroFloatingHyprBar::renderPass(Render::CRenderContext &ctx, PHLMONITOR
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
     windowBox.translate(WORKSPACEOFFSET).scale(pMonitor->m_scale).round();
-    g_pHyprOpenGL->renderRect(ctx, windowBox, CHyprColor(0, 0, 0, 0), {.round = static_cast<int>(scaledRounding), .roundingPower = m_pWindow->presentation().roundingPower()});
+    g_pHyprOpenGL->renderRect(ctx, windowBox, CHyprColor(0, 0, 0, 0), {.round = static_cast<int>(scaledRounding), .roundingPower = PWINDOW->presentation().roundingPower()});
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
     glStencilFunc(GL_NOTEQUAL, 1, -1);
@@ -788,14 +844,15 @@ uint64_t CQuattroFloatingHyprBar::getDecorationFlags() {
 }
 
 CBox CQuattroFloatingHyprBar::assignedBoxGlobal() {
-  if (!validMapped(m_pWindow))
+  const auto PWINDOW = m_pWindow.lock();
+  if (!validMapped(PWINDOW))
     return {};
 
   CBox box = m_bAssignedBox;
-  box.translate(g_pDecorationPositioner->getEdgeDefinedPoint(DECORATION_EDGE_TOP, m_pWindow.lock()));
+  box.translate(g_pDecorationPositioner->getEdgeDefinedPoint(DECORATION_EDGE_TOP, PWINDOW));
 
-  const auto PWORKSPACE = m_pWindow->m_workspace;
-  const auto WORKSPACEOFFSET = PWORKSPACE && !(m_pWindow->m_state & Desktop::View::WINDOW_STATE_PINNED) ? PWORKSPACE->m_renderOffset->value() : Vector2D();
+  const auto PWORKSPACE = PWINDOW->m_workspace;
+  const auto WORKSPACEOFFSET = PWORKSPACE && !(PWINDOW->m_state & Desktop::View::WINDOW_STATE_PINNED) ? PWORKSPACE->m_renderOffset->value() : Vector2D();
 
   return box.translate(WORKSPACEOFFSET);
 }
@@ -865,18 +922,27 @@ void CQuattroFloatingHyprBar::damageOnButtonHover() {
       return;
   }
 
+  if (!inputIsValid()) {
+    if (m_iButtonHoverState != 0) {
+      m_iButtonHoverState = 0;
+      damageEntire();
+    }
+    return;
+  }
+
   const auto ALIGNBUTTONS = g_pQuattroFloatingGlobalState->config.barButtonsAlignment->value();
   const bool BUTTONSRIGHT = ALIGNBUTTONS != "left";
   const auto BARBUF = Vector2D{static_cast<int>(BOX.w), static_cast<int>(HEIGHT)};
+  const auto visibleCount = getVisibleButtonCount(BARBUTTONPADDING, BARPADDING, BARBUF, 1.0f);
 
   float offset = BARPADDING;
 
   unsigned int hoverState = 0;
-  for (size_t i = 0; i < BUTTONS.size(); ++i) {
+  for (size_t i = 0; i < visibleCount; ++i) {
     const auto &b = BUTTONS[i];
     Vector2D currentPos = Vector2D{(BUTTONSRIGHT ? BARBUF.x - BARBUTTONPADDING - b.size - offset : offset), (BARBUF.y - b.size) / 2.0}.floor();
 
-    if (VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + b.size + BARBUTTONPADDING, currentPos.y + b.size))
+    if (i < 32 && VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + b.size + BARBUTTONPADDING, currentPos.y + b.size))
       hoverState |= 1u << i;
 
     offset += BARBUTTONPADDING + b.size;

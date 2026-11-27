@@ -489,7 +489,7 @@ EOF
 
 if ! $SANDBOX && [[ ${QUATTRO_NO_REBOOT:-0} != "1" ]] && [[ -t 0 ]]; then
   echo ""
-  read -r -p "Reboot now to start your Quattro session? [y/N] " reply
+  read -r -p "Reboot now to start your Quattro session? [y/N] " reply || reply=""
   if [[ $reply =~ ^[Yy]$ ]]; then
     sudo reboot
   fi

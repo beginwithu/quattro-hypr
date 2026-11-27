@@ -17,10 +17,20 @@ COLORS_FILE="$NEXT_THEME_DIR/colors.toml"
 # is on screen, so drawing icons never holds up a switch.
 ICONS_ONLY=false
 if [[ ${1:-} == "--icons" ]]; then
+  if (( $# < 3 )); then
+    echo "Usage: quattro-theme-set-templates [--icons <theme-dir> <out-dir>]" >&2
+    exit 1
+  fi
   ICONS_ONLY=true
   COLORS_FILE="$2/colors.toml"
   NEXT_THEME_DIR="$3"
 fi
+
+_TMP_FILES=()
+cleanup_tmp_files() {
+  (( ${#_TMP_FILES[@]} > 0 )) && rm -f "${_TMP_FILES[@]}"
+}
+trap cleanup_tmp_files EXIT
 
 # Theme switching waits on this script before the transition starts, so it
 # avoids a process per value: helpers return through REPLY rather than $(...),
@@ -278,12 +288,12 @@ apply_shell_section_override() {
   section="${section%.toml}"
   [[ $section =~ ^[A-Za-z0-9_-]+$ ]] || return
 
-  tmp=$(mktemp)
-  body=$(mktemp)
+  tmp=$(mktemp) || return 1
+  _TMP_FILES+=("$tmp")
+  body=$(mktemp) || return 1
+  _TMP_FILES+=("$body")
 
-  strip_shell_section_header "$section" "$override" >"$body"
-
-  awk -v section="$section" -v body="$body" '
+  if strip_shell_section_header "$section" "$override" >"$body" && awk -v section="$section" -v body="$body" '
     function emit_override() {
       if (emitted) return
       print "[" section "]"
@@ -311,10 +321,13 @@ apply_shell_section_override() {
         emit_override()
       }
     }
-  ' "$NEXT_THEME_DIR/shell.toml" >"$tmp"
-
-  mv "$tmp" "$NEXT_THEME_DIR/shell.toml"
-  rm "$body"
+  ' "$NEXT_THEME_DIR/shell.toml" >"$tmp"; then
+    mv "$tmp" "$NEXT_THEME_DIR/shell.toml"
+  else
+    rm -f "$tmp" "$body"
+    return 1
+  fi
+  rm -f "$body"
 }
 
 apply_shell_section_overrides() {
@@ -441,8 +454,10 @@ render_templates() {
 
 # Only generate dynamic templates for themes with a colors.toml definition
 if [[ -f $COLORS_FILE ]]; then
-  value_table=$(mktemp)
-  mix_table=$(mktemp)
+  value_table=$(mktemp) || exit 1
+  _TMP_FILES+=("$value_table")
+  mix_table=$(mktemp) || exit 1
+  _TMP_FILES+=("$mix_table")
   declare -A rendered=()
 
   shopt -s nullglob
@@ -640,7 +655,7 @@ if [[ -f $COLORS_FILE ]]; then
   add_function_values
   render_templates
 
-  rm "$value_table" "$mix_table"
+  rm -f "$value_table" "$mix_table"
 fi
 
 if [[ $ICONS_ONLY != "true" ]]; then

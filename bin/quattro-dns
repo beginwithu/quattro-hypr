@@ -213,6 +213,8 @@ set_connection_dns() {
   local ipv4_dns="${1:-}"
   local ipv6_dns="${2:-}"
 
+  systemctl is-active --quiet NetworkManager.service 2>/dev/null || return 0
+
   while IFS=: read -r uuid type; do
     [[ -n $uuid ]] || continue
     networkmanager_dns_connection "$type" || continue
@@ -222,12 +224,14 @@ set_connection_dns() {
       ipv4.dns "$ipv4_dns" \
       ipv6.ignore-auto-dns yes \
       ipv6.dns "$ipv6_dns" \
-      >/dev/null
-  done < <(nmcli -t -f UUID,TYPE connection show)
+      >/dev/null 2>&1 || true
+  done < <(nmcli -t -f UUID,TYPE connection show 2>/dev/null || true)
 }
 
 clear_connection_dns() {
   local uuid type
+
+  systemctl is-active --quiet NetworkManager.service 2>/dev/null || return 0
 
   while IFS=: read -r uuid type; do
     [[ -n $uuid ]] || continue
@@ -238,8 +242,8 @@ clear_connection_dns() {
       ipv4.dns "" \
       ipv6.ignore-auto-dns no \
       ipv6.dns "" \
-      >/dev/null
-  done < <(nmcli -t -f UUID,TYPE connection show)
+      >/dev/null 2>&1 || true
+  done < <(nmcli -t -f UUID,TYPE connection show 2>/dev/null || true)
 }
 
 reapply_active_dns_connections() {

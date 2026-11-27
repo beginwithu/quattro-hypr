@@ -40,7 +40,7 @@ hl.config({
 
 			-- Left-click-and-drag with three fingers. Turn off Quattro's
 			-- three-finger gestures with quattro_default_gestures = false first.
-			drag_3fg = 1,
+			-- drag_3fg = 1,
 		},
 	},
 })

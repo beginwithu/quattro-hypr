@@ -141,6 +141,15 @@ Item {
     ? Math.min(contentMargin * 2 + headerHeight + (mode === "input" ? 0 : contentSpacing + visibleRowsHeight), panel.height - Style.gapsOut * 2)
     : Math.min(contentMargin * 2 + headerHeight + contentSpacing + visibleRowsHeight, panel.height - Style.gapsOut * 2)
 
+  property var pendingFinishCommands: []
+
+  function runNextFinishCommand() {
+    if (resultProc.running || root.pendingFinishCommands.length === 0) return
+    var nextCmd = root.pendingFinishCommands.shift()
+    resultProc.command = nextCmd
+    resultProc.running = true
+  }
+
   function finishRequest(selection) {
     if (!root.requestActive || !root.doneFile) {
       root.opened = false
@@ -153,12 +162,14 @@ Item {
     root.selectionFile = ""
     root.doneFile = ""
 
+    var cmd
     if (selection === null || selection === undefined) {
-      resultProc.command = ["bash", "-c", ": > " + Util.shellQuote(activeDoneFile)]
+      cmd = ["bash", "-c", ": > " + Util.shellQuote(activeDoneFile)]
     } else {
-      resultProc.command = ["bash", "-c", "printf '%s\\n' " + Util.shellQuote(selection) + " > " + Util.shellQuote(activeSelectionFile) + "; : > " + Util.shellQuote(activeDoneFile)]
+      cmd = ["bash", "-c", "printf '%s\\n' " + Util.shellQuote(selection) + " > " + Util.shellQuote(activeSelectionFile) + "; : > " + Util.shellQuote(activeDoneFile)]
     }
-    resultProc.running = true
+    root.pendingFinishCommands.push(cmd)
+    root.runNextFinishCommand()
   }
 
   function runAction(action) {
@@ -952,6 +963,7 @@ Item {
   }
 
   function openExistingMenu(initialMenu) {
+    if (root.requestActive && root.doneFile) root.finishRequest(null)
     requestSerial += 1
     mode = "menu"
     requestActive = false
@@ -976,6 +988,9 @@ Item {
   }
 
   function openDmenu(payload) {
+    var nextDoneFile = String(payload.doneFile || "")
+    if (root.requestActive && root.doneFile && root.doneFile !== nextDoneFile)
+      root.finishRequest(null)
     requestSerial += 1
     mode = payload.mode === "input" ? "input" : "select"
     dmenuPrompt = String(payload.prompt || (mode === "input" ? Commons.I18n.t("menu.inputPrompt") : Commons.I18n.t("menu.selectPrompt")))
@@ -989,7 +1004,7 @@ Item {
     if (dmenuOnChange.length > 0)
       dmenuSelected = MenuModel.dmenuSelections(dmenuOptions, selectionProc.requestedSelection(), true)
     selectionFile = String(payload.selectionFile || "")
-    doneFile = String(payload.doneFile || "")
+    doneFile = nextDoneFile
     requestActive = !!doneFile
     dmenuWidth = Math.max(1, Number(payload.width || 300))
     dmenuMaxHeight = Math.max(0, Number(payload.maxHeight || 0))
@@ -1127,6 +1142,10 @@ Item {
   Process {
     id: resultProc
     onExited: {
+      if (root.pendingFinishCommands.length > 0) {
+        Qt.callLater(root.runNextFinishCommand)
+        return
+      }
       if (root.applySerial === root.requestSerial)
         root.opened = false
     }
@@ -1357,7 +1376,8 @@ Item {
           } else if (event.key === Qt.Key_PageDown) {
             root.select(6)
             event.accepted = true
-          } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || Util.readingKey(event) === Qt.Key_Right) {
+          } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                     || (Util.readingKey(event) === Qt.Key_Right && !(root.dmenuActive && root.mode === "input"))) {
             if (root.dmenuActive) {
               if (root.mode === "input") root.applyDmenuSelection(root.filterText)
               else if (displayModel.count > 0) root.activateIndex(root.cursorActive ? root.selectedIndex : 0)

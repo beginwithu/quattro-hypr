@@ -151,11 +151,7 @@ cmd_use() {
   fi
   bar_option_exists "$plugin" || fail "$plugin is not a known bar option"
 
-  if [[ $plugin == "quattro.bar" ]]; then
-    commit "$NORMALIZE | del(.bar.id)"
-  else
-    commit "$NORMALIZE | .bar.id = \$plugin" --arg plugin "$plugin"
-  fi
+  commit "$NORMALIZE | del(.bar.id)"
   echo "Using $plugin as the active bar"
 }
 

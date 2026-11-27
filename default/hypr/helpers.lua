@@ -157,7 +157,12 @@ function o.preinstalled_bindings_enabled()
 end
 
 function o.bind(keys, description, dispatcher, options)
-  local opts = options or {}
+  local opts = {}
+  if options then
+    for key, value in pairs(options) do
+      opts[key] = value
+    end
+  end
 
   if description then
     opts.description = description
@@ -300,58 +305,104 @@ function o.software_rendering_defaults()
 end
 
 -- What makes apps float on their own account, so a floating workspace can
--- leave their floating to them: the class and title patterns of rules that
--- float them, the tags rules float, and the patterns of rules that tag them.
-o.floating_apps = { class = {}, title = {}, tags = {}, tagged = {} }
+-- leave their floating to them: standalone class/title patterns of rules that
+-- float them, the tags rules float, the patterns of rules that tag them, and a
+-- marker tag for combined rules (e.g. class + title) that cannot be expressed
+-- as a single-field negative exclusion without over-matching other apps.
+o.floating_apps = {
+  class = {},
+  title = {},
+  tags = {},
+  tagged = {},
+  tagged_combined = {},
+  combined_tag = "quattro-app-floating",
+  has_combined = false,
+}
 -- Helpers reload before workspace modes, so discard the previous config's hook.
 o.floating_apps_changed = nil
 
+local function mark_combined_floating(rule_match)
+  hl.window_rule({ match = rule_match, tag = "+" .. o.floating_apps.combined_tag })
+  o.floating_apps.has_combined = true
+end
+
 function o.window(match, rules)
   local floating_changed = false
-  rules.match = rules.match or {}
+  local rule = {}
+  for key, value in pairs(rules) do
+    rule[key] = value
+  end
+
+  local rule_match = {}
+  if type(rules.match) == "table" then
+    for key, value in pairs(rules.match) do
+      rule_match[key] = value
+    end
+  end
 
   if type(match) == "string" then
-    rules.match.class = match
-  else
+    rule_match.class = match
+  elseif type(match) == "table" then
     for key, value in pairs(match) do
-      rules.match[key] = value
+      rule_match[key] = value
     end
   end
+  rule.match = rule_match
 
-  local has_class = type(rules.match.class) == "string"
-  local has_title = type(rules.match.title) == "string"
+  local has_class = type(rule_match.class) == "string"
+  local has_title = type(rule_match.title) == "string"
+  local has_tag = type(rule_match.tag) == "string"
 
-  if rules.float == true then
+  if rule.float == true then
     -- Only a rule floating a tag alone floats everything with that tag; one
     -- that also names a class or title floats just those, recorded below.
-    if type(rules.match.tag) == "string" and not has_class and not has_title then
-      o.floating_apps.tags[rules.match.tag] = true
+    if has_tag and not has_class and not has_title then
+      o.floating_apps.tags[rule_match.tag] = true
+      local pending = o.floating_apps.tagged_combined[rule_match.tag]
+      if pending then
+        for _, combined_match in ipairs(pending) do
+          mark_combined_floating(combined_match)
+        end
+        o.floating_apps.tagged_combined[rule_match.tag] = nil
+      end
       floating_changed = true
     end
-    -- A rule matching both class and title only floats specific dialogs of
-    -- that app; recording class alone would exclude normal windows of the app.
-    if has_title then
-      table.insert(o.floating_apps.title, rules.match.title)
+    -- Only standalone title/class rules are added to single-field exclusions;
+    -- combined rules (class/tag + title) get a marker tag instead so unrelated
+    -- windows sharing the title are not excluded.
+    if has_title and not has_class and not has_tag then
+      table.insert(o.floating_apps.title, rule_match.title)
       floating_changed = true
-    elseif has_class then
-      table.insert(o.floating_apps.class, rules.match.class)
+    elseif has_class and not has_title and not has_tag then
+      table.insert(o.floating_apps.class, rule_match.class)
+      floating_changed = true
+    elseif has_title and (has_class or has_tag) then
+      mark_combined_floating(rule_match)
       floating_changed = true
     end
   end
 
-  if type(rules.tag) == "string" and rules.tag:sub(1, 1) == "+" then
-    local tag = rules.tag:sub(2)
+  if type(rule.tag) == "string" and rule.tag:sub(1, 1) == "+" then
+    local tag = rule.tag:sub(2)
     o.floating_apps.tagged[tag] = o.floating_apps.tagged[tag] or {}
-    if has_title then
-      table.insert(o.floating_apps.tagged[tag], { key = "title", pattern = rules.match.title })
+    if has_title and not has_class and not has_tag then
+      table.insert(o.floating_apps.tagged[tag], { key = "title", pattern = rule_match.title })
       floating_changed = true
-    elseif has_class then
-      table.insert(o.floating_apps.tagged[tag], { key = "class", pattern = rules.match.class })
+    elseif has_class and not has_title and not has_tag then
+      table.insert(o.floating_apps.tagged[tag], { key = "class", pattern = rule_match.class })
+      floating_changed = true
+    elseif has_title and (has_class or has_tag) then
+      if o.floating_apps.tags[tag] then
+        mark_combined_floating(rule_match)
+      else
+        o.floating_apps.tagged_combined[tag] = o.floating_apps.tagged_combined[tag] or {}
+        table.insert(o.floating_apps.tagged_combined[tag], rule_match)
+      end
       floating_changed = true
     end
   end
 
-  hl.window_rule(rules)
+  hl.window_rule(rule)
   if floating_changed and o.floating_apps_changed then
     o.floating_apps_changed()
   end

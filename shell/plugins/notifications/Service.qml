@@ -1453,8 +1453,9 @@ Item {
 
     // Press button n (from 1) on the newest card.
     function invokeAction(n: int): string {
-      if (toasts.count === 0) return "none"
-      return service.runDeed(String(toasts.get(0).key), n - 1) ? "ok" : "none"
+      var key = service.newestLive()
+      if (!key) return "none"
+      return service.runDeed(key, n - 1) ? "ok" : "none"
     }
 
     // Hand the keyboard to the notifications until Escape or a choice.
@@ -1487,12 +1488,16 @@ Item {
         service.commit(function() {
           service.expanded = false; service.openDeck = ""; service.hoverKey = ""
         })
-      } else if (toasts.count > 0) {
-        var front = toasts.get(0)
-        service.pointerEntered(Layout.groupKeyFor(front))
-        service.hoverKey = String(front.key)
       } else {
-        service.pointerEntered(undefined)
+        var key = service.newestLive()
+        var at = key ? service.rowIndexFor(key) : -1
+        if (at >= 0) {
+          var front = toasts.get(at)
+          service.pointerEntered(Layout.groupKeyFor(front))
+          service.hoverKey = String(front.key)
+        } else {
+          service.pointerEntered(undefined)
+        }
       }
       return service.expanded ? "expanded" : "collapsed"
     }

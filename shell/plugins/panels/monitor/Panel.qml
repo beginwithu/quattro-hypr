@@ -628,8 +628,13 @@ Panel {
   }
 
   function setTextSize(px) {
+    if (textScaleProc.running) {
+      textScaleProc.pendingTextSize = px
+      return
+    }
+    textScaleProc.pendingTextSize = -1
     textScaleProc.command = ["quattro-display-text-size", String(px)]
-    if (!textScaleProc.running) textScaleProc.running = true
+    textScaleProc.running = true
   }
 
   function adjustTextSize(deltaSteps) {
@@ -651,6 +656,7 @@ Panel {
   // the cursor until hover or the first navigation key.
   onOpenedChanged: {
     closeRotateMenu()
+    textSizePreviewIndex = -1
     if (opened) {
       refresh()
       selectedName = ""
@@ -770,7 +776,17 @@ Panel {
   // nothing to refresh here.
   Process {
     id: textScaleProc
+    property int pendingTextSize: -1
     stdout: StdioCollector { waitForEnd: true }
+    onExited: {
+      if (pendingTextSize > 0) {
+        var next = pendingTextSize
+        pendingTextSize = -1
+        Qt.callLater(function() { root.setTextSize(next) })
+      } else if (root.textSizePreviewIndex >= 0) {
+        root.textSizePreviewIndex = -1
+      }
+    }
   }
 
   // Clears the hover-suppression flag once the reflow triggered by a text-size
@@ -1109,7 +1125,12 @@ Panel {
                 integer: true
                 tickCount: root.textSizeStops.length
                 value: root.currentTextIndex()
-                onReleased: function(v) { root.setTextSize(root.textSizeStops[Math.round(v)]) }
+                onReleased: function(v) {
+                  var idx = Math.max(0, Math.min(root.textSizeStops.length - 1, Math.round(v)))
+                  root.markReflowing()
+                  root.textSizePreviewIndex = idx
+                  root.setTextSize(root.textSizeStops[idx])
+                }
               }
 
               HoverHandler {

@@ -7,6 +7,7 @@
 
 set -uo pipefail
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
 TOGGLES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quattro/toggles/hypr"
 
 # Sharp and rounded are toggle files loaded after every theme, so they override

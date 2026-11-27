@@ -33,7 +33,7 @@ done
 
 (( ${#files[@]} )) || exit 0
 
-LC_ALL=C pacman -Qo "${files[@]}" 2>/dev/null | while IFS= read -r line; do
+{ LC_ALL=C pacman -Qo "${files[@]}" 2>/dev/null || true; } | while IFS= read -r line; do
   [[ $line =~ ^(.*)\ is\ owned\ by\ [^\ ]+\ ([^\ ]+)$ ]] || continue
   file="${BASH_REMATCH[1]}"
   version="${BASH_REMATCH[2]#*:}"

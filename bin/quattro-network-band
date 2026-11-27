@@ -71,7 +71,7 @@ selected_band() {
 # the rest of its line, so an SSID containing ':' needs no special handling.
 read_link() {
   local link
-  link=$(iw dev "$1" link 2>/dev/null)
+  link=$(iw dev "$1" link 2>/dev/null || true)
   ssid=$(awk '/SSID:/ { sub(/.*SSID: /, ""); print; exit }' <<<"$link")
   freq=$(awk '/freq:/ { print $2; exit }' <<<"$link")
 }

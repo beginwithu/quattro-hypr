@@ -254,7 +254,17 @@ Item {
       id: win
       required property var modelData
 
-      readonly property bool isFocusedScreen: Hyprland.focusedMonitor && String(Hyprland.focusedMonitor.name || "") === String(modelData.name || "")
+      readonly property bool isFocusedScreen: {
+        var focusedName = Hyprland.focusedMonitor ? String(Hyprland.focusedMonitor.name || "") : ""
+        if (focusedName !== "") {
+          if (String(modelData.name || "") === focusedName) return true
+          var screens = Quickshell.screens
+          for (var i = 0; i < screens.length; i++) {
+            if (String(screens[i].name || "") === focusedName) return false
+          }
+        }
+        return Quickshell.screens.length > 0 && modelData === Quickshell.screens[0]
+      }
 
       visible: root.opened
       screen: modelData
@@ -270,7 +280,7 @@ Item {
         if (visible) {
           pointerArea.hasInitialPos = false
           canvas.resetMotion()
-          if (isFocusedScreen) Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+          if (isFocusedScreen) Qt.callLater(function() { if (win.visible) keyCatcher.forceActiveFocus() })
         }
       }
 

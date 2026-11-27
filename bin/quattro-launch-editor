@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # quattro:summary=Launch the default editor selected via Quattro defaults.
-# quattro:args=[--inline] [--notify] <path>
+# quattro:args=[--inline] [--notify] [--wait] <path>
 
 set -euo pipefail
 
 default_editor="$HOME/.local/state/quattro/defaults/editor"
 inline=false
 notify=false
+wait_for_exit=false
 
 while (( $# > 0 )); do
   case "$1" in
@@ -17,6 +18,10 @@ while (( $# > 0 )); do
       ;;
     --notify)
       notify=true
+      shift
+      ;;
+    --wait)
+      wait_for_exit=true
       shift
       ;;
     *)
@@ -44,11 +49,31 @@ case "${editor##*/}" in
 nvim | vim | vi | nano | micro | hx | helix | fresh)
   if [[ $inline == "true" ]]; then
     exec "$editor" -- "$@"
+  elif [[ $wait_for_exit == "true" ]]; then
+    exec xdg-terminal-exec --app-id="org.quattro.${editor##*/}" -e "$editor" -- "$@"
   else
     exec quattro-launch-tui "$editor" -- "$@"
   fi
   ;;
+code | code-insiders | codium | zeditor | zed | cursor)
+  if [[ $wait_for_exit == "true" ]]; then
+    exec "$editor" --wait -- "$@"
+  else
+    exec setsid uwsm-app -- "$editor" -- "$@"
+  fi
+  ;;
+subl | subl3 | subl4)
+  if [[ $wait_for_exit == "true" ]]; then
+    exec "$editor" -w -- "$@"
+  else
+    exec setsid uwsm-app -- "$editor" -- "$@"
+  fi
+  ;;
 *)
-  exec setsid uwsm-app -- "$editor" -- "$@"
+  if [[ $wait_for_exit == "true" ]]; then
+    exec "$editor" -- "$@"
+  else
+    exec setsid uwsm-app -- "$editor" -- "$@"
+  fi
   ;;
 esac

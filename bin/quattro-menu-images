@@ -212,6 +212,7 @@ generate_thumbnail() {
 thumbnail_for() {
   local image="$1"
   local signature hash thumbnail _
+  REPLY=""
 
   signature="${image_sigs[$image]:-}"
   [[ -n $signature ]] || signature=$(stat -Lc '%s:%Y' "$image") || return
@@ -229,7 +230,7 @@ thumbnail_for() {
     # A video that already failed to convert has no row to offer. Hand the
     # marker back so the caller can keep the rows uncached over its absence.
     if is_video_path "$image" && [[ -f $thumbnail.failed ]]; then
-      printf '%s' "$thumbnail.failed"
+      REPLY="$thumbnail.failed"
       return
     fi
 
@@ -243,7 +244,7 @@ thumbnail_for() {
         printf '%s\0%s\0' "$image" "$thumbnail" >>"$pending_file"
       fi
 
-      printf '%s' "$image"
+      REPLY="$image"
       return
     fi
 
@@ -254,7 +255,7 @@ thumbnail_for() {
     fi
   fi
 
-  printf '%s' "$thumbnail"
+  REPLY="$thumbnail"
 }
 
 # Each vips run is single-threaded. Eager preparation can fill every core;
@@ -328,7 +329,8 @@ elif [[ $rows_cache_hit != true ]]; then
     done <"$index_file"
   fi
   for image in "${image_files[@]}"; do
-    thumbnail=$(thumbnail_for "$image")
+    thumbnail_for "$image"
+    thumbnail="$REPLY"
     [[ -n $thumbnail ]] || continue
     # A failed video has no row. Leave the rows uncached so every open checks
     # it again; a repaired file gets a new thumbnail key and is retried.
@@ -336,7 +338,7 @@ elif [[ $rows_cache_hit != true ]]; then
       rows_cacheable=false
       continue
     fi
-    if [[ $lazy_thumbnails == true && $cache_only != true && $thumbnail == $image ]]; then
+    if [[ $lazy_thumbnails == true && $cache_only != true && $thumbnail == "$image" ]]; then
       rows_cacheable=false
     fi
 
@@ -426,8 +428,22 @@ if [[ $open_result != "ok" ]]; then
   exit 1
 fi
 
+next_probe=$((SECONDS + 2))
+consecutive_misses=0
 while [[ ! -e $done_file ]]; do
   sleep 0.01
+  [[ -e $done_file ]] && break
+  if (( SECONDS >= next_probe )); then
+    if quattro-shell shell ping >/dev/null 2>&1; then
+      consecutive_misses=0
+      next_probe=$((SECONDS + 1))
+    else
+      [[ -e $done_file ]] && break
+      consecutive_misses=$((consecutive_misses + 1))
+      (( consecutive_misses >= 2 )) && exit 1
+      next_probe=$((SECONDS + 1))
+    fi
+  fi
 done
 
 if [[ -s $selection_file ]]; then

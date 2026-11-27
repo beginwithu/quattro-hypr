@@ -9,8 +9,9 @@
 
 set -uo pipefail
 
+PID=""
 cleanup_freeze() {
-  [[ -n $PID ]] && kill $PID 2>/dev/null
+  [[ -n $PID ]] && kill "$PID" 2>/dev/null || true
 }
 trap cleanup_freeze EXIT
 

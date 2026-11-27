@@ -8,11 +8,18 @@ using namespace Render::GL;
 CQuattroFloatingBarPassElement::CQuattroFloatingBarPassElement(const CQuattroFloatingBarPassElement::SBarData &data_) : data(data_) { ; }
 
 std::vector<UP<IPassElement>> CQuattroFloatingBarPassElement::draw(Render::CRenderContext &ctx) {
-  data.deco->renderPass(ctx, ctx.m_data.pMonitor.lock(), data.a);
+  const auto PMONITOR = ctx.m_data.pMonitor.lock();
+  if (!data.deco || !PMONITOR)
+    return {};
+
+  data.deco->renderPass(ctx, PMONITOR, data.a);
   return {};
 }
 
 bool CQuattroFloatingBarPassElement::needsLiveBlur(Render::CRenderContext &) {
+  if (!data.deco)
+    return false;
+
   static auto PENABLEBLURGLOBAL = CConfigValue<Config::BOOL>("decoration:blur:enabled");
 
   // The color the bar draws in (focus, forced color and its animation), so
@@ -26,8 +33,12 @@ bool CQuattroFloatingBarPassElement::needsLiveBlur(Render::CRenderContext &) {
 }
 
 std::optional<CBox> CQuattroFloatingBarPassElement::boundingBox(Render::CRenderContext &ctx) {
+  const auto PMONITOR = ctx.m_data.pMonitor.lock();
+  if (!data.deco || !PMONITOR)
+    return std::nullopt;
+
   // Temporary fix: expand the bar bb a bit, otherwise occlusion gets too aggressive.
-  return data.deco->assignedBoxGlobal().translate(-ctx.m_data.pMonitor->m_position).expand(10);
+  return data.deco->assignedBoxGlobal().translate(-PMONITOR->m_position).expand(10);
 }
 
 bool CQuattroFloatingBarPassElement::needsPrecomputeBlur(Render::CRenderContext &) { return false; }

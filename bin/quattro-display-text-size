@@ -28,6 +28,12 @@ SHELL_DEFAULT_PX=12
 
 shell_config="$HOME/.config/quattro/shell.toml"
 
+_TMP_FILES=()
+cleanup_tmp_files() {
+  (( ${#_TMP_FILES[@]} > 0 )) && rm -f "${_TMP_FILES[@]}"
+}
+trap cleanup_tmp_files EXIT
+
 usage() {
   echo "Usage: quattro-display-text-size [size|reset]"
   echo "  (no args)   print the current text size, GTK factor, and terminal size"
@@ -65,8 +71,9 @@ set_base_size() {
   fi
 
   local tmp
-  tmp="$(mktemp)"
-  awk -v val="$size" '
+  tmp="$(mktemp)" || return 1
+  _TMP_FILES+=("$tmp")
+  if awk -v val="$size" '
     function emit_base() { print "base-size = " val; done = 1 }
     /^[[:space:]]*\[/ {
       if (in_font && !done) emit_base()
@@ -87,21 +94,30 @@ set_base_size() {
         emit_base()
       }
     }
-  ' "$shell_config" >"$tmp"
-  mv "$tmp" "$shell_config"
+  ' "$shell_config" >"$tmp"; then
+    mv "$tmp" "$shell_config"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 # Drop the base-size line, returning the shell to the theme/default size.
 reset_base_size() {
   [[ -f $shell_config ]] || return 0
   local tmp
-  tmp="$(mktemp)"
-  awk '
+  tmp="$(mktemp)" || return 1
+  _TMP_FILES+=("$tmp")
+  if awk '
     /^[[:space:]]*\[/ { in_font = ($0 ~ /^[[:space:]]*\[font\]([[:space:]]|$)/) }
     in_font && /^[[:space:]]*base-size[[:space:]]*=/ { next }
     { print }
-  ' "$shell_config" >"$tmp"
-  mv "$tmp" "$shell_config"
+  ' "$shell_config" >"$tmp"; then
+    mv "$tmp" "$shell_config"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 # ---- GTK text-scaling-factor ----

@@ -7,6 +7,8 @@
 
 set -uo pipefail
 
+QUATTRO_PATH="${QUATTRO_PATH:-$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)}"
+
 consume_sleep_events() {
   local line sleep_lock
   sleep_lock="$QUATTRO_PATH/bin/quattro-system-sleep-lock"

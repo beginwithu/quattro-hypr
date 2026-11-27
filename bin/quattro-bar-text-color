@@ -16,11 +16,13 @@ shift 4 2>/dev/null || true
 while (($# > 0)); do
   case "$1" in
   --background)
-    background_path=${2:-}
+    (( $# >= 2 )) || { echo "quattro-bar-text-color: $1 requires a value" >&2; exit 1; }
+    background_path="$2"
     shift 2
     ;;
   --screen)
-    screen_size=${2:-}
+    (( $# >= 2 )) || { echo "quattro-bar-text-color: $1 requires a value" >&2; exit 1; }
+    screen_size="$2"
     shift 2
     ;;
   *)
@@ -36,36 +38,6 @@ valid_hex() {
 fallback() {
   printf '%s\n' "$text_color"
   exit 0
-}
-
-contrast() {
-  local color="$1"
-  local sample="$2"
-
-  awk -v fg="$color" -v bg="$sample" '
-    function channel(hex, start) {
-      return strtonum("0x" substr(hex, start, 2)) / 255
-    }
-    function linear(c) {
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ^ 2.4
-    }
-    function luminance(hex, r, g, b) {
-      r = linear(channel(hex, 2))
-      g = linear(channel(hex, 4))
-      b = linear(channel(hex, 6))
-      return 0.2126 * r + 0.7152 * g + 0.0722 * b
-    }
-    BEGIN {
-      l1 = luminance(fg)
-      l2 = luminance(bg)
-      if (l1 < l2) {
-        t = l1
-        l1 = l2
-        l2 = t
-      }
-      printf "%.6f\n", (l1 + 0.05) / (l2 + 0.05)
-    }
-  '
 }
 
 valid_hex "$text_color" || fallback

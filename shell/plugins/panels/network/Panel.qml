@@ -1725,6 +1725,7 @@ Panel {
       if (!isHovered) return
       root.cursorActive = true
       root.focusSection = "band"
+      root.bandAutoFocused = false
       root.bandIndex = pill.slot
     }
   }

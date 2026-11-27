@@ -42,7 +42,7 @@ audio_input_set_default() {
     /^[[:space:]]*node\.link-group = / { filter = 1 }
     END { if (id != "" && !filter) print id }' | while read -r output; do
     [[ -n $output ]] && pactl move-source-output "$output" "$source_name" 2>/dev/null || true
-  done
+  done || true
 }
 
 audio_output_set_default() {
@@ -65,7 +65,7 @@ audio_output_set_default() {
       if (app != "EasyEffects") print id
     }' | while read -r input; do
     [[ -n $input ]] && timeout 2 pactl move-sink-input "$input" "$sink_name" 2>/dev/null || true
-  done
+  done || true
 }
 
 audio_output_sink() {
@@ -164,7 +164,8 @@ audio_output_switch() {
   next_sink_effective=$(audio_output_sink "$next_sink_name")
   next_sink_volume=$(LC_ALL=C timeout 2 pactl get-sink-volume "$next_sink_effective" 2>/dev/null |
     awk 'NR == 1 {for (i = 1; i <= NF; i++) if ($i ~ /%$/) {sub("%", "", $i); print $i; exit}}' || true)
-  [[ -n $next_sink_volume ]] || next_sink_volume=$(jq -r '.volume | to_entries[0].value.value_percent | sub("%"; "") | tonumber' <<<"$next_sink")
+  [[ -n $next_sink_volume ]] || next_sink_volume=$(jq -r '(.volume // {} | to_entries[0]?.value?.value_percent // empty) | sub("%"; "") | tonumber' <<<"$next_sink" 2>/dev/null || true)
+  [[ $next_sink_volume =~ ^[0-9]+$ ]] || next_sink_volume=0
 
   if [[ $(LC_ALL=C timeout 2 pactl get-sink-mute "$next_sink_effective" 2>/dev/null || true) == *yes ]]; then
     next_sink_is_muted=true
