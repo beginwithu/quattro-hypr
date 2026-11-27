@@ -26,7 +26,9 @@ esac
 
 TEMP_FILE=""
 cleanup() {
-  [[ -n $TEMP_FILE ]] && rm -f "$TEMP_FILE"
+  if [[ -n $TEMP_FILE ]]; then
+    rm -f "$TEMP_FILE"
+  fi
 }
 trap cleanup EXIT
 

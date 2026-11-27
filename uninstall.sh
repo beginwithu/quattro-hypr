@@ -61,7 +61,9 @@ NC='\033[0m'
 
 _TMP_FILES=()
 cleanup_tmp_files() {
-  (( ${#_TMP_FILES[@]} > 0 )) && rm -f "${_TMP_FILES[@]}"
+  if (( ${#_TMP_FILES[@]} > 0 )); then
+    rm -f "${_TMP_FILES[@]}"
+  fi
 }
 trap cleanup_tmp_files EXIT
 
