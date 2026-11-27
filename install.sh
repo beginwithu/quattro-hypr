@@ -346,7 +346,8 @@ install_system_configs() {
     /usr/local/share/wayland-sessions \
     /usr/local/share/xdg-terminal-exec \
     /etc/sddm.conf.d \
-    /usr/share/sddm/themes/quattro \
+    /usr/share/sddm/themes/silent \
+    /usr/share/fonts/silent-sddm \
     /usr/share/quattro/default/i18n \
     /usr/share/quattro/titlebars \
     /usr/share/licenses/quattro-hyprland-titlebars \
@@ -370,11 +371,20 @@ RememberLastSession=true
 EOF
   sudo chmod 0644 /etc/sddm.conf.d/99-quattro-login.conf
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/sddm/hyprland.lua" /usr/share/sddm/hyprland.lua
-  sudo rm -rf /usr/share/sddm/themes/quattro
-  sudo install -d -m 0755 -o root -g root /usr/share/sddm/themes/quattro
-  sudo cp -r --no-preserve=ownership "$PROJECT_DIR/default/sddm/quattro/." /usr/share/sddm/themes/quattro/
-  sudo chown -R root:root /usr/share/sddm/themes/quattro
-  sudo chmod -R a+rX,go-w /usr/share/sddm/themes/quattro
+  sudo rm -rf /usr/share/sddm/themes/quattro /usr/share/sddm/themes/silent
+  sudo install -d -m 0755 -o root -g root /usr/share/sddm/themes/silent
+  sudo cp -r --no-preserve=ownership "$PROJECT_DIR/default/sddm/silent/." /usr/share/sddm/themes/silent/
+  sudo chown -R root:root /usr/share/sddm/themes/silent
+  sudo chmod -R a+rX,go-w /usr/share/sddm/themes/silent
+  sudo rm -rf /usr/share/fonts/silent-sddm
+  sudo install -d -m 0755 -o root -g root /usr/share/fonts/silent-sddm
+  sudo cp -r --no-preserve=ownership "$PROJECT_DIR/default/sddm/silent/fonts/redhat" "$PROJECT_DIR/default/sddm/silent/fonts/redhat-vf" /usr/share/fonts/silent-sddm/
+  sudo chown -R root:root /usr/share/fonts/silent-sddm
+  sudo chmod -R a+rX,go-w /usr/share/fonts/silent-sddm
+  if command -v fc-cache >/dev/null 2>&1; then
+    sudo fc-cache -f /usr/share/fonts/silent-sddm >/dev/null 2>&1 || true
+  fi
+  sudo rm -rf /var/lib/sddm/.cache
 
   if ! sudo grep -qE '^User=.+' /var/lib/sddm/state.conf 2>/dev/null; then
     sudo install -d -m 0755 -o sddm -g sddm /var/lib/sddm 2>/dev/null || sudo install -d -m 0755 /var/lib/sddm

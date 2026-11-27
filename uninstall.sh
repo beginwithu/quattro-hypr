@@ -100,7 +100,7 @@ confirm_uninstall() {
   if ! $SANDBOX; then
     echo "  - System-wide integration (requires sudo):"
     echo "      /usr/bin/quattro-*, /usr/share/quattro, /usr/lib/quattro-hyprland-titlebars"
-    echo "      /usr/share/sddm/themes/quattro, /etc/sddm.conf.d/*, /etc/sudoers.d/*quattro*"
+    echo "      /usr/share/sddm/themes/silent, /etc/sddm.conf.d/*, /etc/sudoers.d/*quattro*"
     echo "      /etc/pam.d/quattro-*, /etc/profile.d/quattro.sh, /usr/share/uwsm/env.d/10-quattro"
     echo "      /usr/share/libalpm/hooks/90-quattro-titlebars-rebuild.hook"
     echo "      /etc/brave/policies/managed/*, /etc/fastfetch, /etc/mpv, /etc/xkb, /var/lib/quattro"
@@ -532,13 +532,19 @@ remove_system_configs() {
     /etc/xkb/symbols/quattro \
     /etc/fonts/conf.d/50-quattro.conf
 
-  # Remove SDDM configs & Quattro SDDM theme
+  # Remove SDDM configs & SilentSDDM theme + fonts
   sudo rm -f \
     /etc/sddm.conf.d/10-wayland.conf \
     /etc/sddm.conf.d/10-theme.conf \
     /etc/sddm.conf.d/99-quattro-login.conf \
     /usr/share/sddm/hyprland.lua
-  sudo rm -rf /usr/share/sddm/themes/quattro
+  sudo rm -rf \
+    /usr/share/sddm/themes/silent \
+    /usr/share/sddm/themes/quattro \
+    /usr/share/fonts/silent-sddm
+  if command -v fc-cache >/dev/null 2>&1; then
+    sudo fc-cache -f /usr/share/fonts >/dev/null 2>&1 || true
+  fi
   if sudo test -f /var/lib/sddm/state.conf && sudo grep -q 'quattro\.desktop' /var/lib/sddm/state.conf 2>/dev/null; then
     sudo rm -f /var/lib/sddm/state.conf
   fi
