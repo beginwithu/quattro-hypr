@@ -42,6 +42,7 @@ foot
 nautilus
 
 # Core CLI tools used by shell & scripts
+base-devel
 bash-completion
 bat
 yay
