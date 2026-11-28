@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Contributor and maintainer reference for `quattro-hypr` and `quattro-shell`.
+Contributor and maintainer reference for `quattro-hypr`.
 
 ## Repository layout
 
