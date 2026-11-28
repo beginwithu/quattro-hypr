@@ -646,11 +646,18 @@ Panel {
     return Model.unmatchedMprisStreamLabel(label, mprisPlayers, audioStreams)
   }
 
+  function resolveStreamAppName(appId) {
+    var id = String(appId || "").trim()
+    if (!id) return ""
+    var entry = DesktopEntries.byId(id) || DesktopEntries.heuristicLookup(id)
+    return entry && entry.name ? String(entry.name) : ""
+  }
+
   // These read the other streams' node properties, so they take the live list --
   // displayAudioStreams carries primitives now, and resolving each row back
   // would only rebuild what audioStreams already is.
   function streamLabel(node) {
-    return Model.streamLabel(node, mprisPlayers, audioStreams, Commons.I18n.t)
+    return Model.streamLabel(node, mprisPlayers, audioStreams, Commons.I18n.t, resolveStreamAppName)
   }
 
   function streamRepresentsPlayer(node, player) {

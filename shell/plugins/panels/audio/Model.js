@@ -141,15 +141,27 @@ function sourceGlyph(node) {
   return "󰍬"
 }
 
+function unwrapAlsaLabel(label) {
+  var match = /^(?:alsa\s+plug-?in|pipewire\s+alsa|alsa\s+(?:playback|capture))\s*\[([^\]]+)\]$/i.exec(String(label || "").trim())
+  return match ? match[1].trim() : ""
+}
+
 function friendlyStreamLabel(label) {
   label = String(label || "").trim()
   if (!label) return ""
+
+  var unwrapped = unwrapAlsaLabel(label)
+  if (unwrapped) label = unwrapped
 
   var known = {
     "spotify": "Spotify"
   }
   var normalized = label.toLowerCase()
-  return known[normalized] || label
+  if (known[normalized]) return known[normalized]
+  if (unwrapped && label === normalized) {
+    return label.charAt(0).toUpperCase() + label.slice(1)
+  }
+  return label
 }
 
 function streamLabelKey(label) {
@@ -157,7 +169,8 @@ function streamLabelKey(label) {
 }
 
 function streamLabelIsGeneric(label) {
-  return streamLabelKey(label) === "audio-src"
+  var key = streamLabelKey(label)
+  return key === "audio-src" || key === "alsa playback"
 }
 
 function rawStreamLabel(node) {
@@ -243,13 +256,35 @@ function unmatchedMprisStreamLabel(label, players, streams) {
   })
 }
 
+function desktopStreamLabel(node, label, resolveAppName) {
+  if (!node || typeof resolveAppName !== "function") return ""
+  var unwrapped = unwrapAlsaLabel(label)
+  if (!unwrapped && !streamLabelIsGeneric(label)) return ""
+
+  var p = nodeProps(node)
+  var candidates = [
+    p["pipewire.access.portal.app_id"],
+    p["application.id"],
+    unwrapped,
+    p["application.process.binary"]
+  ]
+  for (var i = 0; i < candidates.length; i++) {
+    var candidate = String(candidates[i] || "").trim()
+    if (!candidate) continue
+    var resolved = String(resolveAppName(candidate) || "").trim()
+    if (resolved) return resolved
+  }
+  return ""
+}
+
 // Matching passes no tr, so a nameless stream compares as English everywhere.
-function streamLabel(node, players, streams, tr) {
+function streamLabel(node, players, streams, tr, resolveAppName) {
   var t = typeof tr === "function" ? tr : function(key, english) { return english }
   if (!node) return t("audio.stream", "Stream")
   var label = rawStreamLabel(node)
   return friendlyStreamLabel(matchingMprisStreamLabel(label, players)
     || unmatchedMprisStreamLabel(label, players, streams)
+    || desktopStreamLabel(node, label, resolveAppName)
     || label) || t("audio.stream", "Stream")
 }
 
@@ -287,6 +322,7 @@ if (typeof module !== "undefined") {
     isHeadphones: isHeadphones,
     sinkGlyph: sinkGlyph,
     sourceGlyph: sourceGlyph,
+    unwrapAlsaLabel: unwrapAlsaLabel,
     friendlyStreamLabel: friendlyStreamLabel,
     streamLabelKey: streamLabelKey,
     streamLabelIsGeneric: streamLabelIsGeneric,
@@ -297,6 +333,7 @@ if (typeof module !== "undefined") {
     mprisLabelsFor: mprisLabelsFor,
     matchingMprisStreamLabel: matchingMprisStreamLabel,
     unmatchedMprisStreamLabel: unmatchedMprisStreamLabel,
+    desktopStreamLabel: desktopStreamLabel,
     streamLabel: streamLabel,
     streamRepresentsPlayer: streamRepresentsPlayer,
     isUntypedSource: isUntypedSource

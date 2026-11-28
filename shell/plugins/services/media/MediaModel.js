@@ -87,9 +87,10 @@ function isPlaybackStream(node) {
 
 function streamLabelKey(label) {
   var key = String(label || "").toLowerCase()
+  key = key.replace(/^alsa plug-?in \[/, "")
   key = key.replace(/^pipewire alsa \[/, "")
-  key = key.replace(/\]$/, "")
   key = key.replace(/^alsa playback \[/, "")
+  key = key.replace(/\]$/, "")
   key = key.replace(/[^a-z0-9]+/g, "")
   return key
 }
