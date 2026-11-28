@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# quattro:summary=Lightweight event-driven automounter for removable drives via udevadm and udisksctl
+# quattro:hidden=true
+
+set -euo pipefail
+
+command -v udevadm >/dev/null 2>&1 || exit 0
+command -v udisksctl >/dev/null 2>&1 || exit 0
+
+LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/quattro-automount.lock"
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
+is_mounted() {
+  local dev="$1" msrc rest
+  while read -r msrc rest; do
+    [[ $msrc == "$dev" ]] && return 0
+  done </proc/mounts
+  return 1
+}
+
+try_mount() {
+  local dev="$1"
+  [[ -b $dev ]] || return 0
+  is_mounted "$dev" && return 0
+  udisksctl mount --no-user-interaction -b "$dev" >/dev/null 2>&1 &
+}
+
+action="" devname="" fs_usage="" udisks_ignore="" udisks_auto="" udisks_system=""
+id_bus="" id_flash="" id_thumb="" id_cdrom_media=""
+
+flush_event() {
+  if [[ ( $action == "add" || $action == "change" ) &&
+        $devname == /dev/* &&
+        $fs_usage == "filesystem" &&
+        $udisks_ignore != "1" &&
+        $udisks_auto != "0" ]]; then
+    if [[ $udisks_system == "0" || $id_bus == "usb" || $id_flash == "1" || $id_thumb == "1" || $id_cdrom_media == "1" ]]; then
+      try_mount "$devname"
+    fi
+  fi
+
+  action="" devname="" fs_usage="" udisks_ignore="" udisks_auto="" udisks_system=""
+  id_bus="" id_flash="" id_thumb="" id_cdrom_media=""
+}
+
+while IFS= read -r line; do
+  if [[ -z $line ]]; then
+    flush_event
+    continue
+  fi
+  case "$line" in
+    ACTION=*) action="${line#ACTION=}" ;;
+    DEVNAME=*) devname="${line#DEVNAME=}" ;;
+    ID_FS_USAGE=*) fs_usage="${line#ID_FS_USAGE=}" ;;
+    UDISKS_IGNORE=*) udisks_ignore="${line#UDISKS_IGNORE=}" ;;
+    UDISKS_AUTO=*) udisks_auto="${line#UDISKS_AUTO=}" ;;
+    UDISKS_SYSTEM=*) udisks_system="${line#UDISKS_SYSTEM=}" ;;
+    ID_BUS=*) id_bus="${line#ID_BUS=}" ;;
+    ID_DRIVE_FLASH_SD=*) id_flash="${line#ID_DRIVE_FLASH_SD=}" ;;
+    ID_DRIVE_THUMB=*) id_thumb="${line#ID_DRIVE_THUMB=}" ;;
+    ID_CDROM_MEDIA=*) id_cdrom_media="${line#ID_CDROM_MEDIA=}" ;;
+  esac
+done < <(udevadm monitor --udev --property --subsystem-match=block 2>/dev/null)

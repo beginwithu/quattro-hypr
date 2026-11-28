@@ -464,7 +464,7 @@ Item {
         anchors.fill: parent
         path: root.displayedBackground
         version: root.reloadVersion
-        cached: true
+        cached: false
         constrainDecode: true
         decodeSize: panel.decodeSize(root.displayedBackground)
         onFailedChanged: if (failed) root.recoverBackground(path)
@@ -525,7 +525,7 @@ Item {
         id: revealMask
         anchors.fill: parent
         visible: false
-        layer.enabled: true
+        layer.enabled: root.incomingBackground !== "" && panel.maskReady
 
         readonly property real slant: -0.18
         readonly property real centerTop: width / 2 - slant * height / 2
@@ -565,7 +565,7 @@ Item {
   // under it while a video plays. A clear layer above the video and below
   // every window keeps the desktop's double-clicks working meanwhile.
   Variants {
-    model: Quickshell.screens
+    model: root.suspended ? Quickshell.screens : []
 
     PanelWindow {
       required property var modelData

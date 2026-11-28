@@ -28,7 +28,17 @@ run_shell() {
 
   local startup_background
   startup_background=$(readlink -f "$HOME/.local/state/quattro/current/background" 2>/dev/null)
-  QUATTRO_STARTUP_BACKGROUND="$startup_background" QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
+  # 1. QSG_RENDER_LOOP=basic shares one scenegraph render loop instead of
+  #    spawning a separate QSGRenderThread + GL context per PanelWindow (which
+  #    otherwise created 8+ render threads and 100+ MB of driver buffers).
+  # 2. MALLOC_CONF tunes Quickshell's linked libjemalloc (fewer arenas, fast
+  #    1s dirty/muzzy page decay back to the OS), while MALLOC_ARENA_MAX/TRIM
+  #    cover glibc allocations in plugins/drivers.
+  QSG_RENDER_LOOP="${QSG_RENDER_LOOP:-basic}" \
+    MALLOC_CONF="${MALLOC_CONF:-narenas:2,dirty_decay_ms:1000,muzzy_decay_ms:1000}" \
+    MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 MALLOC_MMAP_THRESHOLD_=131072 \
+    QT_LOGGING_RULES="*.debug=false" \
+    QUATTRO_STARTUP_BACKGROUND="$startup_background" QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
     systemd-cat -t quattro-shell -- quickshell -n -p "$QUATTRO_PATH/shell" &
   shell_pid=$!
 

@@ -252,7 +252,7 @@ Item {
   // retain the current desktop and never map this startup cover.
   Variants {
     id: startupCovers
-    model: Quickshell.screens
+    model: root.startupPending ? Quickshell.screens : []
 
     PanelWindow {
       required property var modelData
@@ -285,7 +285,7 @@ Item {
 
   Variants {
     id: covers
-    model: Quickshell.screens
+    model: ((!root.startupPending && root.cover) || root.themeBackground !== "") ? Quickshell.screens : []
 
     PanelWindow {
       id: panel
@@ -327,6 +327,7 @@ Item {
         opacity: root.themeOpacity
         // Start decoding while the remaining theme configs render.
         asynchronous: true
+        cache: false
         onStatusChanged: panel.coverFrames = 0
         layer.enabled: root.themeCut && root.themeCutProgress > 0
         layer.smooth: true

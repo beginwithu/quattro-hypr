@@ -1,0 +1,131 @@
+#!/bin/bash
+
+# quattro:summary=Build the Nautilus live theme CSS reloader extension
+# quattro:args=[--system|--output FILE] [--force] [--source DIR]
+
+set -euo pipefail
+
+MODE="system"
+SRC_DIR=""
+OUT_FILE=""
+FORCE=false
+
+while (( $# > 0 )); do
+  case "$1" in
+    --system) MODE="system" ;;
+    --force) FORCE=true ;;
+    --source)
+      shift
+      [[ $# -gt 0 ]] || { echo "quattro-build-nautilus-theme: --source requires a directory" >&2; exit 1; }
+      SRC_DIR="$1"
+      ;;
+    --output)
+      shift
+      [[ $# -gt 0 ]] || { echo "quattro-build-nautilus-theme: --output requires a file path" >&2; exit 1; }
+      MODE="custom"
+      OUT_FILE="$1"
+      ;;
+    -h|--help)
+      echo "Usage: quattro-build-nautilus-theme [--system|--output FILE] [--force] [--source DIR]"
+      exit 0
+      ;;
+    *)
+      echo "Usage: quattro-build-nautilus-theme [--system|--output FILE] [--force] [--source DIR]" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [[ -z $SRC_DIR ]]; then
+  if [[ $MODE == "system" ]]; then
+    if [[ -f /usr/share/quattro/nautilus-theme-reloader/quattro-nautilus-theme.c ]]; then
+      SRC_DIR="/usr/share/quattro/nautilus-theme-reloader"
+    elif [[ -n ${QUATTRO_PATH:-} && -f $QUATTRO_PATH/default/gtk/nautilus-theme-reloader/quattro-nautilus-theme.c ]]; then
+      SRC_DIR="$QUATTRO_PATH/default/gtk/nautilus-theme-reloader"
+    elif [[ -f "$HOME/.local/share/quattro/default/gtk/nautilus-theme-reloader/quattro-nautilus-theme.c" ]]; then
+      SRC_DIR="$HOME/.local/share/quattro/default/gtk/nautilus-theme-reloader"
+    fi
+  else
+    QUATTRO_DIR="${QUATTRO_PATH:-$HOME/.local/share/quattro}"
+    if [[ -f $QUATTRO_DIR/default/gtk/nautilus-theme-reloader/quattro-nautilus-theme.c ]]; then
+      SRC_DIR="$QUATTRO_DIR/default/gtk/nautilus-theme-reloader"
+    elif [[ -f /usr/share/quattro/nautilus-theme-reloader/quattro-nautilus-theme.c ]]; then
+      SRC_DIR="/usr/share/quattro/nautilus-theme-reloader"
+    fi
+  fi
+fi
+
+SRC_FILE="$SRC_DIR/quattro-nautilus-theme.c"
+if [[ -z $SRC_DIR || ! -f $SRC_FILE ]]; then
+  echo "quattro-build-nautilus-theme: source file not found" >&2
+  exit 1
+fi
+
+for cmd in gcc pkg-config; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "quattro-build-nautilus-theme: missing required build tool: $cmd" >&2
+    exit 1
+  fi
+done
+
+if ! pkg-config --exists libnautilus-extension-4 gtk4; then
+  echo "quattro-build-nautilus-theme: libnautilus-extension-4 or gtk4 development files not found" >&2
+  exit 1
+fi
+
+if [[ $MODE == "system" ]]; then
+  OUT_DIR="/usr/lib/nautilus/extensions-4"
+  OUT_FILE="$OUT_DIR/libquattro-nautilus-theme.so"
+  STAMP_FILE="$OUT_DIR/.quattro-nautilus-theme.stamp"
+else
+  OUT_DIR="${OUT_FILE%/*}"
+  [[ $OUT_DIR == "$OUT_FILE" ]] && OUT_DIR="."
+  STAMP_FILE=""
+fi
+
+read -r -a CFLAGS <<<"$(pkg-config --cflags libnautilus-extension-4 gtk4)"
+read -r -a LIBS <<<"$(pkg-config --libs libnautilus-extension-4 gtk4)"
+
+FINGERPRINT=""
+if [[ -n $STAMP_FILE ]] && command -v sha256sum >/dev/null 2>&1; then
+  FINGERPRINT=$({
+    gcc --version | head -n1
+    pkg-config --modversion libnautilus-extension-4 gtk4
+    printf '%s\n' "${CFLAGS[*]}" "${LIBS[*]}"
+    if command -v pacman >/dev/null 2>&1; then
+      pacman -Q libnautilus-extension nautilus gtk4 2>/dev/null || true
+    fi
+    LC_ALL=C sha256sum "$SRC_FILE"
+  } | sha256sum | awk '{print $1}')
+
+  if ! $FORCE && [[ -f $OUT_FILE && -f $STAMP_FILE ]] && [[ $(<"$STAMP_FILE") == "$FINGERPRINT" ]]; then
+    echo "Up to date: $OUT_FILE"
+    exit 0
+  fi
+fi
+
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+gcc -shared -fPIC -std=c11 -O2 -Wall -Wextra -Werror=implicit-function-declaration \
+  "${CFLAGS[@]}" "$SRC_FILE" -o "$TMP_DIR/libquattro-nautilus-theme.so" "${LIBS[@]}"
+
+mkdir -p "$OUT_DIR"
+TMP_OUT="$OUT_DIR/.libquattro-nautilus-theme.so.$$"
+if [[ $MODE == "system" ]]; then
+  install -m 0755 -o root -g root "$TMP_DIR/libquattro-nautilus-theme.so" "$TMP_OUT"
+else
+  install -m 0755 "$TMP_DIR/libquattro-nautilus-theme.so" "$TMP_OUT"
+fi
+mv -f "$TMP_OUT" "$OUT_FILE"
+
+if [[ -n $STAMP_FILE && -n $FINGERPRINT ]]; then
+  TMP_STAMP="$OUT_DIR/.quattro-nautilus-theme.stamp.$$"
+  printf '%s\n' "$FINGERPRINT" >"$TMP_STAMP"
+  chown root:root "$TMP_STAMP"
+  chmod 0644 "$TMP_STAMP"
+  mv -f "$TMP_STAMP" "$STAMP_FILE"
+fi
+
+echo "Built $OUT_FILE"

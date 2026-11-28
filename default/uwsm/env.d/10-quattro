@@ -18,3 +18,27 @@ fi
 
 # Optional user overrides kept for compatibility with older installs.
 [ -f "$HOME/.config/uwsm/default" ] && . "$HOME/.config/uwsm/default"
+
+# Curb glibc per-thread malloc arena fragmentation and idle accessibility bus
+# overhead across session daemons unless explicitly overridden by the user.
+export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
+export NO_AT_BRIDGE="${NO_AT_BRIDGE:-1}"
+export GTK_A11Y="${GTK_A11Y:-none}"
+
+# On pure-NVIDIA systems (no Intel/AMD DRM cards), skip Mesa/LLVM EGL ICD
+# probing so Hyprland, Quickshell, and Wayland apps do not map libLLVM (~60 MB).
+if [ -z "${__EGL_VENDOR_LIBRARY_FILENAMES:-}" ] && [ -r /usr/share/glvnd/egl_vendor.d/10_nvidia.json ]; then
+  _q_has_nvidia=0
+  _q_has_other=0
+  for _q_drv in /sys/class/drm/card[0-9]*/device/driver; do
+    [ -L "$_q_drv" ] || continue
+    case "$(readlink "$_q_drv" 2>/dev/null)" in
+      */nvidia) _q_has_nvidia=1 ;;
+      *) _q_has_other=1 ;;
+    esac
+  done
+  if [ "$_q_has_nvidia" = 1 ] && [ "$_q_has_other" = 0 ]; then
+    export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+  fi
+  unset _q_has_nvidia _q_has_other _q_drv
+fi

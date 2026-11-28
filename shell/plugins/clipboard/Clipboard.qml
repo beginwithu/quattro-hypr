@@ -58,6 +58,11 @@ Item {
   function close() {
     root.cancelClearHistory()
     root.opened = false
+    // Clear UI rows on the next tick so applySelected() finishes reading its
+    // row proxy before delegates are released.
+    Qt.callLater(function() {
+      if (!root.opened && displayModel.count > 0) displayModel.clear()
+    })
   }
 
   function toggle() {

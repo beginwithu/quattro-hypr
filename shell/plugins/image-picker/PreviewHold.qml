@@ -9,7 +9,7 @@ Item {
   id: root
 
   property bool active: false
-  property int grace: 60000
+  property int grace: 8000
   // Set apart from the timer: restarting a running Timer stops it first, and
   // a held that blinked off would unload every preview just to reload it.
   property bool lingering: false

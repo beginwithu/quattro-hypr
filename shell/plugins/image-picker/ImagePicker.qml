@@ -66,13 +66,28 @@ Item {
   readonly property int previewRadius: Math.max(1, Math.min(16, Math.ceil((panel.width - expandedWidth) / (2 * (sliceWidth + sliceSpacing))) + 1))
   onPreviewRadiusChanged: updateVisibleItems()
 
-  onOpenedChanged: if (!opened) { layoutSettled = false; renderedFrames = 0; deleteConfirmOpen = false; pendingDeleteTheme = ""; deleteSelectionPath = ""; awaitingDeleteRefresh = false }
+  onOpenedChanged: {
+    if (opened) {
+      updateVisibleItems()
+    } else {
+      layoutSettled = false; renderedFrames = 0; deleteConfirmOpen = false; pendingDeleteTheme = ""; deleteSelectionPath = ""; awaitingDeleteRefresh = false
+    }
+  }
 
   PreviewHold {
     id: previewHold
     active: root.opened
-    // The selected preview decodes first again on the next open.
-    onHeldChanged: if (!held) root.neighborImagesEnabled = false
+    // Release preview delegates, offscreen mask layers, and decoded bitmaps
+    // after the short grace window instead of keeping 14 card FBOs in RAM.
+    onHeldChanged: {
+      if (!held) {
+        root.neighborImagesEnabled = false
+        if (!root.opened) {
+          visibleImages.clear()
+          if (typeof gc === "function") gc()
+        }
+      }
+    }
   }
 
   function scriptPath(name) {
@@ -328,6 +343,10 @@ Item {
   onSelectedIndexChanged: updateVisibleItems()
 
   function updateVisibleItems() {
+    if (!root.opened && !previewHold.held) {
+      if (visibleImages.count > 0) visibleImages.clear()
+      return
+    }
     ImagePickerModel.syncWindow(visibleImages, ImagePickerModel.visibleWindow(matchingImageIndices, selectedIndex, previewRadius))
   }
 
@@ -766,7 +785,7 @@ Item {
                 id: maskShape
                 anchors.fill: parent
                 visible: false
-                layer.enabled: true
+                layer.enabled: root.opened
 
                 Shape {
                   anchors.fill: parent
@@ -786,7 +805,7 @@ Item {
 
               Item {
                 anchors.fill: parent
-                layer.enabled: true
+                layer.enabled: root.opened
                 layer.smooth: true
                 layer.effect: MultiEffect {
                   maskEnabled: true

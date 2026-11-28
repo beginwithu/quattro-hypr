@@ -8,8 +8,10 @@ set -euo pipefail
 config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+has_quattro_icons=false
 icon_theme="Adwaita"
 if [[ -f "$data_home/icons/Quattro/index.theme" ]]; then
+  has_quattro_icons=true
   icon_theme="Quattro"
 fi
 
@@ -18,22 +20,46 @@ qt6ct_conf="$config_home/qt6ct/qt6ct.conf"
 if [[ -f $qt6ct_colors ]] && { command -v qt6ct >/dev/null 2>&1 || [[ -f $qt6ct_conf || -f /usr/lib/qt6/plugins/platformthemes/libqt6ct.so ]]; }; then
   mkdir -p "${qt6ct_conf%/*}"
   if [[ ! -f $qt6ct_conf ]]; then
-    cat >"$qt6ct_conf" <<EOF
+    tmp_conf="${qt6ct_conf}.quattro-tmp.$$"
+    cat >"$tmp_conf" <<EOF
 [Appearance]
 color_scheme_path=$qt6ct_colors
 custom_palette=true
 icon_theme=$icon_theme
 style=Fusion
 EOF
+    mv -f "$tmp_conf" "$qt6ct_conf"
   else
-    # Skip spawning Python when qt6ct.conf already holds the target values.
-    _cur_conf=$(<"$qt6ct_conf")
+    _cur_conf=$(<"$qt6ct_conf")$'\n'
+    # Toggle Quattro <-> Quattro-alt (matching quattro-theme-set-gnome) so
+    # QIconLoader::updateSystemTheme() invalidates cached folder icons live.
+    if $has_quattro_icons && [[ $_cur_conf == *$'\n'"icon_theme=Quattro"$'\n'* ]]; then
+      icon_theme="Quattro-alt"
+    fi
+
+    # Pure-Bash fast path: qt6ct's QFileSystemWatcher monitors ~/.config/qt6ct/
+    # via directoryChanged() (NOT qt6ct.colors directly), so we must atomically
+    # rewrite qt6ct.conf via temp-file + rename on every theme switch to make
+    # running Qt6 apps reload their palette and icons live.
     if [[ $_cur_conf == *$'\n'"color_scheme_path=$qt6ct_colors"$'\n'* &&
           $_cur_conf == *$'\n'"custom_palette=true"$'\n'* &&
-          $_cur_conf == *$'\n'"icon_theme=$icon_theme"$'\n'* &&
+          $_cur_conf == *$'\n'"icon_theme="*$'\n'* &&
           $_cur_conf == *$'\n'"style="* ]]; then
+      real_conf=$(readlink -f "$qt6ct_conf" 2>/dev/null || printf '%s' "$qt6ct_conf")
+      tmp_conf="${real_conf}.quattro-tmp.$$"
+      {
+        while IFS= read -r _line || [[ -n $_line ]]; do
+          if [[ $_line == icon_theme=* ]]; then
+            printf 'icon_theme=%s\n' "$icon_theme"
+          else
+            printf '%s\n' "$_line"
+          fi
+        done <"$real_conf"
+      } >"$tmp_conf"
+      mv -f "$tmp_conf" "$real_conf"
       exit 0
     fi
+
     python3 -B - "$qt6ct_conf" "$qt6ct_colors" "$icon_theme" <<'PY'
 import configparser, os, sys
 

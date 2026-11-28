@@ -475,8 +475,10 @@ remove_system_configs() {
   echo "==> Removing system-wide Quattro integration (requires sudo)..."
   sudo -v
 
-  # Remove pacman alpm hook first so subsequent pacman operations never invoke it
-  sudo rm -f /usr/share/libalpm/hooks/90-quattro-titlebars-rebuild.hook
+  # Remove pacman alpm hooks first so subsequent pacman operations never invoke them
+  sudo rm -f \
+    /usr/share/libalpm/hooks/90-quattro-titlebars-rebuild.hook \
+    /usr/share/libalpm/hooks/90-quattro-nautilus-theme-rebuild.hook
 
   # Clean PAM references to quattro-hw-laptop-closed BEFORE deleting /usr/bin/quattro-hw-laptop-closed
   local pam_file
@@ -504,6 +506,7 @@ remove_system_configs() {
   # Remove root-owned privileged helpers
   sudo rm -f \
     /usr/bin/quattro-build-titlebars \
+    /usr/bin/quattro-build-nautilus-theme \
     /usr/bin/quattro-dns \
     /usr/bin/quattro-sudo-passwordless \
     /usr/bin/quattro-theme-set-browser-policy \
@@ -511,9 +514,11 @@ remove_system_configs() {
     /usr/bin/quattro-apply-lock \
     /usr/bin/quattro-hw-laptop-closed
 
-  # Remove compiled titlebars plugin, system runtime data, licenses, and state
+  # Remove compiled titlebars & Nautilus plugins, system runtime data, licenses, and state
   sudo rm -rf \
     /usr/lib/quattro-hyprland-titlebars \
+    /usr/lib/nautilus/extensions-4/libquattro-nautilus-theme.so \
+    /usr/lib/nautilus/extensions-4/.quattro-nautilus-theme.stamp \
     /usr/share/quattro \
     /usr/share/licenses/quattro-hyprland-titlebars \
     /var/lib/quattro \

@@ -422,6 +422,7 @@ EOF
 
   # Install packaged root-owned privileged helpers and sudoers rules
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-build-titlebars" /usr/bin/quattro-build-titlebars
+  sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-build-nautilus-theme" /usr/bin/quattro-build-nautilus-theme
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-dns" /usr/bin/quattro-dns
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-sudo-passwordless" /usr/bin/quattro-sudo-passwordless
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-theme-set-browser-policy" /usr/bin/quattro-theme-set-browser-policy
@@ -430,6 +431,15 @@ EOF
   sudo install -Dm755 -o root -g root "$PROJECT_DIR/bin/quattro-hw-laptop-closed" /usr/bin/quattro-hw-laptop-closed
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/etc/tmpfiles.d/quattro-nopasswd-sudo.conf" /etc/tmpfiles.d/quattro-nopasswd-sudo.conf
   sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/90-quattro-titlebars-rebuild.hook" /usr/share/libalpm/hooks/90-quattro-titlebars-rebuild.hook
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/libalpm/hooks/90-quattro-nautilus-theme-rebuild.hook" /usr/share/libalpm/hooks/90-quattro-nautilus-theme-rebuild.hook
+
+  # Install Nautilus live theme CSS reloader extension source and build it
+  sudo rm -rf /usr/share/quattro/nautilus-theme-reloader
+  sudo install -Dm644 -o root -g root "$PROJECT_DIR/default/gtk/nautilus-theme-reloader/quattro-nautilus-theme.c" /usr/share/quattro/nautilus-theme-reloader/quattro-nautilus-theme.c
+  if command -v nautilus >/dev/null 2>&1; then
+    echo "==> Building Nautilus live theme extension..."
+    sudo /usr/bin/quattro-build-nautilus-theme --system || true
+  fi
 
   # Install Hyprland floating titlebars plugin source, licenses, and build native plugin
   sudo rm -rf /usr/share/quattro/titlebars

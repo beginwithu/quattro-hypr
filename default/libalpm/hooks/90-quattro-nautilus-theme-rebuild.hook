@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = nautilus
+Target = libnautilus-extension
+
+[Action]
+Description = Rebuilding Quattro Nautilus live theme extension...
+When = PostTransaction
+Exec = /usr/bin/quattro-build-nautilus-theme --system --force

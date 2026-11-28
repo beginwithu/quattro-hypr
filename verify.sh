@@ -248,7 +248,9 @@ expected_files=(
   "$tmp_home/.config/brave-origin-flags.conf"
   "$tmp_home/.local/share/quattro/bin/quattro"
   "$tmp_home/.local/share/quattro/bin/quattro-build-titlebars"
+  "$tmp_home/.local/share/quattro/bin/quattro-build-nautilus-theme"
   "$tmp_home/.local/share/quattro/default/hypr/titlebars/main.cpp"
+  "$tmp_home/.local/share/quattro/default/gtk/nautilus-theme-reloader/quattro-nautilus-theme.c"
   "$tmp_home/.local/share/quattro/default/sddm/silent/Main.qml"
   "$tmp_home/.local/share/quattro/default/sddm/silent/metadata.desktop"
   "$tmp_home/.local/share/quattro/config/quattro/shell.json"
@@ -279,6 +281,14 @@ if [[ -n $(HOME="$tmp_home" QUATTRO_PATH="$tmp_home/.local/share/quattro" "$tmp_
   pass "quattro-version reports installed version"
 else
   fail "quattro-version output unexpected"
+fi
+
+if command -v gcc >/dev/null 2>&1 && command -v pkg-config >/dev/null 2>&1 && pkg-config --exists libnautilus-extension-4 gtk4; then
+  if "$PROJECT_DIR/bin/quattro-build-nautilus-theme" --source "$PROJECT_DIR/default/gtk/nautilus-theme-reloader" --output "$tmp_home/libquattro-nautilus-theme.so" >/dev/null; then
+    pass "Nautilus live theme extension compiles cleanly"
+  else
+    fail "Nautilus live theme extension failed to compile"
+  fi
 fi
 
 if (( failures == 0 )); then

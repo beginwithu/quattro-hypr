@@ -27,6 +27,11 @@ hl.env("MOZ_ENABLE_WAYLAND", "1")
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "wayland")
 hl.env("OZONE_PLATFORM", "wayland")
 hl.env("XDG_SESSION_TYPE", "wayland")
+-- Keep accessibility bus idle when no screen reader is active (~15 MB saved)
+-- and curb per-thread glibc malloc arena bloat across desktop daemons.
+hl.env("NO_AT_BRIDGE", "1")
+hl.env("GTK_A11Y", "none")
+hl.env("MALLOC_ARENA_MAX", "2")
 
 -- Allow better support for screen sharing (Google Meet, Discord, etc).
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")

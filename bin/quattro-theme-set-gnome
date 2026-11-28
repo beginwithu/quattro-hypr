@@ -26,16 +26,26 @@ sync_gtk_css() {
   local gtk_css="$1"
   local theme_css="$THEME_DIR/gtk.css"
   local import_line="/* quattro-theme begin */"
+  local import_rule="@import url(\"file://$theme_css\");"
   local end_line="/* quattro-theme end */"
-  local tmp
+  local expected_header="$import_line"$'\n'"$import_rule"$'\n'"$end_line"
+  local existing tmp
 
   [[ -f $theme_css ]] || return 0
+  if [[ -f $gtk_css && -r $gtk_css ]]; then
+    existing=$(<"$gtk_css")
+    if [[ $existing == "$expected_header" || $existing == "$expected_header"$'\n'* ]]; then
+      local tail="${existing#"$expected_header"}"
+      [[ $tail != *"$import_line"* ]] && return 0
+    fi
+  fi
+
   mkdir -p "${gtk_css%/*}"
-  tmp=$(mktemp) || return 1
+  tmp=$(mktemp "${gtk_css}.tmp.XXXXXX") || return 1
   _TMP_FILES+=("$tmp")
 
   if {
-    printf '%s\n@import url("file://%s");\n%s\n' "$import_line" "$theme_css" "$end_line"
+    printf '%s\n' "$expected_header"
     if [[ -f $gtk_css ]]; then
       awk -v begin="$import_line" -v end="$end_line" '
         $0 == begin { skip = 1; next }
@@ -45,6 +55,7 @@ sync_gtk_css() {
       ' "$gtk_css"
     fi
   } >"$tmp"; then
+    chmod 0644 "$tmp" 2>/dev/null || true
     mv -f "$tmp" "$gtk_css"
   else
     rm -f "$tmp"
@@ -245,6 +256,45 @@ except Exception:
 PY
 }
 
+# When the Quattro Nautilus live-reload extension is installed in
+# /usr/lib/nautilus/extensions-4/, running Nautilus instances reload gtk.css
+# in-process via GFileMonitor with zero window disruption. As a fallback when
+# the extension is not installed yet, shut down only idle background
+# `nautilus --gapplication-service` processes that have zero open windows so
+# the next launch reads fresh CSS without ever closing a user's open window.
+reload_nautilus() {
+  local gen_file="$STATE_HOME/quattro/current/theme.generation"
+
+  [[ ! -f /usr/lib/nautilus/extensions-4/libquattro-nautilus-theme.so ]] || return 0
+  [[ ${QUATTRO_THEME_HEADLESS:-0} != "1" && ${QUATTRO_THEME_OFFLINE:-0} != "1" ]] || return 0
+  [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]] || return 0
+  command -v nautilus >/dev/null 2>&1 || return 0
+  pgrep -u "$EUID" -x nautilus >/dev/null 2>&1 || return 0
+
+  if [[ -n ${QUATTRO_THEME_GENERATION:-} && -r $gen_file ]]; then
+    [[ $(<"$gen_file") == "$QUATTRO_THEME_GENERATION" ]] || return 0
+  fi
+
+  local -a hypr_cmd=(hyprctl)
+  [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] || hypr_cmd+=(--instance 0)
+  command -v hyprctl >/dev/null 2>&1 || return 0
+
+  local clients_json
+  clients_json=$("${hypr_cmd[@]}" -j clients 2>/dev/null) || return 0
+  # Only quit Nautilus if no Nautilus window is open (idle background daemon).
+  if [[ $clients_json == *'"org.gnome.Nautilus"'* ]]; then
+    return 0
+  fi
+
+  timeout 2 nautilus --quit >/dev/null 2>&1 || true
+  local attempt
+  for (( attempt = 0; attempt < 20; attempt++ )); do
+    pgrep -u "$EUID" -x nautilus >/dev/null 2>&1 || return 0
+    sleep 0.05
+  done
+  pkill -TERM -u "$EUID" -x nautilus 2>/dev/null || true
+}
+
 # Resolve mode and folder/accent colors in a single quattro-theme-color run.
 declare -A _gnome_palette=()
 if [[ -f $COLORS_FILE ]]; then
@@ -258,20 +308,25 @@ folder_accent="${_gnome_palette[folder_color]:-}"
 
 sync_gtk_css "$CONFIG_HOME/gtk-4.0/gtk.css"
 sync_gtk_css "$CONFIG_HOME/gtk-3.0/gtk.css"
+
+# Apply color-scheme and gtk-theme right away when a user DBus session exists,
+# before regenerating folder SVGs, so apps opened immediately see the new mode.
+if [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
+  if [[ $mode == "light" ]]; then
+    gsettings set org.gnome.desktop.interface color-scheme "prefer-light"
+    gsettings set org.gnome.desktop.interface gtk-theme "Adwaita"
+  else
+    gsettings set org.gnome.desktop.interface color-scheme "prefer-dark"
+    gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark"
+  fi
+fi
+
 gnome_accent=$(sync_folder_icons "$mode" "$folder_accent" || true)
 
 # gsettings needs a user DBus session. During headless/chroot installs, defer
 # until the user has a real session instead of emitting dconf warnings.
 if [[ -z ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
   exit 0
-fi
-
-if [[ $mode == "light" ]]; then
-  gsettings set org.gnome.desktop.interface color-scheme "prefer-light"
-  gsettings set org.gnome.desktop.interface gtk-theme "Adwaita"
-else
-  gsettings set org.gnome.desktop.interface color-scheme "prefer-dark"
-  gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark"
 fi
 
 if [[ -n $gnome_accent ]]; then
@@ -288,3 +343,5 @@ if [[ -f "$DATA_HOME/icons/Quattro/index.theme" ]]; then
 else
   gsettings set org.gnome.desktop.interface icon-theme "Adwaita"
 fi
+
+reload_nautilus || true

@@ -18,6 +18,7 @@ export QUATTRO_PATH
 CURRENT_THEME_PATH="$HOME/.local/state/quattro/current/theme"
 CURRENT_THEME_NAME_PATH="$HOME/.local/state/quattro/current/theme.name"
 NEXT_THEME_PATH="$HOME/.local/state/quattro/current/next-theme"
+OLD_THEME_PATH="$HOME/.local/state/quattro/current/old-theme"
 CURRENT_BACKGROUND_LINK="$HOME/.local/state/quattro/current/background"
 THEME_BACKGROUND_STATE_PATH="$HOME/.local/state/quattro/theme-backgrounds"
 BACKGROUND_TRANSITION_CACHE="$HOME/.cache/quattro/background-transitions"
@@ -414,9 +415,13 @@ if ! quattro-theme-set-templates; then
   exit 1
 fi
 
-# Swap next theme in as current
-rm -rf "$CURRENT_THEME_PATH"
+# Swap next theme in as current with two adjacent directory renames so readers
+# (such as GTK4/Nautilus loading current/theme/gtk.css) do not hit a prolonged
+# missing-directory window during recursive rm -rf.
+rm -rf "$OLD_THEME_PATH"
+[[ -e $CURRENT_THEME_PATH || -L $CURRENT_THEME_PATH ]] && mv "$CURRENT_THEME_PATH" "$OLD_THEME_PATH"
 mv "$NEXT_THEME_PATH" "$CURRENT_THEME_PATH"
+rm -rf "$OLD_THEME_PATH"
 # Name this switch, so its deferred retints can tell when a later one replaced
 # the theme. A directory's inode would do, except that it can be reused.
 # A token that could not be written proves nothing either way, so then the
@@ -425,6 +430,7 @@ APPLIED_THEME_GENERATION="$$-${EPOCHREALTIME//[!0-9]/}"
 if ! printf '%s\n' "$APPLIED_THEME_GENERATION" 2>/dev/null >"$THEME_GENERATION_PATH"; then
   APPLIED_THEME_GENERATION=""
 fi
+export QUATTRO_THEME_GENERATION="$APPLIED_THEME_GENERATION"
 
 # Store theme name for reference
 echo "$THEME_NAME" >"$CURRENT_THEME_NAME_PATH"

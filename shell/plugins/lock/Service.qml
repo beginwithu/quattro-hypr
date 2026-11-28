@@ -604,31 +604,13 @@ Item {
     }
   }
 
-  // The lock only starts decoding its wallpaper once locked, and a machine
-  // suspending right after locking froze that decode partway: waking showed
-  // the password field on a bare background, then the wallpaper popped in.
-  // Keep each screen's lock wallpaper decoded in the image cache ahead of
-  // time, as the lock view requests it (same URL, the screen's logical size,
-  // PreserveAspectCrop), so the lock draws it on its first frame.
+  // Decode the lock wallpaper only while locking so idle sessions do not retain
+  // a permanent duplicate fullscreen bitmap or leak versioned pixmaps across
+  // theme switches in QQuickPixmapCache.
   readonly property string lockWallpaperPath: videoBackground ? videoPosterPath : backgroundPath
   readonly property string lockWallpaperUrl: lockWallpaperPath && !Util.isVideoPath(lockWallpaperPath)
     ? Util.fileUrl(lockWallpaperPath) + (backgroundVersion ? "?v=" + backgroundVersion : "")
     : ""
-
-  Variants {
-    model: Quickshell.screens
-
-    Image {
-      required property var modelData
-      visible: false
-      source: root.lockWallpaperUrl
-      sourceSize.width: modelData.width
-      sourceSize.height: modelData.height
-      fillMode: Image.PreserveAspectCrop
-      asynchronous: true
-      cache: true
-    }
-  }
 
   Timer {
     id: fingerprintRetryTimer

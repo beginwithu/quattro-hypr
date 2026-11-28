@@ -615,6 +615,13 @@ ShellRoot {
 
   property var _hidingPanelIds: ({})
 
+  Timer {
+    id: panelGcTimer
+    interval: 2000
+    repeat: false
+    onTriggered: if (typeof gc === "function") gc()
+  }
+
   function hide(pluginId) {
     var id = shell.pluginRegistry.resolveEnabledId(pluginId)
     if (!id) return false
@@ -633,6 +640,7 @@ ShellRoot {
         openPanelIds = next
       }
       invokeIfLoaded(id, "close", null)
+      if (!serviceKeepLoaded(id)) panelGcTimer.restart()
     } finally {
       delete _hidingPanelIds[id]
     }
