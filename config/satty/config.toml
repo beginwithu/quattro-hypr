@@ -4,14 +4,15 @@ fullscreen = false
 resize = { mode = "smart" }
 floating-hack = true
 early-exit = ["all"]
-corner-roundness = 12
 initial-tool = "pointer"
 copy-command = "wl-copy"
 save-after-copy = true
 default-hide-toolbars = false
-primary-highlighter = "block"
 actions-on-enter = ["save-to-clipboard"]
 actions-on-escape = ["exit"]
 no-window-decoration = true
 brush-smooth-history-size = 5
 notification-thumbnail = "screenshot"
+
+[style]
+corner-radius = 12
