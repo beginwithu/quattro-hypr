@@ -56,26 +56,27 @@ Item {
   readonly property int cornerRadius: Style.cornerRadius
 
   // Built entries bound to live Quickshell / Hyprland state so ScreencopyView
-  // captures monitors and windows cleanly.
-  readonly property var monitorEntries: SharePickerModel.buildMonitorEntries(
+  // captures monitors and windows cleanly. Short-circuit when closed so idle
+  // Hyprland window/workspace events do not rebuild entries in the background.
+  readonly property var monitorEntries: root.opened ? SharePickerModel.buildMonitorEntries(
     root.rawOutputs,
     Quickshell.screens,
     Hyprland.monitors.values
-  )
-  readonly property var allWindowEntries: SharePickerModel.buildWindowEntries(
+  ) : []
+  readonly property var allWindowEntries: root.opened ? SharePickerModel.buildWindowEntries(
     root.rawWindows,
     Hyprland.toplevels.values
-  )
-  readonly property var windowEntries: SharePickerModel.filterWindows(
+  ) : []
+  readonly property var windowEntries: root.opened ? SharePickerModel.filterWindows(
     root.allWindowEntries,
     root.filterText
-  )
-  readonly property var workspaceEntries: SharePickerModel.buildWorkspaceEntries(
+  ) : []
+  readonly property var workspaceEntries: root.opened ? SharePickerModel.buildWorkspaceEntries(
     root.rawWorkspaces,
     Hyprland.workspaces.values,
     Quickshell.screens,
     Hyprland.toplevels.values
-  )
+  ) : []
 
   readonly property int cardWidth: Math.min(Style.space(980), Math.max(Style.space(520), panel.width - Style.gapsOut * 2))
   readonly property int cardHeight: Math.min(Style.space(660), Math.max(Style.space(420), panel.height - Style.gapsOut * 2))
